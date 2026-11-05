@@ -33,11 +33,14 @@ export type ExpressionInput = Expression | string | number | boolean | null;
  * JSON. MapLibre checks the expression's types when it parses the
  * expression, not this library.
  *
+ * Pass an expression to FFI's style functions as is: they call
+ * `JSON.stringify`, which writes its style-spec JSON through {@link toJSON}.
+ *
  * An expression is immutable. Two expressions are {@link equals} when their
  * JSON is the same.
  */
 export class Expression {
-  /** The expression's style-spec JSON, to pass to FFI. */
+  /** The expression's style-spec JSON. */
   readonly json: JsonValue;
   private key: string | undefined = undefined;
 
@@ -53,6 +56,11 @@ export class Expression {
   /** Whether `other` has the same JSON. */
   equals(other: Expression): boolean {
     return this === other || this.toString() === other.toString();
+  }
+
+  /** The style-spec JSON, which `JSON.stringify` writes for the expression. */
+  toJSON(): JsonValue {
+    return this.json;
   }
 
   /** The expression's JSON text, computed once. */

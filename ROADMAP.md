@@ -344,9 +344,10 @@ Decisions (`library/src/main/ets/Expressions.ets`):
   is, and `call(operator, ...args)` calls any operator. The subset covers
   feature data, zoom, ramps, decisions, comparisons, math, conversions, strings,
   colors, `format`, and `image`.
-- `Expression.json` is a plain JSON value, which FFI's style functions take as
-  is (FFI calls `JSON.stringify` on it). `toString()` is the JSON text, cached,
-  and `equals()` compares it, which is what stage 7 needs for diffing.
+- FFI's style functions take an `Expression` as is: they call `JSON.stringify`,
+  and `toJSON()` returns `Expression.json`, a plain JSON value. `toString()` is
+  the JSON text, cached, and `equals()` compares it, which is what stage 7 needs
+  for diffing.
 - No unit conversion: style pixels are vp when the map's scale factor is
   `vp2px(1)`, as in FFI's example. Text sizes in fp would need the font scale,
   which stage 7 can apply as MapLibre Compose does for sp.

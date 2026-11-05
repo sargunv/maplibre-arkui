@@ -102,7 +102,7 @@ model for adding it.
 - `oh-package.json5` files stay plain JSON, which the scripts read with jq.
 - Record FFI gaps and bugs in `docs/ffi-feedback.md` instead of working around
   them with complex code.
-- Expressions are untyped and immutable, and `Expression.json` is what FFI's
-  style functions take. A new expression function gets a JSON case and a case
-  that FFI's `StyleExpressionHandle` parses and evaluates in
-  `Expressions.test.ets`.
+- Expressions are untyped and immutable, and FFI's style functions take an
+  `Expression` as is, through its `toJSON()`. A new expression function gets a
+  JSON case and a case that FFI's `StyleExpressionHandle` parses and evaluates
+  in `Expressions.test.ets`.

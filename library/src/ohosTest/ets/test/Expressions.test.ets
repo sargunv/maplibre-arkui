@@ -5,9 +5,9 @@ import {
 import {
   abs, add, all, any, call, cases, ceil, coalesce, concat, cubicBezier, divide, downcase, eq,
   Expression, exponential, featureState, floor, format, geometryType, get, globalState, gt, gte, has,
-  id, image, interpolate, interpolateHcl, JsonValue, linear, literal, lt, lte, match, max, min, mod,
-  multiply, neq, not, pow, properties, rgb, rgba, round, sqrt, step, subtract, toBoolean, toColor,
-  toNumber, toString, upcase, zoom
+  heatmapDensity, id, image, interpolate, interpolateHcl, interpolateLab, JsonValue, linear,
+  lineProgress, literal, lt, lte, match, max, min, mod, multiply, neq, not, pow, properties, rgb, rgba,
+  round, sqrt, step, subtract, toBoolean, toColor, toNumber, toString, upcase, zoom
 } from '@maplibre/arkui';
 
 function point(properties: Record<string, JsonValue>): Record<string, JsonValue> {
@@ -16,9 +16,10 @@ function point(properties: Record<string, JsonValue>): Record<string, JsonValue>
 }
 
 // Parses an expression with FFI, which checks it as MapLibre Native does, and
-// returns its result for `inputs` as JSON text.
+// returns its result for `inputs` as JSON text. FFI takes the expression as
+// is, through its toJSON().
 function evaluate(expression: Expression, kind: number, inputs?: StyleExpressionInputs): string {
-  const handle = StyleExpressionHandle.create(expression.json, { expectedType: { kind: kind } });
+  const handle = StyleExpressionHandle.create(expression, { expectedType: { kind: kind } });
   try {
     return JSON.stringify(handle.evaluate(inputs));
   } finally {
@@ -42,6 +43,7 @@ export default function expressionsTest(): void {
         .assertEqual('["coalesce",["get","n"],1,true,null]');
       expect(literal(['Open Sans', 'Arial']).toString()).assertEqual('["literal",["Open Sans","Arial"]]');
       expect(new Expression(['get', 'x']).toString()).assertEqual('["get","x"]');
+      expect(JSON.stringify(get('x'))).assertEqual('["get","x"]');
       expect(call('in', get('class'), literal(['a', 'b'])).toString())
         .assertEqual('["in",["get","class"],["literal",["a","b"]]]');
     });
@@ -49,11 +51,14 @@ export default function expressionsTest(): void {
     it('writes feature data and inputs', 0, () => {
       expect(get('name', properties()).toString()).assertEqual('["get","name",["properties"]]');
       expect(has('name').toString()).assertEqual('["has","name"]');
+      expect(has('name', properties()).toString()).assertEqual('["has","name",["properties"]]');
       expect(featureState('hover').toString()).assertEqual('["feature-state","hover"]');
       expect(globalState('theme').toString()).assertEqual('["global-state","theme"]');
       expect(id().toString()).assertEqual('["id"]');
       expect(geometryType().toString()).assertEqual('["geometry-type"]');
       expect(zoom().toString()).assertEqual('["zoom"]');
+      expect(heatmapDensity().toString()).assertEqual('["heatmap-density"]');
+      expect(lineProgress().toString()).assertEqual('["line-progress"]');
     });
 
     it('writes ramps with flat stops', 0, () => {
@@ -63,6 +68,8 @@ export default function expressionsTest(): void {
         .assertEqual('["interpolate",["exponential",2],["zoom"],10,1,18,32]');
       expect(interpolate(cubicBezier(0.4, 0, 1, 1), zoom(), [[0, 0], [1, 1]]).toString())
         .assertEqual('["interpolate",["cubic-bezier",0.4,0,1,1],["zoom"],0,0,1,1]');
+      expect(interpolateLab(linear(), zoom(), [[0, '#000'], [1, '#fff']]).toString())
+        .assertEqual('["interpolate-lab",["linear"],["zoom"],0,"#000",1,"#fff"]');
       expect(step(get('n'), 'low', [[10, 'mid'], [100, 'high']]).toString())
         .assertEqual('["step",["get","n"],"low",10,"mid",100,"high"]');
     });
@@ -109,6 +116,17 @@ export default function expressionsTest(): void {
       const curve = interpolate(exponential(2), zoom(), [[0, 0], [2, 3]]);
       expect(Number(evaluate(curve, NUMBER, atZoom(1)))).assertClose(1, 0.000001);
       expect(evaluate(step(zoom(), 1, [[5, 2], [10, 3]]), NUMBER, atZoom(7))).assertEqual('2');
+      // An ease-in curve: y is 0.3248 where x is 0.5.
+      const eased = interpolate(cubicBezier(0.4, 0, 1, 1), zoom(), [[0, 0], [1, 1]]);
+      expect(Number(evaluate(eased, NUMBER, atZoom(0.5)))).assertClose(0.3248, 0.001);
+    });
+
+    it('interpolates heatmap density and line progress', 0, () => {
+      const ramp: StyleExpressionInputs = { colorRampParameter: 0.5 };
+      const density = interpolate(linear(), heatmapDensity(), [[0, 0], [1, 10]]);
+      expect(evaluate(density, NUMBER, ramp)).assertEqual('5');
+      const progress = interpolate(linear(), lineProgress(), [[0, 0], [1, 10]]);
+      expect(evaluate(progress, NUMBER, ramp)).assertEqual('5');
     });
 
     it('interpolates colors', 0, () => {
@@ -120,6 +138,14 @@ export default function expressionsTest(): void {
       const blue = round(call('at', 2, call('to-rgba', hcl)));
       expect(evaluate(red, NUMBER, withFeature({ 't': 0 }))).assertEqual('255');
       expect(evaluate(blue, NUMBER, withFeature({ 't': 1 }))).assertEqual('255');
+      // Halfway from red to yellow, green is 160 in HCL and 127.5 in RGB.
+      const hclToYellow = interpolateHcl(linear(), get('t'), [[0, '#ff0000'], [1, '#ffff00']]);
+      const green = round(call('at', 1, call('to-rgba', hclToYellow)));
+      expect(evaluate(green, NUMBER, withFeature({ 't': 0.5 }))).assertEqual('160');
+      // Halfway from black to white, gray is 119 in CIELAB and 127.5 in RGB.
+      const lab = interpolateLab(linear(), get('t'), [[0, '#000000'], [1, '#ffffff']]);
+      const gray = round(call('at', 0, call('to-rgba', lab)));
+      expect(evaluate(gray, NUMBER, withFeature({ 't': 0.5 }))).assertEqual('119');
       expect(evaluate(rgba(255, 0, 0, 0.5), COLOR)).assertEqual('["rgba",255,0,0,0.5]');
       // A string is a color in CSS syntax, with alpha last. MapLibre keeps
       // colors premultiplied, so red comes back as 254.99998….
@@ -159,6 +185,9 @@ export default function expressionsTest(): void {
       expect(evaluate(multiply(globalState('scale'), 2), NUMBER, { globalState: global })).assertEqual('6');
       expect(evaluate(id(), NUMBER, withFeature({}))).assertEqual('7');
       expect(evaluate(geometryType(), STRING, withFeature({}))).assertEqual('"Point"');
+      const props = withFeature({ 'a': 'x' });
+      expect(evaluate(get('a', properties()), STRING, props)).assertEqual('"x"');
+      expect(evaluate(has('b', properties()), BOOLEAN, props)).assertEqual('false');
     });
 
     it('computes math', 0, () => {

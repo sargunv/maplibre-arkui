@@ -59,9 +59,7 @@ release. Each entry names the FFI commit it was seen at.
   second try succeeded. This is in devices-cli rather than FFI, which
   `tools/devices/ohos-key` shares. Suggested fix: have devices-cli wait until
   the lock screen is gone before it reports the device. (`power-shell suspend`
-  to reproduce it hangs `hdc shell` until the emulator is released.) The first
-  `hdc install` after a boot can also fail with "code:301 error: user not
-  exist", which a retry fixes.
+  to reproduce it hangs `hdc shell` until the emulator is released.)
 
 ## Stage 6: expressions (FFI `5c4c9084`, `11ffaaf6`)
 
@@ -77,6 +75,11 @@ release. Each entry names the FFI commit it was seen at.
   `mln_style_expression_evaluate`, and round un-premultiplied channels that are
   within float error of an integer. The header on main (`11ffaaf6`) still says
   only that the result is JSON.
+- **The first `hdc install` after a boot can fail.** On the emulator it failed
+  with "code:301 error: user not exist", and a retry succeeded. Like the lock
+  screen above, this is in devices-cli rather than FFI. Suggested fix: have
+  devices-cli wait until the account service reports the user before it reports
+  the device.
 
 [42012958276]:
   https://github.com/maplibre/maplibre-native-ffi/actions/runs/42012958276
