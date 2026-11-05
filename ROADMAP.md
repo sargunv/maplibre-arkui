@@ -345,6 +345,34 @@ Questions:
 - Feature queries need an attached render session, which can use a window or an
   offscreen target.
 
+Decided:
+
+- No wrapper. FFI's `MapHandle` already has the whole style API, as promises
+  that reject with a `MaplibreError`, and its `RenderSessionHandle` the queries.
+  Apps call them through `controller.map` and `controller.renderSession`, and
+  the library re-exports the types they take and return. Style values are
+  style-spec JSON, and an `Expression` goes in as is.
+- Style reloads need no handles. A new style starts without the sources, layers,
+  and images the app added (feature state of a source re-added under the same ID
+  can carry over), commands fail with `invalidState` until it loads, and
+  `onStyleLoaded` (or the observable `styleLoaded`) fires for each load, so the
+  app adds its sources, layers, and images there. MapLibre Compose's handle
+  generations serve its declarative content, which stage 7 takes up.
+- GeoJSON goes to FFI as an object. Strict ArkTS accepts an object literal only
+  for a declared type, so the library declares GeoJSON's types
+  (`GeoJsonFeatureCollection` and the rest); layers and sources are
+  `Record<string, Object>` literals, since their keys aren't identifiers.
+- `readPixelMap(pixelMap)` copies an ArkUI `PixelMap` into the premultiplied
+  RGBA that `setStyleImage()` takes, from `RGBA_8888` or `BGRA_8888`,
+  premultiplied or not. Apps decode resources into a `PixelMap` themselves.
+- Query points need no conversion: the map's logical pixels are vp, so a
+  `ClickEvent`'s `x` and `y` on the map are the query's point. Results are FFI's
+  `RenderedFeature`, whose `feature` reads as a `GeoJsonFeature`.
+- Feature state is FFI's. The map compares IDs as text, so a GeoJSON ID goes in
+  as `{ kind: 'stringValue', value: String(id) }`.
+- FFI draws a feature state change on an idle map only from the next frame, so
+  the demo requests one; see `docs/ffi-feedback.md`.
+
 References:
 
 - FFI guides: [add GeoJSON data][ffi-geojson], [add tile sources][ffi-tiles],

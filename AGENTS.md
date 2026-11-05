@@ -12,6 +12,8 @@ library/                 @maplibre/arkui, a source HAR
   oh-package.json5       name, version, API floor (20), FFI dependency
   src/main/ets/
     Expressions.ets      style expressions: functions that build style-spec JSON
+    GeoJson.ets          GeoJSON types, so ArkTS can write GeoJSON literals
+    StyleImage.ets       readPixelMap(): a PixelMap as FFI's style image
     MapLibreMap.ets      the map component: params, events, lifecycle
     MapController.ets    the app's handle: observable camera, camera methods,
                          FFI handles
@@ -23,12 +25,15 @@ library/                 @maplibre/arkui, a source HAR
     Snapshot.ets         snapshot(): a still image of a map, as a PixelMap
   src/main/module.json   the HAR's module manifest
   src/ohosTest/          the hypium suite, a test HAP in DevEco's layout
-    ets/test/            the cases; List.test.ets registers them
+    ets/test/            the cases; List.test.ets registers them, until.ets
+                         waits for frames
     ets/testability/     the test ability and the page whose map cases drive
 demo/entry/src/main/     the demo app's only module (module.json holds the app's
                          fields too, as FFI's ArkUI example does): a map with
-                         camera buttons, a page with two maps, and a page with a
-                         snapshot, a resource transform, and an offline region
+                         camera buttons, a page with two maps, a page with a
+                         snapshot, a resource transform, and an offline region,
+                         and a style page (StyleDemo.ets) that adds to the
+                         style and queries on tap
 scripts/                 the build, pack, FFI, and device scripts the tasks run
 .mise/plugins/ohos-sdk/  mise plugin for the OpenHarmony SDK, identical to FFI's;
                          linked by scripts/link-ohos-sdk-plugin.sh
@@ -135,3 +140,11 @@ model for adding it.
   `Index.ets`; wrap them only where ArkUI needs it.
 - Test cases don't need the network, except the resource transform case, which
   rewrites a URL to a real style.
+- The build has no resource table, so `.ets` files can't use `$r()`; load files
+  from `resources/rawfile` with `getRawFileContentSync()`.
+- The style and query API is FFI's, through `MapController.map` and
+  `renderSession`; wrap a part of it only where ArkUI apps need more than the
+  FFI types, which `Index.ets` re-exports. Style JSON in ArkTS is a
+  `Record<string, Object>` literal with quoted keys, each nested object in a
+  variable of its own, since ArkTS types an object literal only from a declared
+  type.

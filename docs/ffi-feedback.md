@@ -164,6 +164,65 @@ release. Each entry names the FFI commit it was seen at.
   devices-cli wait until the account service reports the user before it reports
   the device.
 
+## Stage 5: style and queries (FFI `5c4c9084`)
+
+- **A feature state change on an idle map draws only from the frame after the
+  one that applies it.** On the emulator, with the demo's style page at rest,
+  `setFeatureState()` on a circle, fill, or line feature resolved, and a
+  rendered query reported the new `state`, but the map kept drawing the old
+  paint until something else rendered a frame: toggling a layer's visibility
+  showed the highlight at once (`.proof/style-tap-branly-later.jpeg` and
+  `style-after-toggle.jpeg` in the stage 5 worktree). After
+  `removeFeatureState()` on one feature then `setFeatureState()` on another, the
+  removal showed and the new state didn't, and `requestRepaint()` right after
+  didn't help. The first tap while tiles still loaded did show, since frames
+  kept coming. Each command calls `triggerRepaint()`, and the render session
+  applies the state diff before it renders (`map.cpp`,
+  `render_session_common.cpp`), so the lag is likely in MapLibre Native's
+  renderer, which applies the state to tile buckets in
+  `RenderTileSource::prepare()` and then reports `needsRepaint` false; this
+  wasn't traced further. The demo asks for one more frame 100 ms after a change
+  (`requestRepaint()` from a delayed frame callback). Suggested fix: have the
+  render session report `needs_repaint` (or render once more) after a frame that
+  applied a feature state diff, or fix it in MapLibre Native, and add a test
+  that renders a feature state change on an idle map and reads back the pixels.
+- **Strict ArkTS can't pass an object literal to the style functions.** They
+  take `unknown`, and ArkTS accepts an object literal only for a declared type,
+  so `map.addStyleLayerJson({ id: 'a', ... })` fails
+  `arkts-no-untyped-obj-literals`. A `Record<string, Object>` variable works,
+  with quoted keys, since style properties such as `circle-color` aren't
+  identifiers, but a nested literal needs a variable of its own (`paint`,
+  `layout`), and GeoJSON needs declared types, which this library adds
+  (`GeoJson.ets`). Suggested fix: show the `Record<string, Object>` pattern in
+  the ArkTS part of the style guide, and consider declaring GeoJSON types for
+  `GeoJsonSourceDataHandle.create()` and the `feature` of query results, which
+  is `unknown` too.
+- **`FeatureId` makes ArkTS apps convert the IDs that queries return.** A
+  rendered feature's GeoJSON `id` is a number or a string, and a selector takes
+  `{ kind, value }` with a `bigint` for the integer kinds. Since the map
+  compares IDs as text, `{ kind: 'stringValue', value: String(id) }` or
+  `doubleValue` works for any of them, as the demo and the tests do. Suggested
+  fix: also accept a plain `number | string` in `FeatureStateSelector`, or point
+  out the `doubleValue` and `stringValue` shortcut in the type's doc.
+- **Images reach the style only as premultiplied RGBA bytes.** OpenHarmony apps
+  hold images as `image.PixelMap`s, which decode as `RGBA_8888` and can be
+  `BGRA_8888` (the default of `createPixelMap()`) and unpremultiplied, so this
+  library's `readPixelMap()` copies the pixels out and converts them in ArkTS.
+  Suggested fix, not urgent: on OpenHarmony, accept a `PixelMap` in
+  `setStyleImage()` and image sources through the NDK's `OH_PixelmapNative`,
+  which would skip the copy into ArkTS.
+- **The ArkUI example's build only warns about ArkTS rule violations.**
+  ets-loader's webpack build prints "Has N ArkTS Linter Error", writes them to
+  `cache/ArkTS/ArkTSLinter_output.json`, and still reports
+  `COMPILE RESULT:SUCCESS`, so code that DevEco rejects builds. This
+  repository's `scripts/build-hap.sh` now fails on the errors in that file.
+  Suggested fix: the same check in `examples/arkui/scripts/build-hap.sh`.
+- **The example's build can't compile `$r()`.** Without restool's resource
+  table, ets-loader rejects `$r('app.media.pin')` with "Unknown resource type
+  'media'", so the demo loads its icon from `rawfile/` instead. Suggested fix:
+  note it with the example's other build limits; a build that needs `$r()` would
+  run restool before ets-loader and pass it the `ResourceTable.txt`.
+
 ## Stage 10: requests, offline, snapshots, logs (FFI `5c4c9084`)
 
 - **A relative `cachePath` creates a runtime whose cache can't open.** On the

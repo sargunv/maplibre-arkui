@@ -62,16 +62,22 @@ export class MapController {
   }
 
   /**
-   * The FFI map on screen, for what this library doesn't wrap yet. Don't
-   * release it; the `MapLibreMap` that created it does.
+   * The FFI map on screen, for its style API (sources, layers, images, and
+   * feature state) and what else this library doesn't wrap. A new style
+   * starts without the sources, layers, and images the app added, so add them
+   * in `onStyleLoaded`. A feature state change draws only from the next frame,
+   * so request one on an idle map (see the README). Don't release it; the
+   * `MapLibreMap` that created it does.
    */
   get map(): MapHandle | undefined {
     return this.view?.map;
   }
 
   /**
-   * The FFI render session that draws the map, while the map has a surface.
-   * Don't release it or change its target.
+   * The FFI render session that draws the map, while the map has a surface,
+   * for feature queries. Its screen points are in vp from the map's top-left
+   * corner, as an ArkUI `ClickEvent`'s `x` and `y` are. Don't release it or
+   * change its target.
    */
   get renderSession(): RenderSessionHandle | undefined {
     return this.view?.session;

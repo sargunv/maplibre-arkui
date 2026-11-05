@@ -7,6 +7,7 @@ import {
 } from '@maplibre/arkui';
 
 import { Engine } from './Engine';
+import { StyleDemo } from './StyleDemo';
 import { LIBERTY, TwoMaps } from './TwoMaps';
 
 const SWITZERLAND: LatLngBounds = {
@@ -64,6 +65,9 @@ struct Index {
             Button('Snapshots, offline').margin(4).onClick(() => {
               this.stack.pushPathByName('engine', null);
             })
+            Button('Style').margin(4).onClick(() => {
+              this.stack.pushPathByName('style', null);
+            })
           }
         }
         .padding(12)
@@ -85,6 +89,8 @@ struct Index {
       TwoMaps()
     } else if (name === 'engine') {
       Engine()
+    } else if (name === 'style') {
+      StyleDemo()
     }
   }
 

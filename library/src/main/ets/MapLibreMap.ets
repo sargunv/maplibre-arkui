@@ -37,7 +37,11 @@ export struct MapLibreMap {
    * listen with `addRuntimeEventListener()` instead of setting one.
    */
   @Param @Once runtime: RuntimeHandle | undefined = undefined;
-  /** The style has loaded, so its layers and sources exist. */
+  /**
+   * The style has loaded, so its layers and sources exist. Each style starts
+   * from its own document, so add the app's sources, layers, and images
+   * here, through `controller.map`, each time it loads.
+   */
   @Event onStyleLoaded: () => void = () => {
   };
   /** The camera has come to rest, after a jump or once an animation ends. */
