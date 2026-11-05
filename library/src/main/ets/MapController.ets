@@ -37,16 +37,17 @@ export interface MapControllerOptions {
 @ObservedV2
 export class MapController {
   /**
-   * Where the camera last came to rest, after a jump or once an animation
-   * ends. Undefined until the map first shows. Read `getCamera()` for where
-   * the camera is right now, such as during an animation.
+   * Where the camera last came to rest: after a jump, once an animation ends,
+   * or where the map left it. Undefined until the map first shows. Read
+   * `getCamera()` for where the camera is right now, such as during an
+   * animation. Only the map sets it; assigning it doesn't move the camera.
    */
   @Trace camera: CameraPosition | undefined = undefined;
   /** Whether the map's style has loaded, so its layers and sources exist. */
   @Trace styleLoaded: boolean = false;
 
   private view: MapView | undefined = undefined;
-  private startCamera: CameraOptions | undefined;
+  private readonly startCamera: CameraOptions | undefined;
 
   constructor(options?: MapControllerOptions) {
     this.startCamera = options?.camera;
@@ -90,9 +91,10 @@ export class MapController {
    * `MapHandle.updateCamera()` does.
    *
    * Resolves once the camera stops: with `CameraTransitionOutcome.completed`
-   * when it got there, or `cancelled` or `replaced` when
+   * when it got there, `cancelled` or `replaced` when
    * `cancelCameraTransitions()`, a gesture, or a later camera change stopped
-   * it first. It rejects when the map rejects the change.
+   * it first, or `closed` when the map left the screen first. It rejects when
+   * the map rejects the change.
    */
   updateCamera(update: CameraUpdate): Promise<CameraTransitionOutcome> {
     return this.transition(update.animation, (map: MapHandle, animation: AnimationOptions) => map.updateCamera({
@@ -123,22 +125,26 @@ export class MapController {
     await this.requireMap().cancelCameraTransitions();
   }
 
-  // Called by the MapLibreMap that shows this controller. Returns where its
-  // map's camera starts.
+  /**
+   * Internal: the MapLibreMap that shows this controller calls it. Returns
+   * where its map's camera starts.
+   */
   attach(view: MapView): CameraOptions | undefined {
     this.view = view;
-    return this.startCamera;
+    return this.camera !== undefined ? cameraToOptions(this.camera) : this.startCamera;
   }
 
-  // Called by that MapLibreMap as it leaves, so the next map starts where this
-  // one left the camera.
+  /**
+   * Internal: that MapLibreMap calls it as it leaves, so the camera rests where
+   * that map left it, and the next map starts there.
+   */
   detach(view: MapView): void {
     if (this.view !== view) {
       return;
     }
     const map = view.map;
     if (map !== undefined) {
-      this.startCamera = cameraToOptions(map.getSnapshot().view.camera);
+      this.camera = map.getSnapshot().view.camera;
     }
     this.view = undefined;
     this.styleLoaded = false;

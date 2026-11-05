@@ -36,7 +36,7 @@ struct MapPage {
           mode: CameraUpdateMode.fly,
           camera: { center: { latitude: 40.7128, longitude: -74.006 }, zoom: 12 },
           animation: { durationMs: 3000 },
-        });
+        }).catch((error: Error) => console.error(error.message));
       })
     }
     .width('100%')

@@ -6,9 +6,7 @@ import {
   MapLibreMap,
 } from '@maplibre/arkui';
 
-import { TwoMaps } from './TwoMaps';
-
-export const LIBERTY = 'https://tiles.openfreemap.org/styles/liberty';
+import { LIBERTY, TwoMaps } from './TwoMaps';
 
 const SWITZERLAND: LatLngBounds = {
   southwest: { latitude: 45.82, longitude: 5.96 },

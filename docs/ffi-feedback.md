@@ -120,6 +120,29 @@ release. Each entry names the FFI commit it was seen at.
   there. Suggested fix: if FFI knows a trigger (a device that drops surfaces in
   the background, or a fold), name it in the window guide so downstream tests
   can reproduce it.
+- **Maps crash the app on the Oniro emulator, more often the more maps run.**
+  The process dies with `SIGSEGV(SEGV_MAPERR)` on a MapLibre render thread in
+  the emulator's Mesa llvmpipe: `lp_scene_is_resource_referenced` <-
+  `lp_setup_is_resource_referenced` <- `llvmpipe_flush_resource`, reached from
+  `libmaplibre-native-c.so` through `glDrawElements`, `glTexSubImage2D`,
+  `glClear`, or `ohos_create_image_from_native_buffer`. It reproduces with FFI
+  alone: a copy of `examples/arkui` whose page shows N of the example's own
+  `MapController` maps (each with its own runtime, pacer, and `coreWorker`
+  session; FFI `5c4c9084` HARs, OpenHarmony 6.1.0.31 image) crashed within
+  seconds in 3 of 3 starts with three maps, within 30 s in 4 of 8 starts with
+  two, and in 1 of 5 starts with one. In this library's demo, the same crash
+  came within three pushes of the two-map page over the first page's map (three
+  sessions) in three runs, not at all in fifteen pushes of another run, and once
+  with one map during a fly. The sessions use dedicated, unshared EGL contexts,
+  and the process also runs ArkUI's own `RSRenderThread` on llvmpipe, so this
+  looks like a llvmpipe race between contexts on different threads rather than a
+  misuse in FFI, but it hasn't been checked on a device with a GPU. Suggested
+  fix: try two maps on a device; if only the emulator crashes, report it to
+  Oniro with these stacks and note in the OpenHarmony guide that the emulator
+  can't run several maps (or many frames of one) reliably; if devices crash too,
+  look at how the render threads share EGL state. The full fault logs are in the
+  stage 2 worktree's gitignored `.proof/` (`ffi-repro-cppcrash-*.log`,
+  `review-cppcrash*.log`).
 
 ## Stage 6: expressions (FFI `5c4c9084`, `11ffaaf6`)
 

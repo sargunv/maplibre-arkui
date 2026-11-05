@@ -1,7 +1,7 @@
 import { MapController, MapLibreMap } from '@maplibre/arkui';
 
 const DEMOTILES = 'https://demotiles.maplibre.org/style.json';
-const LIBERTY = 'https://tiles.openfreemap.org/styles/liberty';
+export const LIBERTY = 'https://tiles.openfreemap.org/styles/liberty';
 
 // Two maps on one page, which share the default runtime and frame pacer.
 @ComponentV2

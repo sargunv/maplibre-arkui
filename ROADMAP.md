@@ -188,6 +188,12 @@ Decided:
   pacer serves every session.
 - The scale factor is `vp2px(1)` when the map is created. A density change still
   needs a new map. OpenGL only, through `-opengl`.
+- Not yet proven: several maps at once. On the Oniro emulator the process
+  crashes at random in Mesa's llvmpipe while maps render, with FFI's own example
+  too, and more often the more maps render: the demo's two-map page over its
+  first map has crashed within three pushes and has also survived fifteen. See
+  `docs/ffi-feedback.md`; telling an emulator bug from an FFI one needs a device
+  with a GPU.
 
 References:
 
@@ -245,10 +251,11 @@ Decided:
   FFI's snapshot synchronously.
 - The camera methods take FFI's types: `updateCamera(CameraUpdate)` and
   `fitCameraToLatLngBounds(bounds, CameraFitUpdate)`. They resolve with FFI's
-  `CameraTransitionOutcome` (completed, cancelled, or replaced) and reject only
-  when the map rejects the command. Resolving keeps a cancelled or replaced move
-  that nobody awaits from becoming an unhandled rejection, and Map Kit's
-  `animateCameraStatus` resolves the same way.
+  `CameraTransitionOutcome` (completed, cancelled, replaced, or closed when the
+  map leaves first) and reject only when the map rejects the command. Resolving
+  keeps a cancelled or replaced move that nobody awaits from becoming an
+  unhandled rejection, and Map Kit's `animateCameraStatus` resolves the same
+  way.
 - The methods need a map that is ready, and reject without one, rather than
   waiting for a map as MapLibre Compose does. The starting camera goes to the
   constructor.

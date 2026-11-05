@@ -164,6 +164,25 @@ export default function mapControllerTest(): void {
       expect(camera(map).bearing).assertClose(45, 0.001);
     });
 
+    it('rests where a map that leaves mid-animation left the camera', 0, async () => {
+      await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 2 } });
+      const animation = map.updateCamera({
+        mode: CameraUpdateMode.ease,
+        camera: { zoom: 12 },
+        animation: { durationMs: 10000 },
+      });
+      await until('the camera moves', () => camera(map).zoom > 2.1);
+      testMap.shown = false;
+      expect(await animation).assertEqual(CameraTransitionOutcome.closed);
+      const left = camera(map).zoom;
+      expect(map.camera?.zoom).assertEqual(left);
+      expect(left).assertLess(12);
+
+      testMap.shown = true;
+      await until('the map comes back', () => map.styleLoaded);
+      expect(camera(map).zoom).assertClose(left, 0.001);
+    });
+
     it('loads the style it is given, as JSON or a URL', 0, async () => {
       const loads = testMap.styleLoads;
       testMap.style = STYLE.replace('#4a90d9', '#d94a4a');

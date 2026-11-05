@@ -174,19 +174,24 @@ export class MapView extends XComponentController {
 
   private onEvent(event: RuntimeEvent): void {
     const map = this.map;
-    const controller = this.controller;
-    if (map === undefined || controller === undefined) {
+    if (map === undefined) {
       return;
     }
+    // The controller's state is this map's only while the controller shows it.
+    const controller = this.controller?.map === map ? this.controller : undefined;
     if (event.type === RuntimeEventType.mapStyleLoaded) {
-      controller.styleLoaded = true;
+      if (controller !== undefined) {
+        controller.styleLoaded = true;
+      }
       this.events.onStyleLoaded();
     } else if (event.type === RuntimeEventType.mapCameraDidChange) {
       // The camera changes at the end of each jump and animation. Report it
       // once nothing moves it any more.
       const snapshot = map.getSnapshot();
       if (!snapshot.transitionInProgress && !snapshot.gestureInProgress) {
-        controller.camera = snapshot.view.camera;
+        if (controller !== undefined) {
+          controller.camera = snapshot.view.camera;
+        }
         this.events.onCameraIdle(snapshot.view.camera);
       }
     } else if (event.type === RuntimeEventType.mapLoadingFailed ||
@@ -202,8 +207,9 @@ export class MapView extends XComponentController {
     if (map === undefined) {
       return;
     }
-    if (this.controller !== undefined) {
-      this.controller.styleLoaded = false;
+    const controller = this.controller;
+    if (controller !== undefined && controller.map === map) {
+      controller.styleLoaded = false;
     }
     const style = this.style.trim();
     if (!style.startsWith('{')) {
