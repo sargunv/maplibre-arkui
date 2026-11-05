@@ -218,6 +218,27 @@ export default function contentTest(): void {
       await untilLayers('background,labels,lost,dots');
     });
 
+    it('adds a layer once the rejected source it waited on leaves', 0, async () => {
+      // The base style already has a source called base.
+      const dots: MapLayer = { id: 'dots', type: 'circle', source: 'base' };
+      testMap.content = { sources: [{ id: 'base', json: { 'type': 'geojson', 'data': TWO } }], layers: [dots] };
+      await until('the map rejects the source', () =>
+        testMap.errors.some((error: string) => error.includes('adding source base')));
+      testMap.content = { layers: [dots] };
+      await untilLayers('background,labels,dots');
+    });
+
+    it('retries a rejected layer when its source changes type', 0, async () => {
+      const raster: Record<string, Object> = {
+        'type': 'raster', 'tiles': ['file:///nonexistent/{z}/{x}/{y}.png'], 'tileSize': 256,
+      };
+      testMap.content = { sources: [{ id: 'places', json: raster }], layers: [circles('dots', '#ff0000')] };
+      await until('the map rejects the layer', () =>
+        testMap.errors.some((error: string) => error.includes('adding layer dots')));
+      testMap.content = content(TWO, [circles('dots', '#ff0000')]);
+      await untilLayers('background,labels,dots');
+    });
+
     it('draws the content in a snapshot', 0, async () => {
       const west: MapContent = {
         sources: [{ id: 'west', json: { 'type': 'geojson', 'data': WEST } }],

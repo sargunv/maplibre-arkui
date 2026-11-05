@@ -260,6 +260,14 @@ export class ContentReconciler {
       images.set(image.id, image);
     }
 
+    // A rejected source that the content dropped no longer holds back the
+    // layers over a source of that ID.
+    for (const id of Array.from(this.rejectedSources.keys())) {
+      if (!sources.has(id)) {
+        this.rejectedSources.delete(id);
+      }
+    }
+
     // Sources that go or that change more than their data take their layers
     // with them.
     const replaced = new Set<string>();
@@ -352,7 +360,8 @@ export class ContentReconciler {
           map.setGeoJsonSourceUrl(source.id, value));
         return;
       }
-      await this.run(generation, `setting the data of source ${source.id}`, setGeoJsonData(map, source.id, value));
+      await this.run(generation, `setting the data of source ${source.id}`,
+        setGeoJsonData(map, source.id, value, () => this.check(generation)));
     } else {
       applied.value = value;
     }
@@ -370,9 +379,9 @@ export class ContentReconciler {
         return false;
       }
       // The key changes when the map might take the layer: when it changes,
-      // goes elsewhere, or its source comes or goes.
+      // goes elsewhere, or its source comes, goes, or changes.
       const json = layerJson(layer);
-      const key = `${JSON.stringify(json)}@${above}@${this.sources.has(layer.source ?? '')}`;
+      const key = `${JSON.stringify(json)}@${above}@${this.sources.get(layer.source ?? '')?.shape ?? ''}`;
       if (this.rejectedLayers.get(layer.id) === key) {
         return false;
       }
@@ -445,9 +454,12 @@ export class ContentReconciler {
 }
 
 // Replaces a GeoJSON source's data with data prepared with the source's own
-// options, which FFI requires.
-async function setGeoJsonData(map: MapHandle, id: string, data: Object): Promise<CommandCompletion> {
+// options, which FFI requires. `check` throws if the pass ended while it read
+// them.
+async function setGeoJsonData(map: MapHandle, id: string, data: Object,
+  check: () => void): Promise<CommandCompletion> {
   const info = await map.getStyleSource(id);
+  check();
   const prepared = GeoJsonSourceDataHandle.create(data, info?.geoJson);
   try {
     return await map.setGeoJsonSourceData(id, prepared);
