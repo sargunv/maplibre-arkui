@@ -138,18 +138,15 @@ that reads public repositories.
 Nothing is published yet. `mise run pack` warns about what keeps the HAR off
 ohpm. To publish:
 
-1. Add a `LICENSE` at the repository's root, which `pack-har.sh` copies into the
-   HAR, and its SPDX name as `license` in `library/oh-package.json5`. This is
-   the owner's decision, and blocks publishing.
-2. Once FFI publishes `@maplibre/native-ffi` and its backends on OHPM, set the
+1. Once FFI publishes `@maplibre/native-ffi` and its backends on OHPM, set the
    dependency in `library/oh-package.json5` to that exact version, such as
    `"@maplibre/native-ffi": "0.202612.0"`. FFI breaks its API in most releases,
    and the backend the app installs must match the facade, so pin it exactly,
    and tell apps that version in the READMEs' install line
    (`ohpm install @maplibre/arkui @maplibre/native-ffi-opengl@<version>`). Then
    `vars.ffi_commit` and `ffi:download` can give way to the published packages.
-3. Set `version` and add its section to `library/CHANGELOG.md`.
-4. `mise run pack`, then `ohpm prepublish build/har/maplibre-arkui.har` with
+2. Set `version` and add its section to `library/CHANGELOG.md`.
+3. `mise run pack`, then `ohpm prepublish build/har/maplibre-arkui.har` with
    DevEco's or the command-line tools' ohpm, which isn't part of this
    repository's toolchain. It warns that the HAR has source code, which a source
    HAR does. Then `ohpm publish build/har/maplibre-arkui.har`. OHPM lists the
