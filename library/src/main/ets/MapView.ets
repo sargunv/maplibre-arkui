@@ -147,8 +147,9 @@ export class MapView extends XComponentController implements GestureTarget {
 
   /** The app moves the camera, which takes over from the gestures. */
   takeOverCamera(): void {
-    this.cameraTakeovers++;
+    // After the stop, so the gesture that it ends sees the takeover too.
     this.gestures.stop();
+    this.cameraTakeovers++;
   }
 
   gestureStarted(): void {

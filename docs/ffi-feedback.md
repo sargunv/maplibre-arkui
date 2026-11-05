@@ -285,10 +285,11 @@ release. Each entry names the FFI commit it was seen at.
   render thread. Two GL contexts rendering on two threads at once in one process
   is the common factor.
 
-  **A `glFinish()` before FFI's `eglSwapBuffers` stops it.** With FFI at
-  `11ffaaf6`, this repository's suite (48 cases, with the scale bar and markers
-  on during some of them) finished in 3 of 6 runs; the other 3 crashed as above.
-  With one line added to `OpenGLSurfaceBackend::swap_surface()` in
+  **A `glFinish()` before FFI's `eglSwapBuffers` makes it rarer, but doesn't
+  stop it.** With FFI at `11ffaaf6`, this repository's suite (48 cases, with the
+  scale bar and markers on during some of them) finished in 3 of 6 runs; the
+  other 3 crashed as above. With one line added to
+  `OpenGLSurfaceBackend::swap_surface()` in
   `src/render/opengl/opengl_surface_session.cpp`, at the same commit, it
   finished in 6 of 6:
 
@@ -299,11 +300,15 @@ release. Each entry names the FFI commit it was seen at.
          eglSwapBuffers(
   ```
 
-  So the compositor reads a window buffer that FFI's render thread is still
-  drawing: llvmpipe doesn't honor the release fence that `eglSwapBuffers` hands
-  the native window, or FFI's swap doesn't wait for one. Suggested fix: on
-  OpenHarmony, finish (or wait on a fence) before the swap, at least under
-  llvmpipe, and check whether a GPU driver needs it too.
+  With stage 4's gestures on the same map (84 cases, ten of them injecting
+  input), the same patched build still crashed in 5 of 6 runs, with the same
+  stack. So the compositor can read a window buffer that FFI's render thread is
+  still drawing, but finishing before the swap doesn't close the race: some
+  other access to the buffer, or llvmpipe itself across threads, is involved.
+  Suggested fix: trace how the OpenHarmony surface hands buffers between FFI's
+  render thread and `RSRenderThread` (fences on `eglSwapBuffers`, and whether
+  the native window's buffers are shared across contexts), and check whether a
+  GPU driver crashes too.
 
 - **The webpack build that FFI's example uses rejects more ArkUI.** In SDK 6.1,
   besides the limits in stage 1 and 2: (a) any component written directly in a
