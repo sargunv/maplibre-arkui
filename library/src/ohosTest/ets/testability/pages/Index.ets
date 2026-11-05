@@ -30,28 +30,59 @@ struct Index {
   build() {
     Column() {
       if (testMap.shown) {
-        MapLibreMap({
-          controller: testMap.controller,
-          style: testMap.style,
-          cameraBounds: testMap.cameraBounds,
-          onStyleLoaded: () => {
-            testMap.styleLoads++;
-          },
-          onMapError: (error: Error) => {
-            testMap.errors.push(error.message);
-          },
-        }) {
-          if (testMap.scaleBar !== undefined) {
-            this.scaleBar()
+        if (testMap.inScroll) {
+          Scroll(testMap.scroller) {
+            Column() {
+              Column() {
+                this.map()
+              }
+              .height(300)
+
+              Text('Below the map')
+                .width('100%')
+                .height(1000)
+            }
           }
-          if (testMap.marker !== undefined) {
-            this.marker(testMap.marker)
-          }
+          .width('100%')
+          .height('100%')
+        } else {
+          this.map()
         }
       }
     }
     .id('map-host')
     .width('100%')
     .height('100%')
+  }
+
+  @Builder
+  map() {
+    MapLibreMap({
+      controller: testMap.controller,
+      style: testMap.style,
+      cameraBounds: testMap.cameraBounds,
+      gestures: testMap.gestures,
+      onStyleLoaded: () => {
+        testMap.styleLoads++;
+      },
+      onMapError: (error: Error) => {
+        testMap.errors.push(error.message);
+      },
+      onGestureStart: () => {
+        testMap.gestureStarts++;
+        testMap.onGestureStart();
+      },
+      onGestureEnd: () => {
+        testMap.gestureEnds++;
+        testMap.onGestureEnd();
+      },
+    }) {
+      if (testMap.scaleBar !== undefined) {
+        this.scaleBar()
+      }
+      if (testMap.marker !== undefined) {
+        this.marker(testMap.marker)
+      }
+    }
   }
 }

@@ -19,6 +19,8 @@ library/                 @maplibre/arkui, a source HAR
                          FFI handles
     MapView.ets          the XComponent controller that owns the FFI map and
                          render session (internal)
+    gestures.ets         gesture options, and the recognizer that turns touch,
+                         wheel, and keys into camera deltas and momentum
     MapMarker.ets        ArkUI content pinned to a coordinate
     Ornaments.ets        the compass, scale bar, attribution, and zoom buttons
     runtime.ets          the default runtime and its cache file, the frame
@@ -32,10 +34,11 @@ library/                 @maplibre/arkui, a source HAR
     ets/testability/     the test ability and the page whose map cases drive
 demo/entry/src/main/     the demo app's only module (module.json holds the app's
                          fields too, as FFI's ArkUI example does): a map with
-                         camera buttons, a page with two maps, a page with a
-                         snapshot, a resource transform, and an offline region,
-                         and a style page (StyleDemo.ets) that adds to the
-                         style and queries on tap
+                         camera buttons, a page with two maps, a map in a
+                         Scroll, a page with a snapshot, a resource transform,
+                         and an offline region, and a style page
+                         (StyleDemo.ets) that adds to the style and queries on
+                         tap
 scripts/                 the build, pack, FFI, and device scripts the tasks run
 .mise/plugins/ohos-sdk/  mise plugin for the OpenHarmony SDK, identical to FFI's;
                          linked by scripts/link-ohos-sdk-plugin.sh
@@ -162,3 +165,12 @@ model for adding it.
 - On the emulator, content that moves every frame over a map makes the llvmpipe
   crash likelier, so test cases turn on the scale bar and markers only while
   they need them.
+- The map's ArkUI gestures only claim touches; `MapGestures` moves the camera
+  from the raw touches, and only after a claim. Keep camera math out of the
+  gesture callbacks, except for input that has no touches (touchpad pinch).
+- Tests may import the library's internal files by path, such as
+  `@maplibre/arkui/src/main/ets/gestures`; `build-hap.sh` rewrites those
+  imports. `Gestures.test.ets` feeds the recognizer made-up touches, and
+  `GestureInput.test.ets` injects real input with `@ohos.UiTest`'s `Driver`.
+- hypium's `assertClose` divides the difference by the actual value, so check
+  values near zero with `Math.abs(...)` and `assertLessOrEqual`.

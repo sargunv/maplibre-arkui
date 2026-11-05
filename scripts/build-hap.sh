@@ -115,15 +115,17 @@ for package in "$@"; do
 done
 
 # Rewrite the module's imports of each source HAR to relative imports of its
-# copy under ets/.
+# copy under ets/. The library's tests also import its internal files by path,
+# such as @maplibre/arkui/src/main/ets/gestures.
 while IFS= read -r -d '' file; do
   directory=$(dirname "${file#"$src/ets/"}")
   up=$(sed -E 's#[^/]+#..#g' <<<"$directory")
   [[ $directory == . ]] && up=.
   for entry in ${source_hars[@]+"${source_hars[@]}"}; do
     name=${entry%/*}
-    NAME="$name" TARGET="$up/$entry" perl -pi -e \
-      's#(from\s+["\x27])\Q$ENV{NAME}\E(["\x27])#$1$ENV{TARGET}$2#g' "$file"
+    NAME="$name" TARGET="$up/$entry" ROOT="$up/$name" perl -pi -e \
+      's#(from\s+["\x27])\Q$ENV{NAME}\E(["\x27])#$1$ENV{TARGET}$2#g;
+       s#(from\s+["\x27])\Q$ENV{NAME}\E/#$1$ENV{ROOT}/#g' "$file"
   done
 done < <(find "$src/ets" \( -name '*.ets' -o -name '*.ts' \) -type f -print0)
 

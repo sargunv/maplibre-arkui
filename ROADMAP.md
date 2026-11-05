@@ -310,6 +310,41 @@ Questions:
 - How much of the MapLibre Compose interaction model to port: bindings,
   mappings, momentum, bearing snapping, haptics.
 
+Decided:
+
+- ArkUI's recognizers decide whether the map owns a touch, and the raw touches
+  decide how the camera moves. The map's XComponent binds a parallel
+  `GestureGroup` of `PanGesture`, `PinchGesture`, `RotationGesture`, and two
+  `TapGesture`s, and `onTouch`. On the emulator, the map's pan wins drags that
+  start on it from a parent `Scroll`, content above the map with its own
+  gestures wins its touches, and `onTouch` keeps getting touches the map lost,
+  without a cancel. So touches move the camera only after one of the map's
+  gestures starts, and the motion before that is the slop. No NDK code.
+- `MapGestures`, a plain class, ports the parts of MapLibre Compose's
+  recognition that give the feel: thresholds, the speed gates that keep a pinch
+  from rotating and staggered fingers from pinching, an exclusive two-finger
+  pitch, the fling and zoom and rotation momentum, and staged momentum when
+  fingers lift one at a time. Momentum runs on `displaySync` as UPDATE deltas,
+  and a new touch or the app's camera call stops it; the app's call leaves a
+  gesture that fingers still make alone. A rotation that ends within 7° of north
+  eases to it, unless the app moved the camera as the gesture ended.
+- ArkUI's `TapGesture`s zoom in at a double tap and out at a two-finger tap,
+  with FFI's animated deltas. A tap and then a drag zooms while `pan` is on. The
+  wheel zooms at the pointer (`onAxisEvent`), a touchpad pinch zooms
+  (`PinchGesture`), and the arrows, Shift and the arrows, and plus and minus
+  pan, rotate, pitch, and zoom a focused map.
+- One `gestures: MapGestureOptions` param of booleans, in Map Kit's style:
+  `pan`, `zoom`, `rotate`, `pitch`, and `cooperative`, which needs two fingers
+  to pan so one-finger drags and the plain wheel scroll a parent, and Ctrl and
+  the wheel zoom. No bindings DSL. `onGestureStart` and `onGestureEnd` events,
+  such as to stop following a location.
+- ArkUI reports the fingers of one motion in separate touch events, sometimes at
+  one time, so the speed gates measure from the last earlier time.
+- Not yet: haptics, long press, mouse right-drag rotation, touchpad two-finger
+  pan (the emulator can't inject it), a held key that moves every frame, a
+  public handler for custom hosts like Compose's `Modifier.mapInput`, and
+  calibrating thresholds on a device.
+
 References:
 
 - [MapLibre Compose interaction guide][compose-interaction] and its [interaction

@@ -10,6 +10,7 @@ import {
 
 import { Engine } from './Engine';
 import { StyleDemo } from './StyleDemo';
+import { ScrollingMap } from './ScrollingMap';
 import { LIBERTY, TwoMaps } from './TwoMaps';
 
 const SWITZERLAND: LatLngBounds = {
@@ -38,6 +39,7 @@ struct Index {
   @Local message: string = '';
   // The panel's height, which the map keeps its ornaments above.
   @Local panelHeight: number = 0;
+  @Local gesturing: boolean = false;
   private map: MapController = new MapController({
     camera: { center: { latitude: 48.8584, longitude: 2.2945 }, zoom: 14 },
   });
@@ -55,6 +57,12 @@ struct Index {
             onMapError: (error: Error) => {
               this.message = error.message;
             },
+            onGestureStart: () => {
+              this.gesturing = true;
+            },
+            onGestureEnd: () => {
+              this.gesturing = false;
+            },
           }) {
             // The webpack build rejects components written in a ForEach item,
             // so the item calls a builder.
@@ -69,7 +77,7 @@ struct Index {
             .textAlign(TextAlign.Center)
         }
         Column({ space: 8 }) {
-          Text(this.describeCamera())
+          Text(this.gesturing ? 'Moving with a gesture…' : this.describeCamera())
             .fontSize(14)
           if (this.message !== '') {
             Text(this.message)
@@ -95,6 +103,9 @@ struct Index {
             })
             Button('Style').margin(4).onClick(() => {
               this.stack.pushPathByName('style', null);
+            })
+            Button('In a scroll').margin(4).onClick(() => {
+              this.stack.pushPathByName('scrolling-map', null);
             })
           }
         }
@@ -146,6 +157,8 @@ struct Index {
       Engine()
     } else if (name === 'style') {
       StyleDemo()
+    } else if (name === 'scrolling-map') {
+      ScrollingMap()
     }
   }
 

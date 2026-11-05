@@ -1,6 +1,6 @@
 // The map that the test page shows, which the cases read and change.
 
-import { BoundOptions, LatLng, MapController, ScaleBarUnits } from '@maplibre/arkui';
+import { BoundOptions, LatLng, MapController, MapGestureOptions, ScaleBarUnits } from '@maplibre/arkui';
 
 // A style without network requests.
 export const STYLE =
@@ -17,10 +17,22 @@ export class TestMap {
   // emulator's llvmpipe crash more often, so other cases go without.
   @Trace scaleBar: ScaleBarUnits | undefined = undefined;
   @Trace marker: LatLng | undefined = undefined;
+  @Trace gestures: MapGestureOptions = {};
+  // The map is 300 vp tall at the top of a Scroll while this is true, and fills
+  // the page otherwise.
+  @Trace inScroll: boolean = false;
   // What the map's events reported.
   styleLoads: number = 0;
   errors: string[] = [];
+  gestureStarts: number = 0;
+  gestureEnds: number = 0;
+  // What a case does as a gesture starts or ends, as an app would.
+  onGestureStart: () => void = () => {
+  };
+  onGestureEnd: () => void = () => {
+  };
   controller: MapController = new MapController({ camera: { zoom: 1 } });
+  scroller: Scroller = new Scroller();
   // The page's UI context, once the page appears.
   context: UIContext | undefined = undefined;
 }
