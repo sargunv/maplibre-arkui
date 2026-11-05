@@ -255,6 +255,22 @@ export default function contentTest(): void {
       await map.removeStyleImage('dot');
     });
 
+    it('leaves an image ID alone after the map rejects the content image', 0, async () => {
+      const map = requireMap();
+      // Too few pixels for its size, so the map rejects it.
+      const bad: Uint8Array = new Uint8Array(4);
+      testMap.content = { images: [{ id: 'dot', image: { width: 2, height: 2, stride: 8, pixels: bad } }] };
+      await until('the map rejects the image', () =>
+        testMap.errors.some((error: string) => error.includes('setting image dot')));
+      await map.setStyleImage('dot', { width: 3, height: 1, stride: 12, pixels: new Uint8Array(12) });
+      const empty: MapContent = {};
+      testMap.content = empty;
+      let frames = 0;
+      await until('a moment passes', () => ++frames > 10);
+      expect((await map.getStyleImage('dot'))?.width).assertEqual(3);
+      await map.removeStyleImage('dot');
+    });
+
     it('removes a source on a later pass once nothing else uses it', 0, async () => {
       const map = requireMap();
       testMap.content = content(TWO, []);

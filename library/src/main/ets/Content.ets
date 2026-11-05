@@ -145,8 +145,8 @@ export class ContentReconciler {
   private images: Map<string, MapImage> = new Map<string, MapImage>();
   // What the map rejected, by ID, as text, so a pass skips it until it changes.
   private rejectedSources: Map<string, string> = new Map<string, string>();
-  // Images of the content whose ID the style already had, which it leaves to
-  // the style.
+  // Images of the content that the map rejected, or whose ID the style
+  // already had, which the content leaves alone until the ID leaves it.
   private rejectedImages: Set<string> = new Set<string>();
   private rejectedLayers: Map<string, string> = new Map<string, string>();
   private passes: Promise<void> = Promise.resolve();
@@ -331,9 +331,15 @@ export class ContentReconciler {
       }
       if (applied === undefined || applied.image !== image.image ||
         JSON.stringify(applied.options) !== JSON.stringify(image.options)) {
-        this.images.set(image.id, image);
-        await this.run(generation, `setting image ${image.id}`,
+        const set = await this.run(generation, `setting image ${image.id}`,
           map.setStyleImage(image.id, image.image, image.options));
+        // The content owns an image only once the map has taken it; one that
+        // it rejects waits until its ID leaves the content.
+        if (set || applied !== undefined) {
+          this.images.set(image.id, image);
+        } else {
+          this.rejectedImages.add(image.id);
+        }
       }
     }
 
