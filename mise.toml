@@ -58,12 +58,12 @@ ohos-sdk = { version = "{{vars.ohos_sdk_version}}", os = ["linux", "macos"] }
   "macos",
 ] }
 
+# The ohos-sdk plugin link is global to mise, and FFI's checkouts link the same
+# plugin, so link it only when no checkout has. Relinking it here would leave a
+# dangling link once this worktree is removed.
 [hooks]
-preinstall = ["mise plugins link --force ohos-sdk .mise/plugins/ohos-sdk"]
-postinstall = [
-  "mise plugins link --force ohos-sdk .mise/plugins/ohos-sdk",
-  "hk install --mise",
-]
+preinstall = ["sh scripts/link-ohos-sdk-plugin.sh"]
+postinstall = ["sh scripts/link-ohos-sdk-plugin.sh", "hk install --mise"]
 
 [tasks.check]
 description = "Run every formatter and linter check."
