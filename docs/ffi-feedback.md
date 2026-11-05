@@ -164,5 +164,39 @@ release. Each entry names the FFI commit it was seen at.
   devices-cli wait until the account service reports the user before it reports
   the device.
 
+## Stage 10: requests, offline, snapshots, logs (FFI `5c4c9084`)
+
+- **A relative `cachePath` creates a runtime whose cache can't open.** On the
+  emulator, `RuntimeHandle.create({ cachePath: 'probe-cache.db' })` resolved,
+  and then `createOfflineRegion()` rejected with
+  `nativeError: unable to open database file`: an app's working directory isn't
+  writable on OpenHarmony. The offline guide's snippet passes
+  `"maplibre-cache.db"`. Suggested fix: use an app data directory in the snippet
+  and say in `RuntimeOptions.cachePath` that it should be absolute; ideally,
+  have `RuntimeHandle.create()` reject when it can't open the file. This
+  library's default runtime uses `<filesDir>/maplibre-cache.db`.
+- **Offline download progress needs the runtime's one event handler.** Progress,
+  response errors, and the tile limit arrive only as runtime events, so a
+  library that sets the handler for its maps (see stages 2 and 3) has to pass
+  the runtime's own events on too. This library adds `addRuntimeEventListener()`
+  for it (about 20 lines in `runtime.ets`). The same per-map or multi-handler
+  fix would cover it; a per-region callback on `setOfflineRegionObserved()`
+  would also suit apps.
+- **The header transform is unsupported on OpenHarmony, and the network guide
+  doesn't say so.** `setHttpHeaderTransform()` documents `Status.unsupported`
+  there, but the guide's "Add headers" section reads as if it works everywhere,
+  and its TypeScript snippet doesn't mention OpenHarmony. An ArkTS app has to
+  serve the requests with a resource provider and `@ohos.net.http` to add a
+  header. Suggested fix: say so in the guide, with the provider as the way to
+  add headers, or implement the transform on OpenHarmony's HTTP source.
+- **Only offscreen sessions read back pixels, so an image of a visible map
+  renders it again.** `readTexture()` needs
+  `RenderSessionCapabilityFlag.readback`, which only `offscreen_device.cpp`
+  sets; an OpenHarmony surface session doesn't. This library's `snapshot()`
+  renders the map's style and camera in a static map instead, which loads the
+  resources again (from the cache) and can differ from the screen mid-load.
+  Suggested fix: readback for window sessions, or a note in the images guide
+  that a still image of an on-screen map means a second, static map.
+
 [42012958276]:
   https://github.com/maplibre/maplibre-native-ffi/actions/runs/42012958276

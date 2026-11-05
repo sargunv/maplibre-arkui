@@ -17,15 +17,18 @@ library/                 @maplibre/arkui, a source HAR
                          FFI handles
     MapView.ets          the XComponent controller that owns the FFI map and
                          render session (internal)
-    runtime.ets          the default runtime, the frame pacer, and per-runtime
-                         event dispatch
+    runtime.ets          the default runtime and its cache file, the frame
+                         pacer, and per-runtime event dispatch to maps and app
+                         listeners
+    Snapshot.ets         snapshot(): a still image of a map, as a PixelMap
   src/main/module.json   the HAR's module manifest
   src/ohosTest/          the hypium suite, a test HAP in DevEco's layout
     ets/test/            the cases; List.test.ets registers them
     ets/testability/     the test ability and the page whose map cases drive
 demo/entry/src/main/     the demo app's only module (module.json holds the app's
                          fields too, as FFI's ArkUI example does): a map with
-                         camera buttons, and a page with two maps
+                         camera buttons, a page with two maps, and a page with a
+                         snapshot, a resource transform, and an offline region
 scripts/                 the build, pack, FFI, and device scripts the tasks run
 .mise/plugins/ohos-sdk/  mise plugin for the OpenHarmony SDK, identical to FFI's;
                          linked by scripts/link-ohos-sdk-plugin.sh
@@ -106,8 +109,7 @@ model for adding it.
 - Strict ArkTS. Import `@ohos.*` modules, not `@kit.*`, which the webpack build
   doesn't rewrite.
 - No formatter understands `.ets`, so format it by hand in the style of the
-  existing files (2 spaces, single quotes). ets-loader enforces the ArkTS rules
-  when it builds.
+  existing files (2 spaces, single quotes). The build enforces the ArkTS rules.
 - `oh-package.json5` files stay plain JSON, which the scripts read with jq.
 - Record FFI gaps and bugs in `docs/ffi-feedback.md` instead of working around
   them with complex code.
@@ -124,3 +126,12 @@ model for adding it.
   `setTimeout` poll.
 - The webpack build's ESM tsconfig omits some built-in components, such as
   `NodeContainer` and `ContentSlot`, so `.ets` files can't use them yet.
+- ets-loader only warns when code breaks the ArkTS rules, so `build-hap.sh`
+  fails on the errors in its `ArkTSLinter_output.json`.
+- The library owns each runtime's one FFI event handler. Code that needs a
+  runtime's events, such as offline progress, uses `addRuntimeEventListener()`,
+  never `RuntimeHandle.setEventHandler()`.
+- Request handlers, offline regions, and logs are FFI's API, re-exported from
+  `Index.ets`; wrap them only where ArkUI needs it.
+- Test cases don't need the network, except the resource transform case, which
+  rewrites a URL to a real style.

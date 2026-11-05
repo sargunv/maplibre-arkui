@@ -33,7 +33,8 @@ export struct MapLibreMap {
   @Param cameraBounds: BoundOptions | undefined = undefined;
   /**
    * The FFI runtime that creates the map. Without one, maps share the
-   * library's default runtime. The map sets the runtime's event handler.
+   * library's default runtime. The map sets the runtime's event handler, so
+   * listen with `addRuntimeEventListener()` instead of setting one.
    */
   @Param @Once runtime: RuntimeHandle | undefined = undefined;
   /** The style has loaded, so its layers and sources exist. */

@@ -170,6 +170,14 @@ if [[ ! -s "$work/cache/filesInfo.txt" ]]; then
   echo "error: ets-loader didn't compile the module" >&2
   exit 1
 fi
+# ets-loader reports breaks of the ArkTS rules as warnings and builds anyway.
+linter="$work/cache/ArkTS/ArkTSLinter_output.json"
+if [[ -s $linter ]] && jq -e 'any(.[]; .categoryInfo == "Error")' "$linter" >/dev/null; then
+  jq -r '.[] | select(.categoryInfo == "Error") | "\(.fileName):\(.line):\(.character): \(.messageText)"' \
+    "$linter" | sed "s#$src/##" >&2
+  echo "error: the module breaks the ArkTS rules" >&2
+  exit 1
+fi
 
 cat "$work/cache/filesInfo.txt" "$records" >"$work/all-records.txt"
 "$es2abc" --merge-abc --module --output "$work/modules.abc" "@$work/all-records.txt"

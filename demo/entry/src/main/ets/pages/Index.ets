@@ -6,6 +6,7 @@ import {
   MapLibreMap,
 } from '@maplibre/arkui';
 
+import { Engine } from './Engine';
 import { LIBERTY, TwoMaps } from './TwoMaps';
 
 const SWITZERLAND: LatLngBounds = {
@@ -60,6 +61,9 @@ struct Index {
             Button('Two maps').margin(4).onClick(() => {
               this.stack.pushPathByName('two-maps', null);
             })
+            Button('Snapshots, offline').margin(4).onClick(() => {
+              this.stack.pushPathByName('engine', null);
+            })
           }
         }
         .padding(12)
@@ -79,6 +83,8 @@ struct Index {
   pages(name: string) {
     if (name === 'two-maps') {
       TwoMaps()
+    } else if (name === 'engine') {
+      Engine()
     }
   }
 

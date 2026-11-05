@@ -3,7 +3,8 @@
 An ArkUI library for [MapLibre Native] on HarmonyOS and OpenHarmony, built on
 the ArkTS bindings of [MapLibre Native FFI]. It is a cousin of [MapLibre
 Compose]. It's early: the package, `@maplibre/arkui`, shows a map, moves its
-camera, and builds style expressions, without gestures yet. See
+camera, builds style expressions, and renders snapshots, without gestures yet.
+It re-exports FFI's request handlers, offline regions, and logs. See
 [ROADMAP.md](ROADMAP.md) for the plan.
 
 ## Using it

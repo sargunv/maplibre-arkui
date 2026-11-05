@@ -530,12 +530,42 @@ References:
   [guidelines][oh-location-guidelines]
 - [Requesting user authorization][oh-request-permission]
 
-## Stage 10: Requests, offline, snapshots, logging, terrain
+## Stage 10: Requests, offline, snapshots, logging
 
-Goal: the remaining engine features of MapLibre Compose. Request handlers are
-fixed when a runtime is created, in FFI and in MapLibre Compose
-([#1287][compose-1287]). MapLibre Compose's terrain guide covers 3D buildings,
-hillshade, and globe; it has no 3D terrain yet ([#1772][compose-1772]).
+Goal: the remaining engine features of MapLibre Compose. MapLibre Compose fixes
+request handlers when a runtime is created ([#1287][compose-1287]); FFI main
+lets an app set and replace them on a runtime at any time. MapLibre Compose's
+terrain guide covers 3D buildings, hillshade, and globe; it has no 3D terrain
+yet ([#1772][compose-1772]), so terrain is out of scope here.
+
+Decided:
+
+- Requests, offline regions, and logs are FFI's API, re-exported. An app sets a
+  resource transform or provider on `await getDefaultRuntime()` (or its own
+  runtime), and calls the runtime's offline methods; nothing configures the
+  default runtime before first use, since the handlers can change later. FFI
+  doesn't support the header transform on OpenHarmony, so a header goes through
+  a resource provider.
+- The default runtime keeps its cache database at
+  `<filesDir>/maplibre-cache.db`, so the ambient cache and offline regions last
+  between launches in the app's sandbox. The files directory rather than the
+  cache directory, as MapLibre Native on Android does, because the system can
+  clear the cache directory and offline regions are downloads an app means to
+  keep. An app that wants another path creates its own runtime.
+- `addRuntimeEventListener()` and `removeRuntimeEventListener()` pass on every
+  event of a runtime, since the library owns its one FFI event handler. That is
+  how an app sees offline download progress.
+- `snapshot(options): Promise<image.PixelMap>` renders a still image of a style
+  and camera in a static map with an offscreen session, at the display's
+  density, for an `Image`. FFI reads back only offscreen sessions, so an image
+  of an on-screen map is a snapshot of its style and its controller's camera.
+  Each call creates its own map and session; a reusable snapshotter waits for a
+  need.
+- Logs need no code: MapLibre Native on OpenHarmony writes them to hilog (domain
+  `0x4d4c`, tag `MapLibreNative`), and an app takes them over with FFI's
+  `setLogCallback()`.
+- Not done: following the device's connectivity with `setNetworkStatus()`, as
+  MapLibre Compose does; apps can call it.
 
 References:
 
