@@ -1,7 +1,9 @@
 # @maplibre/arkui
 
-ArkUI components for MapLibre Native on HarmonyOS and OpenHarmony. Not usable
-yet; see the [repository](https://github.com/sargunv/maplibre-arkui).
+ArkUI components for MapLibre Native on HarmonyOS and OpenHarmony: a
+`MapLibreMap` component and a `MapController` that reads and moves its camera.
+Early, and not on ohpm yet; see the
+[repository](https://github.com/sargunv/maplibre-arkui).
 
 ## Style expressions
 

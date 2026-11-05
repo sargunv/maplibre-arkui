@@ -10,13 +10,22 @@ ideas set the priorities.
 library/                 @maplibre/arkui, a source HAR
   Index.ets              the public API: only what this exports is public
   oh-package.json5       name, version, API floor (20), FFI dependency
-  src/main/ets/          the sources
+  src/main/ets/
     Expressions.ets      style expressions: functions that build style-spec JSON
+    MapLibreMap.ets      the map component: params, events, lifecycle
+    MapController.ets    the app's handle: observable camera, camera methods,
+                         FFI handles
+    MapView.ets          the XComponent controller that owns the FFI map and
+                         render session (internal)
+    runtime.ets          the default runtime, the frame pacer, and per-runtime
+                         event dispatch
   src/main/module.json   the HAR's module manifest
   src/ohosTest/          the hypium suite, a test HAP in DevEco's layout
     ets/test/            the cases; List.test.ets registers them
+    ets/testability/     the test ability and the page whose map cases drive
 demo/entry/src/main/     the demo app's only module (module.json holds the app's
-                         fields too, as FFI's ArkUI example does)
+                         fields too, as FFI's ArkUI example does): a map with
+                         camera buttons, and a page with two maps
 scripts/                 the build, pack, FFI, and device scripts the tasks run
 .mise/plugins/ohos-sdk/  mise plugin for the OpenHarmony SDK, identical to FFI's;
                          linked by scripts/link-ohos-sdk-plugin.sh
@@ -106,3 +115,12 @@ model for adding it.
   `Expression` as is, through its `toJSON()`. A new expression function gets a
   JSON case and a case that FFI's `StyleExpressionHandle` parses and evaluates
   in `Expressions.test.ets`.
+- Import FFI's `Camera` type as `CameraPosition`; ArkUI reserves the name for a
+  built-in component, and ets-loader rejects the import.
+- The FFI map is usable only once `map.ready` settles: its snapshot throws
+  before then. `MapView` exposes it to the controller only after that.
+- Tests wait with frame callbacks, not timers. OpenHarmony's main thread can
+  lose a timer's wakeup while nothing else wakes its event loop, which hangs a
+  `setTimeout` poll.
+- The webpack build's ESM tsconfig omits some built-in components, such as
+  `NodeContainer` and `ContentSlot`, so `.ets` files can't use them yet.

@@ -6,16 +6,15 @@ import { Hypium } from '@ohos/hypium';
 import testsuite from '../test/List.test';
 
 export default class TestAbility extends UIAbility {
-  onCreate(): void {
-    Hypium.hypiumTest(abilityDelegatorRegistry.getAbilityDelegator(),
-      abilityDelegatorRegistry.getArguments(), testsuite);
-  }
-
+  // The suite starts once the page has loaded, so the cases can use its map.
   onWindowStageCreate(windowStage: window.WindowStage): void {
     windowStage.loadContent('testability/pages/Index', (error) => {
       if (error.code !== 0) {
         console.error(`MapLibre: can't load the test page: ${error.message}`);
+        return;
       }
+      Hypium.hypiumTest(abilityDelegatorRegistry.getAbilityDelegator(),
+        abilityDelegatorRegistry.getArguments(), testsuite);
     });
   }
 }
