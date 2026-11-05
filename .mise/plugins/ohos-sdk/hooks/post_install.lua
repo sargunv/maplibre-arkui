@@ -101,13 +101,6 @@ function PLUGIN:PostInstall(ctx)
   if not file.exists(hdc) then
     error("the installed SDK has no device connector at " .. hdc)
   end
-  -- PATH gets bin/, which holds only hdc. See env_keys.lua.
-  run(
-    "mkdir -p "
-      .. quote(root .. "/bin")
-      .. "; ln -sf ../toolchains/hdc "
-      .. quote(root .. "/bin/hdc")
-  )
   -- The ArkTS component names its compiler directory for the host it targets.
   local ark = RUNTIME.osType == "darwin" and "build-mac" or "build"
   local es2abc = root .. "/ets/build-tools/ets-loader/bin/ark/" .. ark .. "/bin/es2abc"
