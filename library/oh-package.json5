@@ -5,6 +5,7 @@
   "keywords": ["maplibre", "map", "maps", "vector tiles", "gis", "arkui", "arkts", "harmonyos", "openharmony"],
   "main": "Index.ets",
   "author": { "name": "MapLibre", "url": "https://maplibre.org" },
+  "license": "BSD-2-Clause",
   "homepage": "https://github.com/sargunv/maplibre-arkui#readme",
   "repository": "https://github.com/sargunv/maplibre-arkui",
   "bugs": { "url": "https://github.com/sargunv/maplibre-arkui/issues" },

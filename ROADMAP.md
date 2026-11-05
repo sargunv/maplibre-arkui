@@ -77,8 +77,7 @@ left, which [Next](#next) collects.
   styling the indicator, a zoom gesture that keeps following, a real device.
 - Stage 10, requests, offline, snapshots, logs (#6): done. Follow-up: following
   the device's connectivity with `setNetworkStatus()`.
-- Stage 11, guidelines, docs, and release prep: done, except the license and the
-  publish.
+- Stage 11, guidelines, docs, and release prep: done, except the publish.
 
 ## Stage 0: Build against FFI main
 
@@ -808,7 +807,7 @@ References:
 
 Goal: written API guidelines, a documentation site, and publication on ohpm.
 Early previews can ship from any earlier stage. Done without the docs site and
-the publish, which waits for the license and FFI's packages.
+the publish, which waits for FFI's packages.
 
 Questions:
 
@@ -847,18 +846,18 @@ Decided:
   READMEs, so they can't drift from the API.
 - `@maplibre/arkui`, version `0.1.0-preview.1`, with a `CHANGELOG.md` that names
   each version, as OHPM's review requires. `mise run pack` makes a HAR that
-  `ohpm prepublish` accepts once the FFI dependency names a published version
-  and the repository has a license; it warns until then. `AGENTS.md` lists the
-  release steps. The license is the owner's decision, and blocks publishing.
+  `ohpm prepublish` accepts once the FFI dependency names a published version;
+  it warns until then. `AGENTS.md` lists the release steps. The license is
+  BSD-2-Clause, as MapLibre Native FFI's is.
 - `mise run test` runs the hypium suite once; a run that the llvmpipe crash ends
   without hypium's tally fails, and isn't retried. CI doesn't run the suite
   until that crash is fixed (see Next).
 
 ## Next
 
-- **Publish.** Pick a license; move the FFI dependency to the facade's OHPM
-  version once FFI publishes it, and build CI against OHPM instead of FFI's CI
-  artifacts; then `ohpm publish`. See `AGENTS.md`, Releasing.
+- **Publish.** Move the FFI dependency to the facade's OHPM version once FFI
+  publishes it, and build CI against OHPM instead of FFI's CI artifacts; then
+  `ohpm publish`. See `AGENTS.md`, Releasing.
 - **CI on the emulator.** Run the hypium suite on the Oniro emulator in CI, as
   FFI's CI does, once the llvmpipe crash is fixed. Locally, during stage 11,
   only 2 of 18 runs of the suite finished; the rest crashed. At that rate a CI
@@ -866,7 +865,7 @@ Decided:
 - **The llvmpipe crash.** Mesa's llvmpipe crashes the app on the emulator while
   maps render, and more often with ArkUI content moving over them. A device with
   a GPU tells an emulator bug from an FFI race between render threads
-  (`docs/ffi-feedback.md`).
+  ([maplibre-native-ffi#1692], `docs/ffi-feedback.md`).
 - **Real devices.** Check gestures (thresholds, momentum, the feel of pinch and
   rotate), location from Location Kit, several maps at once, and Vulkan on a
   phone and a tablet.
@@ -1055,6 +1054,8 @@ All of these are imperative controller APIs:
 [mapbox-declarative]:
   https://docs.mapbox.com/ios/maps/guides/styles/declarative-map-styling/
 [mapbox-swiftui]: https://docs.mapbox.com/ios/maps/guides/swift-ui/
+[maplibre-native-ffi#1692]:
+  https://github.com/maplibre/maplibre-native-ffi/issues/1692
 [mccharts]: https://ohpm.openharmony.cn/#/cn/detail/@mcui%2Fmccharts
 [native-4315]: https://github.com/maplibre/maplibre-native/pull/4315
 [oh-addmonitor]:

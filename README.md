@@ -10,7 +10,7 @@ and snapshots. It passes on FFI's style API, request handlers, offline regions,
 and logs as they are.
 
 It's a preview, and it isn't on [ohpm] yet: it waits for FFI to publish its
-packages there, and for a license. See [the changelog](library/CHANGELOG.md) and
+packages there. See [the changelog](library/CHANGELOG.md) and
 [ROADMAP.md](ROADMAP.md).
 
 - [Install](#install) and [quick start](#quick-start)
