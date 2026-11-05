@@ -42,15 +42,16 @@ export type ExpressionInput = Expression | string | number | boolean | null;
 export class Expression {
   /** The expression's style-spec JSON. */
   readonly json: JsonValue;
-  private key: string | undefined = undefined;
+  private readonly key: string;
 
   /**
    * Creates an expression from its style-spec JSON, such as
-   * `new Expression(['get', 'name'])`. The expression keeps `json`, so don't
-   * change it afterward.
+   * `new Expression(['get', 'name'])`. The expression keeps a copy, so later
+   * changes to `json` don't change it.
    */
   constructor(json: JsonValue) {
-    this.json = json;
+    this.key = JSON.stringify(json);
+    this.json = JSON.parse(this.key) as JsonValue;
   }
 
   /** Whether `other` has the same JSON. */
@@ -63,11 +64,8 @@ export class Expression {
     return this.json;
   }
 
-  /** The expression's JSON text, computed once. */
+  /** The expression's JSON text. */
   toString(): string {
-    if (this.key === undefined) {
-      this.key = JSON.stringify(this.json);
-    }
     return this.key;
   }
 }

@@ -93,6 +93,41 @@ export default function expressionsTest(): void {
         '{"font-scale":0.8,"text-font":["literal",["Bold"]],"text-color":"#f00"}]');
     });
 
+    it('writes each operator with its arguments in order', 0, () => {
+      const pairs: [Expression, string][] = [
+        [neq(1, 2), '["!=",1,2]'], [lt(1, 2), '["<",1,2]'], [lte(1, 2), '["<=",1,2]'],
+        [gt(1, 2), '[">",1,2]'], [gte(1, 2), '[">=",1,2]'], [not(true), '["!",true]'],
+        [all(true, false), '["all",true,false]'], [any(true, false), '["any",true,false]'],
+        [add(1, 2, 3), '["+",1,2,3]'], [subtract(1, 2), '["-",1,2]'],
+        [multiply(1, 2), '["*",1,2]'], [divide(1, 2), '["/",1,2]'], [mod(1, 2), '["%",1,2]'],
+        [pow(2, 3), '["^",2,3]'], [sqrt(4), '["sqrt",4]'], [abs(-1), '["abs",-1]'],
+        [round(1.5), '["round",1.5]'], [floor(1.5), '["floor",1.5]'], [ceil(1.5), '["ceil",1.5]'],
+        [min(1, 2), '["min",1,2]'], [max(1, 2), '["max",1,2]'],
+        [toNumber(get('n'), 0), '["to-number",["get","n"],0]'], [toString(1), '["to-string",1]'],
+        [toBoolean(1), '["to-boolean",1]'], [toColor('#f00'), '["to-color","#f00"]'],
+        [concat('a', 'b'), '["concat","a","b"]'], [upcase('a'), '["upcase","a"]'],
+        [downcase('A'), '["downcase","A"]'], [rgb(1, 2, 3), '["rgb",1,2,3]'],
+        [rgba(1, 2, 3, 0.5), '["rgba",1,2,3,0.5]'], [image('park'), '["image","park"]'],
+        [interpolateHcl(linear(), zoom(), [[0, '#000'], [1, '#fff']]),
+          '["interpolate-hcl",["linear"],["zoom"],0,"#000",1,"#fff"]'],
+      ];
+      for (const pair of pairs) {
+        expect(pair[0].toString()).assertEqual(pair[1]);
+      }
+    });
+
+    it('keeps a copy of the values it was built from', 0, () => {
+      const labels: string[] = ['lake'];
+      const values: JsonValue[] = ['a'];
+      const water = match(get('class'), [[labels, '#00f']], '#ccc');
+      const names = literal(values);
+      labels.push('river');
+      values.push('b');
+      expect(JSON.stringify(water)).assertEqual('["match",["get","class"],["lake"],"#00f","#ccc"]');
+      expect(water.toString()).assertEqual(JSON.stringify(water));
+      expect(JSON.stringify(names)).assertEqual('["literal",["a"]]');
+    });
+
     it('compares by JSON', 0, () => {
       const a = interpolate(linear(), zoom(), [[0, 1], [10, get('size')]]);
       const b = interpolate(linear(), zoom(), [[0, 1], [10, get('size')]]);
