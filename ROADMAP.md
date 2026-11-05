@@ -546,6 +546,67 @@ predict some answers, noted here; confirm them on a device.
 - Snapshots. FFI has no snapshotter; a snapshot is an offscreen render target
   plus a still-image request.
 
+Decided (`library/src/main/ets/Content.ets`):
+
+- Content as data. An app passes `MapLibreMap` a `MapContent` value of sources,
+  layers, and images, usually from a `@Computed` getter over its state, and
+  `snapshot()` takes the same value. A new value is a change; the map doesn't
+  see changes made inside one. This is the simplest shape that ArkUI V2 supports
+  well, and child components that render nothing fail on the facts below.
+- Layers have a small typed core (`id`, `type`, `source`, `sourceLayer`,
+  `filter`, `minZoom`, `maxZoom`) and `paint` and `layout` records of plain
+  values or expressions; a declared interface lets ArkTS type the nested
+  literals, which a `Record<string, Object>` layer can't. Sources are the style
+  spec's JSON (`json`), and images are FFI's premultiplied images, such as from
+  `readPixelMap()`. No per-type property surfaces.
+- Order: layers go on top, or under the base-style layer that `below` names or
+  that a predicate picks (`layer.type === 'symbol'` for "below labels",
+  `() => true` for the bottom), resolved against the layers the style had when
+  the content first applied to it, and falling back to the top. Layers under the
+  same base layer keep their order in `layers`. That covers "above or below each
+  other" without anchoring to content layers.
+- A reconciler, after MapLibre Compose's but much smaller, diffs the content by
+  ID against what it added to the current style, and on each style load applies
+  all of it again. Properties and GeoJSON data compare by their JSON (an
+  `Expression`'s cached text), images by reference. A change to `paint`,
+  `layout`, `filter`, or the zoom range sets just those properties (null resets
+  one the content dropped); a change to a layer's type, source, or source layer
+  replaces the layer; a change to only a GeoJSON source's `data` loads the new
+  data into the source; any other source change replaces the source and its
+  layers. Ordering walks each group from its top down and moves a layer only
+  when the one above it is wrong.
+- One pass at a time, awaiting each FFI command, so the reconciler always knows
+  what the style holds and a rejection can't cascade. A pass reads the latest
+  content when it starts, a style change aborts it, and changes during a pass
+  coalesce into one more. On the emulator, test cases with two to four passes of
+  up to eight commands took 75 to 150 ms in all. A source or layer that the map
+  rejects goes to `onMapError` and stays out until its definition (or, for a
+  layer, its position or its source's presence) changes; a layer over a rejected
+  source waits for it.
+- Not done: per-layer click handlers. They need the map's taps, which stage 4
+  owns; with them, a layer's `onClick` is a rendered query at the tap filtered
+  to the layers that have one. Apps query on a tap themselves meanwhile, as the
+  demo does. Also not done: font scale (`fp`) for text sizes, and anchoring to
+  content layers.
+
+Prototype results (Oniro emulator, SDK 6.1; source in the stage 7 worktree's
+gitignored `.proof/prototype/`):
+
+- `@Consumer` inside `@BuilderParam` trailing-closure content resolves to the
+  `@Provider` of the page that wrote the content, not of the component that
+  renders it, in V2 as in V1. Child components would need the map as a `@Param`.
+- A child inserted by `if` between two siblings runs `aboutToAppear` after both,
+  so registration order isn't declaration order, and child components would need
+  explicit z-order.
+- A `@ComponentV2` can't have an `id` param: it clashes with the `id()`
+  attribute ("Property 'id' ... is not assignable to the same property in base
+  type 'CustomComponent'"), the property-name clash that TPC MapLibre cited.
+- A `@Computed` getter that returns a new array recomputes when an `@Local` it
+  reads changes, including a push to an `@Local` array whose `length` it reads,
+  and not for unrelated state or an assignment of the same value; a child's
+  `@Monitor` on the `@Param` it feeds fires each time.
+- A component whose `build()` is empty compiles and runs.
+
 ## Stage 8: Ornaments and overlays
 
 Goal: compass, scale bar, attribution, logo, and zoom buttons, plus ArkUI

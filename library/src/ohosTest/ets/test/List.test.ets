@@ -1,3 +1,4 @@
+import contentTest from './Content.test';
 import engineTest from './Engine.test';
 import expressionsTest from './Expressions.test';
 import gestureInputTest from './GestureInput.test';
@@ -14,4 +15,5 @@ export default function testsuite(): void {
   styleTest();
   ornamentsTest();
   gestureInputTest();
+  contentTest();
 }

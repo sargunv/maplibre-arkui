@@ -223,6 +223,35 @@ release. Each entry names the FFI commit it was seen at.
   note it with the example's other build limits; a build that needs `$r()` would
   run restool before ets-loader and pass it the `ResourceTable.txt`.
 
+## Stage 7: declarative content (FFI `5c4c9084`)
+
+- **Replacing a GeoJSON source's data takes options that the app has to read
+  back first.** `setGeoJsonSourceData()` takes a `GeoJsonSourceDataHandle`
+  prepared with the source's options, so a source added from style JSON with
+  `cluster` or `maxzoom` needs its options in FFI's form. This library reads
+  them with `getStyleSource(id)` and passes `info.geoJson` to
+  `GeoJsonSourceDataHandle.create()` (`setGeoJsonData()` in `Content.ets`): a
+  round trip and a handle for what is "set this source's data" in the style spec
+  and GL JS (`GeoJSONSource.setData`). Suggested fix: a
+  `setGeoJsonSourceDataJson(sourceId, data)` that prepares the data with the
+  source's own options, or let `create()` skip options it doesn't need, and say
+  in `setGeoJsonSourceData()`'s doc how to get the options (the doc names
+  `getStyleSource()`, which helped).
+- **Layer properties read back in a normalized form that the docs don't
+  describe.** On the emulator, `getStyleLayerProperty()` returned
+  `["rgba",0,255,0,1]` for a `circle-color` set as `'#00ff00'`,
+  `["to-color",["get","color"]]` for one set as `["get","color"]`, and
+  `undefined` for a property reset with null, not its default. A reconciler
+  can't compare what it set with what it reads, so this library compares with
+  what it set last. Suggested fix: document the forms on
+  `mln_map_get_style_layer_property` (as for expression results in stage 6), and
+  say that an unset property reads as absent.
+- **Rejections don't name what was missing.** Adding a layer over a missing
+  source failed with `notFound: layer source does not exist`, and a duplicate
+  with `alreadyExists: layer already exists`, without the layer or source ID, so
+  a library that adds many layers has to wrap each error with its own context.
+  Suggested fix: include the IDs in the messages.
+
 ## Stage 10: requests, offline, snapshots, logs (FFI `5c4c9084`)
 
 - **A relative `cachePath` creates a runtime whose cache can't open.** On the

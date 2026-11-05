@@ -11,6 +11,7 @@ import {
   CameraQueryResult,
   CameraTransitionOutcome,
   CameraUpdateMode,
+  CommandCompletion,
   LogicalSize,
   MapHandle,
   MapMode,
@@ -25,6 +26,7 @@ import {
   StyleSourceInfo,
 } from '@maplibre/native-ffi';
 
+import { ContentReconciler, MapContent } from './Content';
 import { GESTURE_ANIMATION_MS, GestureTarget, MapGestures, snapBearing } from './gestures';
 import { MapController } from './MapController';
 import { addRuntimeEventListener, getDefaultRuntime, getFramePacer, removeRuntimeEventListener } from './runtime';
@@ -61,6 +63,8 @@ export class MapView extends XComponentController implements GestureTarget {
   // The map from when it's created, which the view disposes.
   private created: MapHandle | undefined = undefined;
   private style: string = '';
+  private content: MapContent | undefined = undefined;
+  private reconciler: ContentReconciler | undefined = undefined;
   private bounds: BoundOptions | undefined = undefined;
   // The limits a new map has, which apply again when the app removes its own.
   private defaultBounds: BoundOptions | undefined = undefined;
@@ -116,9 +120,10 @@ export class MapView extends XComponentController implements GestureTarget {
   }
 
   start(controller: MapController, runtime: RuntimeHandle | undefined, style: string,
-    bounds: BoundOptions | undefined): void {
+    content: MapContent | undefined, bounds: BoundOptions | undefined): void {
     this.controller = controller;
     this.style = style;
+    this.content = content;
     this.bounds = bounds;
     const runtimeReady = runtime === undefined ? getDefaultRuntime() : Promise.resolve(runtime);
     runtimeReady.then((runtime: RuntimeHandle) => this.createMap(runtime)).catch((error: Error) => this.fail(error));
@@ -127,6 +132,11 @@ export class MapView extends XComponentController implements GestureTarget {
   setStyle(style: string): void {
     this.style = style;
     this.applyStyle();
+  }
+
+  setContent(content: MapContent | undefined): void {
+    this.content = content;
+    this.reconciler?.setContent(content);
   }
 
   setBounds(bounds: BoundOptions | undefined): void {
@@ -197,6 +207,8 @@ export class MapView extends XComponentController implements GestureTarget {
       removeRuntimeEventListener(runtime, this.listener);
     }
     this.controller?.detach(this);
+    this.reconciler?.styleUnloaded();
+    this.reconciler = undefined;
     this.runtime = undefined;
     this.created = undefined;
     this.map = undefined;
@@ -235,6 +247,8 @@ export class MapView extends XComponentController implements GestureTarget {
       return;
     }
     this.map = map;
+    this.reconciler = new ContentReconciler(map, (error: Error) => this.fail(error));
+    this.reconciler.setContent(this.content);
     this.defaultBounds = boundOptions(map.getSnapshot().bounds);
     addRuntimeEventListener(runtime, this.listener);
     // The controller takes camera changes from here on, and the map runs
@@ -260,6 +274,7 @@ export class MapView extends XComponentController implements GestureTarget {
         controller.styleLoaded = true;
         this.readAttributions(map, controller);
       }
+      this.reconciler?.styleLoaded();
       this.events.onStyleLoaded();
     } else if (event.type === RuntimeEventType.mapCameraDidChange) {
       // The camera changes at the end of each jump and animation. Report it
@@ -304,7 +319,6 @@ export class MapView extends XComponentController implements GestureTarget {
     this.events.onCameraIdle(camera);
   }
 
-  // A style that fails to load reports mapLoadingFailed.
   private applyStyle(): void {
     const map = this.map;
     if (map === undefined) {
@@ -315,8 +329,11 @@ export class MapView extends XComponentController implements GestureTarget {
       controller.styleLoaded = false;
       controller.attributions = [];
     }
+    this.reconciler?.styleUnloaded();
     try {
-      loadStyle(map, this.style);
+      // A style that fails to load reports mapLoadingFailed.
+      loadStyle(map, this.style).catch(() => {
+      });
     } catch (error) {
       this.fail(error as Error);
     }
@@ -406,14 +423,11 @@ export class MapView extends XComponentController implements GestureTarget {
 }
 
 // A style that starts with `{` is a style document, and anything else is its
-// URL. It throws when the document isn't JSON.
-export function loadStyle(map: MapHandle, style: string): void {
+// URL. It throws when the document isn't JSON, and the command completes once
+// the style is loaded.
+export function loadStyle(map: MapHandle, style: string): Promise<CommandCompletion> {
   const trimmed = style.trim();
-  if (trimmed.startsWith('{')) {
-    map.discarding.setStyleJson(JSON.parse(trimmed));
-  } else {
-    map.discarding.setStyleUrl(trimmed);
-  }
+  return trimmed.startsWith('{') ? map.setStyleJson(JSON.parse(trimmed)) : map.setStyleUrl(trimmed);
 }
 
 function boundOptions(bounds: CameraBounds): BoundOptions {

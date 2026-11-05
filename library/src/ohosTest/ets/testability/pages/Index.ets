@@ -60,6 +60,7 @@ struct Index {
     MapLibreMap({
       controller: testMap.controller,
       style: testMap.style,
+      content: testMap.content,
       cameraBounds: testMap.cameraBounds,
       gestures: testMap.gestures,
       onStyleLoaded: () => {

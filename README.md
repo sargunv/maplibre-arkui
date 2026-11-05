@@ -5,9 +5,10 @@ the ArkTS bindings of [MapLibre Native FFI]. It is a cousin of [MapLibre
 Compose]. It's early: the package, `@maplibre/arkui`, shows a map that moves
 with touch, mouse, and keyboard gestures, with a compass, scale bar,
 attribution, and zoom buttons. It pins ArkUI content to coordinates, moves its
-camera from code, builds style expressions, changes the style, and renders
-snapshots. It re-exports FFI's request handlers, offline regions, and logs. See
-[ROADMAP.md](ROADMAP.md) for the plan.
+camera from code, builds style expressions, draws content that the app declares
+from its state, changes the style, and renders snapshots. It re-exports FFI's
+request handlers, offline regions, and logs. See [ROADMAP.md](ROADMAP.md) for
+the plan.
 
 ## Using it
 
@@ -88,44 +89,74 @@ camera methods resolve with how the move ended. `frameCamera` and
 map. It also exposes the FFI runtime, map, and render session for what this
 library doesn't wrap yet.
 
-### The style
+### Map content
 
-The style API is MapLibre Native FFI's: `controller.map` adds and changes
-sources, layers, images, and feature state, and `controller.renderSession`
-queries features. A new style starts without the sources, layers, and images the
-app added, so add them in `onStyleLoaded`. (Feature state of a source re-added
-under the same ID can carry over.) Sources and layers are style-spec JSON,
-written in ArkTS as `Record<string, Object>` literals, and take this library's
-expressions as they are:
+An app declares what it draws over the style as data: sources, layers, and
+images, in a `MapContent` that it passes to `MapLibreMap`. A `@Computed` getter
+that reads the app's state makes a new value when that state changes, and the
+map compares it with what it applied, by ID, and changes only what differs: a
+property in place, a GeoJSON source's data, a layer's position. Each style the
+map loads gets the content again, so it lasts across style changes, and
+`snapshot()` takes the same content.
 
 ```ets
-MapLibreMap({
-  controller: this.map,
-  style: 'https://tiles.openfreemap.org/styles/liberty',
-  onStyleLoaded: () => {
-    const map = this.map.map!;
-    const places: GeoJsonFeatureCollection = { type: 'FeatureCollection', features: [] };
-    const source: Record<string, Object> = { 'type': 'geojson', 'data': places };
-    const paint: Record<string, Object> = {
-      'circle-color': match(get('kind'), [['museum', '#fb8c00']], '#1e88e5'),
-    };
-    const layer: Record<string, Object> = { 'id': 'places', 'type': 'circle', 'source': 'places', 'paint': paint };
-    map.addStyleSourceJson('places', source);
-    map.addStyleLayerJson(layer);
-    map.setStyleImage('pin', readPixelMap(this.pin));
-  },
-}).onClick((event: ClickEvent) => {
-  // The click's point is in vp from the map's corner, as queries take it.
-  this.map.renderSession?.queryRenderedFeatures({ kind: 'point', value: { x: event.x, y: event.y } });
-});
+@Local places: GeoJsonFeatureCollection = { type: 'FeatureCollection', features: [] };
+@Local color: string = '#1e88e5';
+// Read once: the map compares images by reference.
+private pin: PremultipliedRgba8Image = readPixelMap(PIN);
+
+@Computed
+get content(): MapContent {
+  return {
+    sources: [{ id: 'places', json: { 'type': 'geojson', 'data': this.places } }],
+    layers: [{
+      id: 'places', type: 'circle', source: 'places',
+      paint: { 'circle-color': match(get('kind'), [['museum', '#fb8c00']], this.color) },
+      // Under the base style's labels.
+      below: (layer: StyleLayerInfo) => layer.type === 'symbol',
+    }],
+    images: [{ id: 'pin', image: this.pin }],
+  };
+}
+
+build() {
+  MapLibreMap({
+    controller: this.map,
+    style: 'https://tiles.openfreemap.org/styles/liberty',
+    content: this.content,
+  })
+}
 ```
 
-`readPixelMap()` turns an ArkUI `PixelMap` into the image that FFI takes. The
-demo's style page shows each of these, with feature state on tap. On an idle
-map, a feature state change draws only from the frame after the one that applies
-it, so until FFI fixes that, request one, as the demo does with
-`map.discarding.requestRepaint()` from a delayed frame callback (see
-[docs/ffi-feedback.md](docs/ffi-feedback.md)).
+Layers are style-spec JSON with typed `id`, `type`, `source`, `filter`, and zoom
+range, and `paint` and `layout` records whose values are plain values or this
+library's expressions. Layers go on top, or under the base-style layer that
+`below` names or picks, in their order in `layers`. A source or layer that the
+map rejects is reported to `onMapError` and left out until it changes.
+`readPixelMap()` turns an ArkUI `PixelMap` into a style image.
+
+### The style API
+
+For everything else, the style API is MapLibre Native FFI's: `controller.map`
+adds and changes sources, layers, images, and feature state, and
+`controller.renderSession` queries features:
+
+```ets
+MapLibreMap({ controller: this.map, style: STYLE, content: this.content })
+  .onClick((event: ClickEvent) => {
+    // The click's point is in vp from the map's corner, as queries take it.
+    this.map.renderSession?.queryRenderedFeatures({ kind: 'point', value: { x: event.x, y: event.y } },
+      { layerIds: ['places'] });
+  })
+```
+
+What an app adds through `controller.map` is gone in the next style, so it adds
+it again in `onStyleLoaded`. (Feature state of a source re-added under the same
+ID can carry over.) The demo's style page shows content driven by state, a
+snapshot of it, and feature state on tap. On an idle map, a feature state change
+draws only from the frame after the one that applies it, so until FFI fixes
+that, request one, as the demo does with `map.discarding.requestRepaint()` from
+a delayed frame callback (see [docs/ffi-feedback.md](docs/ffi-feedback.md)).
 
 ## Developing
 

@@ -13,6 +13,7 @@ import {
 import display from '@ohos.display';
 import image from '@ohos.multimedia.image';
 
+import { ContentReconciler, MapContent } from './Content';
 import { loadStyle } from './MapView';
 import { getDefaultRuntime } from './runtime';
 
@@ -20,6 +21,11 @@ import { getDefaultRuntime } from './runtime';
 export interface SnapshotOptions {
   /** The style's URL, or a style document as JSON, as `MapLibreMap` takes it. */
   style: string;
+  /**
+   * Sources, layers, and images to draw over the style, as `MapLibreMap`
+   * takes them. A source or layer that the map rejects is left out.
+   */
+  content?: MapContent;
   /** The image's width in vp. */
   width: number;
   /** The image's height in vp. */
@@ -56,9 +62,9 @@ export interface SnapshotOptions {
  *
  * It resolves once every resource the image needs has loaded, and rejects when
  * the style or one of those resources fails to load. To capture what a
- * `MapLibreMap` shows, pass its style and its controller's camera, through
- * `cameraToOptions()`, when `getCamera()` returns one. The image holds only
- * the map: show the style's attribution with it.
+ * `MapLibreMap` shows, pass its style, its content, and its controller's
+ * camera, through `cameraToOptions()`, when `getCamera()` returns one. The
+ * image holds only the map: show the style's attribution with it.
  */
 export async function snapshot(options: SnapshotOptions): Promise<image.PixelMap> {
   const runtime = options.runtime ?? await getDefaultRuntime();
@@ -74,7 +80,13 @@ export async function snapshot(options: SnapshotOptions): Promise<image.PixelMap
       { driver: RenderDriverKind.coreWorker });
     try {
       await session.ready;
-      loadStyle(map, options.style);
+      await loadStyle(map, options.style);
+      if (options.content !== undefined) {
+        const reconciler = new ContentReconciler(map,
+          (error: Error) => console.warn(`MapLibre snapshot: ${error.message}`));
+        reconciler.setContent(options.content);
+        await reconciler.styleLoaded();
+      }
       if (options.camera !== undefined) {
         map.discarding.updateCamera({ mode: CameraUpdateMode.jump, camera: options.camera });
       }
