@@ -352,11 +352,12 @@ Decided:
   Apps call them through `controller.map` and `controller.renderSession`, and
   the library re-exports the types they take and return. Style values are
   style-spec JSON, and an `Expression` goes in as is.
-- Style reloads need no handles. A new style starts without what the app added,
-  commands fail with `invalidState` until it loads, and `onStyleLoaded` (or the
-  observable `styleLoaded`) fires for each load, so the app adds its sources,
-  layers, and images there. MapLibre Compose's handle generations serve its
-  declarative content, which stage 7 takes up.
+- Style reloads need no handles. A new style starts without the sources, layers,
+  and images the app added (feature state of a source re-added under the same ID
+  can carry over), commands fail with `invalidState` until it loads, and
+  `onStyleLoaded` (or the observable `styleLoaded`) fires for each load, so the
+  app adds its sources, layers, and images there. MapLibre Compose's handle
+  generations serve its declarative content, which stage 7 takes up.
 - GeoJSON goes to FFI as an object. Strict ArkTS accepts an object literal only
   for a declared type, so the library declares GeoJSON's types
   (`GeoJsonFeatureCollection` and the rest); layers and sources are

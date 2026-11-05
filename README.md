@@ -58,46 +58,40 @@ map, and render session for what this library doesn't wrap yet.
 
 The style API is MapLibre Native FFI's: `controller.map` adds and changes
 sources, layers, images, and feature state, and `controller.renderSession`
-queries features. A new style starts without what the app added, so add it in
-`onStyleLoaded`. Sources and layers are style-spec JSON, written in ArkTS as
-`Record<string, Object>` literals, and take this library's expressions as they
-are:
+queries features. A new style starts without the sources, layers, and images the
+app added, so add them in `onStyleLoaded`. (Feature state of a source re-added
+under the same ID can carry over.) Sources and layers are style-spec JSON,
+written in ArkTS as `Record<string, Object>` literals, and take this library's
+expressions as they are:
 
-```ts
+```ets
 MapLibreMap({
   controller: this.map,
-  style: "https://tiles.openfreemap.org/styles/liberty",
+  style: 'https://tiles.openfreemap.org/styles/liberty',
   onStyleLoaded: () => {
     const map = this.map.map!;
-    const places: GeoJsonFeatureCollection = {
-      type: "FeatureCollection",
-      features: [],
-    };
-    const source: Record<string, Object> = { type: "geojson", data: places };
+    const places: GeoJsonFeatureCollection = { type: 'FeatureCollection', features: [] };
+    const source: Record<string, Object> = { 'type': 'geojson', 'data': places };
     const paint: Record<string, Object> = {
-      "circle-color": match(get("kind"), [["museum", "#fb8c00"]], "#1e88e5"),
+      'circle-color': match(get('kind'), [['museum', '#fb8c00']], '#1e88e5'),
     };
-    const layer: Record<string, Object> = {
-      id: "places",
-      type: "circle",
-      source: "places",
-      paint: paint,
-    };
-    map.addStyleSourceJson("places", source);
+    const layer: Record<string, Object> = { 'id': 'places', 'type': 'circle', 'source': 'places', 'paint': paint };
+    map.addStyleSourceJson('places', source);
     map.addStyleLayerJson(layer);
-    map.setStyleImage("pin", readPixelMap(this.pin));
+    map.setStyleImage('pin', readPixelMap(this.pin));
   },
 }).onClick((event: ClickEvent) => {
   // The click's point is in vp from the map's corner, as queries take it.
-  this.map.renderSession?.queryRenderedFeatures({
-    kind: "point",
-    value: { x: event.x, y: event.y },
-  });
+  this.map.renderSession?.queryRenderedFeatures({ kind: 'point', value: { x: event.x, y: event.y } });
 });
 ```
 
 `readPixelMap()` turns an ArkUI `PixelMap` into the image that FFI takes. The
-demo's style page shows each of these, with feature state on tap.
+demo's style page shows each of these, with feature state on tap. On an idle
+map, a feature state change draws only from the frame after the one that applies
+it, so until FFI fixes that, request one, as the demo does with
+`map.discarding.requestRepaint()` from a delayed frame callback (see
+[docs/ffi-feedback.md](docs/ffi-feedback.md)).
 
 ## Developing
 

@@ -26,11 +26,17 @@ have no function.
 
 `controller.map` is MapLibre Native FFI's `MapHandle`, whose style API adds and
 changes sources, layers, images, and feature state, and
-`controller.renderSession` queries features at a point in vp. Add sources and
-layers in `onStyleLoaded`, since each style starts without them. The package
-re-exports the FFI types these take, declares GeoJSON's types for ArkTS
+`controller.renderSession` queries features at a point in vp. Add sources,
+layers, and images in `onStyleLoaded`, since each style starts without them
+(feature state of a source re-added under the same ID can carry over). The
+package re-exports the FFI types these take, declares GeoJSON's types for ArkTS
 literals, and adds `readPixelMap()`, which turns a `PixelMap` into the image
 that `setStyleImage()` takes.
+
+On an idle map, a feature state change draws only from the frame after the one
+that applies it. Until FFI fixes that, request one after the change, for example
+with `map.discarding.requestRepaint()` from a delayed frame callback, as the
+repository's demo does.
 
 ## Snapshots
 

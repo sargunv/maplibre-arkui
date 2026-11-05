@@ -15,6 +15,7 @@ import {
   MapController,
   MapLibreMap,
   match,
+  PremultipliedRgba8Image,
   readPixelMap,
   RenderedFeature,
   toBoolean,
@@ -110,13 +111,18 @@ function pinsLayer(): Record<string, Object> {
     'filter': all(eq(geometryType(), 'Point'), eq(get('kind'), 'monument')), 'layout': layout };
 }
 
-// Decodes an image from the app's rawfile resources into a pixel map. (This
-// repository's build can't compile `$r()` yet; see AGENTS.md.)
-function loadPin(context: UIContext): image.PixelMap {
+// Decodes an image from the app's rawfile resources into the pixels the style
+// takes. (This repository's build can't compile `$r()` yet; see AGENTS.md.)
+function loadPin(context: UIContext): PremultipliedRgba8Image {
   const bytes = context.getHostContext()!.resourceManager.getRawFileContentSync('pin.png');
   const source = image.createImageSource(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
   try {
-    return source.createPixelMapSync();
+    const pixelMap = source.createPixelMapSync();
+    try {
+      return readPixelMap(pixelMap);
+    } finally {
+      pixelMap.release();
+    }
   } finally {
     source.release();
   }
@@ -133,15 +139,11 @@ export struct StyleDemo {
   private controller: MapController = new MapController({
     camera: { center: { latitude: 48.8570, longitude: 2.2965 }, zoom: 13.6 },
   });
-  private pin: image.PixelMap | undefined = undefined;
+  private pin: PremultipliedRgba8Image | undefined = undefined;
   private selected: FeatureStateSelector | undefined = undefined;
 
   aboutToAppear(): void {
     this.pin = loadPin(this.getUIContext());
-  }
-
-  aboutToDisappear(): void {
-    this.pin?.release();
   }
 
   build() {
@@ -189,7 +191,7 @@ export struct StyleDemo {
     }
     const added: Promise<CommandCompletion>[] = [];
     if (this.pin !== undefined) {
-      added.push(map.setStyleImage('pin', readPixelMap(this.pin), { pixelRatio: 3 }));
+      added.push(map.setStyleImage('pin', this.pin, { pixelRatio: 3 }));
     }
     const source: Record<string, Object> = { 'type': 'geojson', 'data': PARIS };
     added.push(map.addStyleSourceJson('paris', source));
@@ -228,15 +230,21 @@ export struct StyleDemo {
         `${feature?.properties?.['name']} in ${hit.layerId} ${where}` +
           (hits.length > 1 ? `, over ${hits.length - 1} more` : '');
 
-      if (this.selected !== undefined) {
-        await map.removeFeatureState(this.selected);
-        this.selected = undefined;
+      // The map compares feature IDs as text.
+      const next: FeatureStateSelector | undefined = hit === undefined || feature?.id === undefined ? undefined :
+        { sourceId: hit.sourceId, featureId: { kind: 'stringValue', value: `${feature.id}` } };
+      // Swap the selection before awaiting, so a later tap's swap follows this
+      // one. The map runs the commands in order.
+      const previous = this.selected;
+      this.selected = next;
+      const changes: Promise<CommandCompletion>[] = [];
+      if (previous !== undefined) {
+        changes.push(map.removeFeatureState(previous));
       }
-      if (hit !== undefined && feature?.id !== undefined) {
-        // The map compares feature IDs as text.
-        this.selected = { sourceId: hit.sourceId, featureId: { kind: 'stringValue', value: `${feature.id}` } };
-        await map.setFeatureState(this.selected, SELECTED_STATE);
+      if (next !== undefined) {
+        changes.push(map.setFeatureState(next, SELECTED_STATE));
       }
+      await Promise.all(changes);
       // FFI draws a feature state change only from the frame after the one
       // that applies it, so ask for that frame. See docs/ffi-feedback.md.
       this.getUIContext().postDelayedFrameCallback(new Repaint(this.controller), 100);

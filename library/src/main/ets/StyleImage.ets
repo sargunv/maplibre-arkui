@@ -26,8 +26,7 @@ export function readPixelMap(pixelMap: image.PixelMap): PremultipliedRgba8Image 
   const height = info.size.height;
   const buffer = new ArrayBuffer(pixelMap.getPixelBytesNumber());
   pixelMap.readPixelsToBufferSync(buffer);
-  // The buffer holds `height` rows, which can be padded past `width` pixels.
-  const stride = height > 0 ? buffer.byteLength / height : width * 4;
+  const stride = pixelMap.getBytesNumberPerRow();
   const pixels = new Uint8Array(buffer);
   const bgra = format === image.PixelMapFormat.BGRA_8888;
   const premultiply = info.alphaType === image.AlphaType.UNPREMUL;
