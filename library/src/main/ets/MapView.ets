@@ -11,6 +11,7 @@ import {
   LogicalSize,
   MapHandle,
   MapMode,
+  MapView as FrameView,
   RenderDriverKind,
   RenderResult,
   RenderSessionHandle,
@@ -18,6 +19,7 @@ import {
   RuntimeEventFlag,
   RuntimeEventType,
   RuntimeHandle,
+  StyleSourceInfo,
 } from '@maplibre/native-ffi';
 
 import { MapController } from './MapController';
@@ -60,6 +62,9 @@ export class MapView extends XComponentController {
   private target: bigint | undefined = undefined;
   // Target changes run one at a time, in the order the component reports them.
   private targets: Promise<void> = Promise.resolve();
+  // The view of the last frame shown, as JSON, to skip frames that only
+  // redraw it.
+  private frameView: string = '';
 
   constructor(context: UIContext, events: MapViewEvents) {
     super();
@@ -156,7 +161,8 @@ export class MapView extends XComponentController {
       eventMask: RuntimeEventFlag.mapStyleLoaded |
         RuntimeEventFlag.mapLoadingFailed |
         RuntimeEventFlag.mapRenderError |
-        RuntimeEventFlag.mapCameraDidChange,
+        RuntimeEventFlag.mapCameraDidChange |
+        RuntimeEventFlag.mapSourceChanged,
     });
     this.runtime = runtime;
     this.created = map;
@@ -188,6 +194,7 @@ export class MapView extends XComponentController {
     if (event.type === RuntimeEventType.mapStyleLoaded) {
       if (controller !== undefined) {
         controller.styleLoaded = true;
+        this.readAttributions(map, controller);
       }
       this.events.onStyleLoaded();
     } else if (event.type === RuntimeEventType.mapCameraDidChange) {
@@ -200,10 +207,32 @@ export class MapView extends XComponentController {
         }
         this.events.onCameraIdle(snapshot.view.camera);
       }
+    } else if (event.type === RuntimeEventType.mapSourceChanged) {
+      // A source's attribution can arrive after the style, with its TileJSON.
+      if (controller !== undefined && controller.styleLoaded) {
+        this.readAttributions(map, controller);
+      }
     } else if (event.type === RuntimeEventType.mapLoadingFailed ||
       event.type === RuntimeEventType.mapRenderError) {
       this.fail(new Error(event.message));
     }
+  }
+
+  private readAttributions(map: MapHandle, controller: MapController): void {
+    map.listStyleSources().then((sources: readonly StyleSourceInfo[]) => {
+      const attributions: string[] = [];
+      for (const source of sources) {
+        const attribution = source.attribution.trim();
+        if (attribution !== '' && !attributions.includes(attribution)) {
+          attributions.push(attribution);
+        }
+      }
+      // Sources change often, as their data does, so keep an unchanged list.
+      if (controller.map === map && controller.styleLoaded &&
+        JSON.stringify(attributions) !== JSON.stringify(controller.attributions)) {
+        controller.attributions = attributions;
+      }
+    }).catch((error: Error) => this.fail(error));
   }
 
   // A style that fails to load reports mapLoadingFailed.
@@ -215,6 +244,7 @@ export class MapView extends XComponentController {
     const controller = this.controller;
     if (controller !== undefined && controller.map === map) {
       controller.styleLoaded = false;
+      controller.attributions = [];
     }
     try {
       loadStyle(map, this.style);
@@ -281,6 +311,20 @@ export class MapView extends XComponentController {
     const results = session.drainFrameResults();
     if (results.some((result) => result.disposition === RenderResult.failed)) {
       this.fail(new Error(`The map failed to render a frame: ${session.getFailure()}`));
+    }
+    // Overlays follow the view of the latest frame drawn.
+    let view: FrameView | undefined = undefined;
+    for (const result of results) {
+      if (result.disposition === RenderResult.rendered) {
+        view = result.view;
+      }
+    }
+    const json = view === undefined ? '' : JSON.stringify(view);
+    const controller = this.controller;
+    if (view !== undefined && json !== this.frameView && controller !== undefined &&
+      controller.map === this.map) {
+      this.frameView = json;
+      controller.showFrame(view);
     }
   }
 

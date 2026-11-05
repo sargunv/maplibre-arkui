@@ -2,10 +2,11 @@
 
 An ArkUI library for [MapLibre Native] on HarmonyOS and OpenHarmony, built on
 the ArkTS bindings of [MapLibre Native FFI]. It is a cousin of [MapLibre
-Compose]. It's early: the package, `@maplibre/arkui`, shows a map, moves its
-camera, builds style expressions, changes the style, and renders snapshots,
-without gestures yet. It re-exports FFI's request handlers, offline regions, and
-logs. See [ROADMAP.md](ROADMAP.md) for the plan.
+Compose]. It's early: the package, `@maplibre/arkui`, shows a map with a
+compass, scale bar, attribution, and zoom buttons, pins ArkUI content to
+coordinates, moves its camera, builds style expressions, changes the style, and
+renders snapshots, without gestures yet. It re-exports FFI's request handlers,
+offline regions, and logs. See [ROADMAP.md](ROADMAP.md) for the plan.
 
 ## Using it
 
@@ -49,10 +50,26 @@ struct MapPage {
 An app that loads styles or tiles from the network requests
 `ohos.permission.INTERNET` in its `module.json5`.
 
+The map shows a compass while it's rotated and the style's attribution; its
+`scaleBarEnabled` and `zoomButtonsEnabled` flags add the others, and
+`ornamentPadding` keeps them clear of app UI. Each is also a component, such as
+`MapCompass({ controller })`, to place yourself. Content in the map's trailing
+closure lies over it, and `MapMarker` pins content to a coordinate:
+
+```ts
+MapLibreMap({ controller: this.map, style: STYLE, scaleBarEnabled: true }) {
+  MapMarker({ controller: this.map, coordinate: { latitude: 48.8566, longitude: 2.3522 } }) {
+    Text('Paris')
+  }
+}
+```
+
 `MapController` reads and moves the camera from anywhere: its `camera` and
 `styleLoaded` are observable, `getCamera()` reads the camera right now, and its
-camera methods resolve with how the move ended. It also exposes the FFI runtime,
-map, and render session for what this library doesn't wrap yet.
+camera methods resolve with how the move ended. `frameCamera` and
+`pixelForLatLng()` follow the frame on screen, for content that moves with the
+map. It also exposes the FFI runtime, map, and render session for what this
+library doesn't wrap yet.
 
 ### The style
 

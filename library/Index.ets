@@ -110,3 +110,6 @@ export type {
 } from '@maplibre/native-ffi';
 export type { GeoJsonFeature, GeoJsonFeatureCollection, GeoJsonGeometry, GeoJsonPosition } from './src/main/ets/GeoJson';
 export { readPixelMap } from './src/main/ets/StyleImage';
+
+export { MapMarker } from './src/main/ets/MapMarker';
+export { MapAttribution, MapCompass, MapScaleBar, MapZoomButtons, ScaleBarUnits } from './src/main/ets/Ornaments';

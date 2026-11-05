@@ -19,6 +19,8 @@ library/                 @maplibre/arkui, a source HAR
                          FFI handles
     MapView.ets          the XComponent controller that owns the FFI map and
                          render session (internal)
+    MapMarker.ets        ArkUI content pinned to a coordinate
+    Ornaments.ets        the compass, scale bar, attribution, and zoom buttons
     runtime.ets          the default runtime and its cache file, the frame
                          pacer, and per-runtime event dispatch to maps and app
                          listeners
@@ -130,7 +132,10 @@ model for adding it.
   lose a timer's wakeup while nothing else wakes its event loop, which hangs a
   `setTimeout` poll.
 - The webpack build's ESM tsconfig omits some built-in components, such as
-  `NodeContainer` and `ContentSlot`, so `.ets` files can't use them yet.
+  `NodeContainer`, `ContentSlot`, and `SymbolGlyph`, so `.ets` files can't use
+  them yet. It also rejects `layoutGravity`. In a `ForEach` item, a built-in
+  component fails to build, and a custom component with a trailing closure
+  builds but silently loses that content; have the item call a `@Builder`.
 - ets-loader only warns when code breaks the ArkTS rules, so `build-hap.sh`
   fails on the errors in its `ArkTSLinter_output.json`.
 - The library owns each runtime's one FFI event handler. Code that needs a
@@ -148,3 +153,12 @@ model for adding it.
   `Record<string, Object>` literal with quoted keys, each nested object in a
   variable of its own, since ArkTS types an object literal only from a declared
   type.
+- Per-frame state lives in one traced field, the controller's frame view, which
+  the map sets from the render session's frame results. Read it through
+  `frameCamera` and the projection methods, in `@Computed` getters where a
+  component derives values from it.
+- Ornaments use `sys.color.*` and `sys.media.*` resources so they follow dark
+  mode; the HAR has no resources of its own yet.
+- On the emulator, content that moves every frame over a map makes the llvmpipe
+  crash likelier, so test cases turn on the scale bar and markers only while
+  they need them.
