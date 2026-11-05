@@ -850,9 +850,9 @@ Decided:
   `ohpm prepublish` accepts once the FFI dependency names a published version
   and the repository has a license; it warns until then. `AGENTS.md` lists the
   release steps. The license is the owner's decision, and blocks publishing.
-- `mise run test` runs the hypium suite again when the app crashes before
-  hypium's tally, up to 3 runs, since llvmpipe crashes it on the emulator. A
-  failed case fails at once. CI doesn't run the suite yet.
+- `mise run test` runs the hypium suite once; a run that the llvmpipe crash ends
+  without hypium's tally fails, and isn't retried. CI doesn't run the suite
+  until that crash is fixed (see Next).
 
 ## Next
 

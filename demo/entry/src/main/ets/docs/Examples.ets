@@ -242,6 +242,7 @@ struct LocationExample {
   @Local location: geoLocationManager.Location | undefined = undefined;
   private controller: MapController = new MapController();
   private listening: boolean = false;
+  private gone: boolean = false;
   private onLocation = (location: geoLocationManager.Location): void => {
     this.location = location;
   };
@@ -259,6 +260,7 @@ struct LocationExample {
   }
 
   aboutToDisappear(): void {
+    this.gone = true;
     if (!this.listening) {
       return;
     }
@@ -274,18 +276,26 @@ struct LocationExample {
       return;
     }
     this.listening = true;
-    const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
-    const result = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(context, PERMISSIONS);
-    if (!result.authResults.some((status: number) => status === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED)) {
-      this.listening = false;
-      this.controller.stopFollowingUserLocation();
-      return;
+    try {
+      const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const result = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(context, PERMISSIONS);
+      const granted = result.authResults.some(
+        (status: number) => status === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED);
+      // The page may have gone while the user answered.
+      if (granted && !this.gone) {
+        const request: geoLocationManager.ContinuousLocationRequest = {
+          interval: 1,
+          locationScenario: geoLocationManager.UserActivityScenario.NAVIGATION,
+        };
+        geoLocationManager.on('locationChange', request, this.onLocation);
+        return;
+      }
+    } catch (error) {
+      console.error((error as Error).message);
     }
-    const request: geoLocationManager.ContinuousLocationRequest = {
-      interval: 1,
-      locationScenario: geoLocationManager.UserActivityScenario.NAVIGATION,
-    };
-    geoLocationManager.on('locationChange', request, this.onLocation);
+    // Without updates, a later tap tries again.
+    this.listening = false;
+    this.controller.stopFollowingUserLocation();
   }
 }
 
