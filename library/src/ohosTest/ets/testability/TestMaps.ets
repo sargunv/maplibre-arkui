@@ -1,6 +1,7 @@
 // The map that the test page shows, which the cases read and change.
 
 import { BoundOptions, LatLng, MapContent, MapController, MapGestureOptions, ScaleBarUnits } from '@maplibre/arkui';
+import geoLocationManager from '@ohos.geoLocationManager';
 
 // A style without network requests.
 export const STYLE =
@@ -18,6 +19,7 @@ export class TestMap {
   @Trace scaleBar: ScaleBarUnits | undefined = undefined;
   @Trace marker: LatLng | undefined = undefined;
   @Trace gestures: MapGestureOptions = {};
+  @Trace userLocation: geoLocationManager.Location | undefined = undefined;
   // The map is 300 vp tall at the top of a Scroll while this is true, and fills
   // the page otherwise.
   @Trace inScroll: boolean = false;

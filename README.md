@@ -5,8 +5,9 @@ the ArkTS bindings of [MapLibre Native FFI]. It is a cousin of [MapLibre
 Compose]. It's early: the package, `@maplibre/arkui`, shows a map that moves
 with touch, mouse, and keyboard gestures, with a compass, scale bar,
 attribution, and zoom buttons. It pins ArkUI content to coordinates, moves its
-camera from code, builds style expressions, draws content that the app declares
-from its state, changes the style, and renders snapshots. It re-exports FFI's
+camera from code, shows and follows the user's location, builds style
+expressions, draws content that the app declares from its state, changes the
+style, and renders snapshots. It re-exports FFI's
 request handlers, offline regions, and logs. See [ROADMAP.md](ROADMAP.md) for
 the plan.
 
@@ -88,6 +89,43 @@ camera methods resolve with how the move ended. `frameCamera` and
 `pixelForLatLng()` follow the frame on screen, for content that moves with the
 map. It also exposes the FFI runtime, map, and render session for what this
 library doesn't wrap yet.
+
+### The user's location
+
+The map shows the location that the app passes as `userLocation`, a Location Kit
+`geoLocationManager.Location`, as a dot in a circle of its accuracy, with an
+arrow for its course while it moves. `followUserLocation()` moves the camera
+with each new location until the user starts a gesture, which sets the
+controller's observable `followingUserLocation` to false:
+
+```ets
+@Local location: geoLocationManager.Location | undefined = undefined;
+
+build() {
+  Stack({ alignContent: Alignment.Bottom }) {
+    MapLibreMap({ controller: this.map, style: STYLE, userLocation: this.location })
+    Button(this.map.followingUserLocation ? 'Following' : 'Locate me')
+      .onClick(() => this.map.followUserLocation({ zoom: 16, course: true }))
+  }
+}
+
+// Once the user grants the permission:
+const request: geoLocationManager.ContinuousLocationRequest = {
+  interval: 1,
+  locationScenario: geoLocationManager.UserActivityScenario.NAVIGATION,
+};
+geoLocationManager.on('locationChange', request, (location: geoLocationManager.Location) => {
+  this.location = location;
+});
+```
+
+The library declares no permission and starts no location request, so apps that
+don't show a location don't ask for one. An app that does declares
+`ohos.permission.APPROXIMATELY_LOCATION` and `ohos.permission.LOCATION` in its
+`module.json5`, with a `reason`, and asks with
+`abilityAccessCtrl.createAtManager().requestPermissionsFromUser()` when the user
+chooses to see their location, as the demo's location page does. The indicator
+is the style layer `USER_LOCATION_LAYER`, which apps can restyle.
 
 ### Map content
 

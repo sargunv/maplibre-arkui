@@ -1,1 +1,6 @@
-{ "string": [{ "name": "label", "value": "MapLibre ArkUI Demo" }] }
+{
+  "string": [
+    { "name": "label", "value": "MapLibre ArkUI Demo" },
+    { "name": "location_reason", "value": "Shows where you are on the map." }
+  ]
+}

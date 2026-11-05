@@ -63,6 +63,7 @@ struct Index {
       content: testMap.content,
       cameraBounds: testMap.cameraBounds,
       gestures: testMap.gestures,
+      userLocation: testMap.userLocation,
       onStyleLoaded: () => {
         testMap.styleLoads++;
       },
