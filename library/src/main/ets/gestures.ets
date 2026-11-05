@@ -437,7 +437,7 @@ export class MapGestures {
     } else if (claimed && this.down !== undefined) {
       const dx = Math.abs(touches[0].x - this.down.x);
       const dy = Math.abs(touches[0].y - this.down.y);
-      this.quickZooming = this.quickZoomReady && dy > dx;
+      this.quickZooming = this.quickZoomReady && this.options.zoom !== false && dy > dx;
       this.panning = !this.quickZooming;
       this.quickZoom = 0;
     }
@@ -482,26 +482,27 @@ export class MapGestures {
     this.minSpan = Math.min(this.minSpan, span);
     const stable = span0 >= MIN_SPAN && span >= MIN_SPAN;
 
+    // Options can change mid-gesture, so each motion checks its option too.
     const delta: CameraDelta = {};
-    if (this.panning) {
+    if (this.panning && options.pan !== false) {
       const center0 = midpoint(a0, b0);
       delta.offset = { x: center.x - center0.x, y: center.y - center0.y };
       this.panX.add(time, center.x);
       this.panY.add(time, center.y);
     }
-    if (this.zooming && stable) {
+    if (this.zooming && stable && options.zoom !== false) {
       delta.scale = span / span0;
       delta.anchor = center;
       this.zoom.add(time, Math.log2(span));
     }
-    if (this.rotating && stable) {
+    if (this.rotating && stable && options.rotate !== false) {
       const turn = wrap(angle(a, b) - angle(a0, b0));
       this.turned -= turn;
       delta.bearing = -turn;
       delta.anchor = center;
       this.turn.add(time, this.turned);
     }
-    if (this.pitching) {
+    if (this.pitching && options.pitch !== false) {
       delta.pitch = ((a.y - a0.y) + (b.y - b0.y)) / 2 * PITCH_PER_VP;
     }
     if (delta.anchor !== undefined) {

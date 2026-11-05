@@ -297,6 +297,40 @@ export default function gesturesTest(): void {
       expect(camera.zoom()).assertEqual(0);
     });
 
+    it('pans with a tap and then a drag down while zoom is off', 0, () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      gestures.height = 600;
+      gestures.options = { zoom: false };
+      gestures.touch(0, [touch(1, 200, 300)]);
+      gestures.touch(80, []);
+      const end = drag(gestures, 200, [touch(2, 200, 300)], [touch(2, 200, 450)], 10, 50);
+      gestures.touch(end + 100, []);
+      expect(camera.zoom()).assertEqual(0);
+      expect(camera.offsetY()).assertClose(135, 0.001);
+    });
+
+    it('stops a two-finger motion whose option turns off mid-gesture', 0, () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      const from = [touch(1, 150, 300), touch(2, 250, 300)];
+      const to = [touch(1, 350, 300), touch(2, 450, 300)];
+      gestures.touch(0, from);
+      for (let i = 1; i <= 20; i++) {
+        if (i === 11) {
+          gestures.options = { pan: false };
+        }
+        gestures.touch(i * 40, lerp(from, to, i / 20));
+        if (i === 1) {
+          gestures.claim();
+        }
+      }
+      // It panned until the option turned off at 100 of the 200 vp.
+      const panned = camera.offsetX();
+      expect(panned).assertLarger(0);
+      expect(panned).assertLess(101);
+    });
+
     it('zooms about the center with a tap and then a drag down', 0, () => {
       const camera = new Recorder();
       const gestures = new MapGestures(camera);
