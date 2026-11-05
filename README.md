@@ -324,6 +324,10 @@ controller's observable `followingUserLocation` to false:
 ```ets
 @Local location: geoLocationManager.Location | undefined = undefined;
 private controller: MapController = new MapController();
+private listening: boolean = false;
+private onLocation = (location: geoLocationManager.Location): void => {
+  this.location = location;
+};
 
 build() {
   Stack({ alignContent: Alignment.Bottom }) {
@@ -342,13 +346,29 @@ The library declares no permission and starts no location request, so apps that
 don't show a location don't ask for one. An app that does declares
 `ohos.permission.APPROXIMATELY_LOCATION` and `ohos.permission.LOCATION` in its
 `module.json5`, with a `reason`, asks for them when the user wants to see their
-location, and listens:
+location, and listens until the page goes away:
 
 ```ets
+aboutToDisappear(): void {
+  if (!this.listening) {
+    return;
+  }
+  try {
+    geoLocationManager.off('locationChange', this.onLocation);
+  } catch (error) {
+    // Location Kit throws once the user takes the permission back.
+  }
+}
+
 private async startUpdates(): Promise<void> {
+  if (this.listening) {
+    return;
+  }
+  this.listening = true;
   const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
   const result = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(context, PERMISSIONS);
   if (!result.authResults.some((status: number) => status === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED)) {
+    this.listening = false;
     this.controller.stopFollowingUserLocation();
     return;
   }
@@ -356,9 +376,7 @@ private async startUpdates(): Promise<void> {
     interval: 1,
     locationScenario: geoLocationManager.UserActivityScenario.NAVIGATION,
   };
-  geoLocationManager.on('locationChange', request, (location: geoLocationManager.Location) => {
-    this.location = location;
-  });
+  geoLocationManager.on('locationChange', request, this.onLocation);
 }
 ```
 
@@ -369,6 +387,7 @@ private async startUpdates(): Promise<void> {
 
 ```ets
 @Local preview: image.PixelMap | undefined = undefined;
+private disappeared: boolean = false;
 
 aboutToAppear(): void {
   snapshot({
@@ -377,11 +396,16 @@ aboutToAppear(): void {
     height: 200,
     camera: { center: { latitude: 48.8584, longitude: 2.2945 }, zoom: 14 },
   }).then((preview: image.PixelMap) => {
-    this.preview = preview;
+    if (this.disappeared) {
+      preview.release();
+    } else {
+      this.preview = preview;
+    }
   }).catch((error: Error) => console.error(error.message));
 }
 
 aboutToDisappear(): void {
+  this.disappeared = true;
   this.preview?.release();
 }
 ```
@@ -393,10 +417,10 @@ controller's camera:
 function snapshotOf(controller: MapController, content: MapContent): Promise<image.PixelMap> {
   const camera = controller.getCamera();
   return snapshot({
-  style: STYLE,
-  content: content,
-  width: 320,
-  height: 200,
+    style: STYLE,
+    content: content,
+    width: 320,
+    height: 200,
     camera: camera === undefined ? undefined : cameraToOptions(camera),
   });
 }

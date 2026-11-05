@@ -399,5 +399,7 @@ release. Each entry names the FFI commit it was seen at.
   `src/arkts.ts` or `bindAddon`, throw an error that names the packages, such as
   "install @maplibre/native-ffi-opengl or @maplibre/native-ffi-vulkan, at this
   facade's version", when the addon is missing. The ABI check already covers a
-  backend of another version. [42012958276]:
+  backend of another version.
+
+[42012958276]:
   https://github.com/maplibre/maplibre-native-ffi/actions/runs/42012958276
