@@ -1,6 +1,6 @@
 import { BoundOptions, Camera as CameraPosition, RuntimeHandle } from '@maplibre/native-ffi';
 
-import { MapGestureOptions } from './gestures';
+import { MapGestureOptions, TAP_SLOP } from './gestures';
 import { MapController } from './MapController';
 import { MapView } from './MapView';
 import { MapAttribution, MapCompass, MapScaleBar, MapZoomButtons } from './Ornaments';
@@ -28,11 +28,6 @@ const BOTTOM_END: LocalizedAlignRuleOptions = {
   bottom: { anchor: CONTAINER, align: VerticalAlign.Bottom },
   end: { anchor: CONTAINER, align: HorizontalAlign.End },
 };
-
-// A pan, pinch, or rotation this far claims the touches from a parent, such as
-// a Scroll, and a tap may move this far.
-const CLAIM_DISTANCE = 5;
-const TAP_DISTANCE = 10;
 
 /**
  * A MapLibre map, which fills the size that its parent gives it.
@@ -123,7 +118,10 @@ export struct MapLibreMap {
    */
   @Event onGestureStart: () => void = () => {
   };
-  /** The camera stopped moving from the user's input, after any momentum. */
+  /**
+   * The user's input stopped moving the camera, after any momentum. A rotation
+   * that ends near north may still ease to it.
+   */
   @Event onGestureEnd: () => void = () => {
   };
 
@@ -175,20 +173,20 @@ export struct MapLibreMap {
         .onAxisEvent((event: AxisEvent) => this.view.gestures.onAxis(event))
         .onKeyEvent((event: KeyEvent): boolean => this.view.gestures.onKey(event))
         .gesture(GestureGroup(GestureMode.Parallel,
-          PanGesture({ fingers: this.panFingers(), distance: CLAIM_DISTANCE })
+          PanGesture({ fingers: this.panFingers() })
             .onActionStart(() => this.view.gestures.claim()),
-          PinchGesture({ distance: CLAIM_DISTANCE })
+          PinchGesture()
             .onActionStart(() => this.view.gestures.claim())
             .onActionUpdate((event: GestureEvent) => this.view.gestures.onPinch(event))
             .onActionEnd((event: GestureEvent) => this.view.gestures.onPinchEnd(event)),
           RotationGesture()
             .onActionStart(() => this.view.gestures.claim()),
-          TapGesture({ count: 2, distanceThreshold: TAP_DISTANCE })
+          TapGesture({ count: 2, distanceThreshold: TAP_SLOP })
             .onAction((event: GestureEvent) => {
               const finger = event.fingerList[0];
               this.view.gestures.doubleTap(finger.localX, finger.localY);
             }),
-          TapGesture({ fingers: 2, distanceThreshold: TAP_DISTANCE })
+          TapGesture({ fingers: 2, distanceThreshold: TAP_SLOP })
             .onAction((event: GestureEvent) => {
               const fingers = event.fingerList;
               const x = fingers.reduce((sum: number, finger: FingerInfo) => sum + finger.localX, 0);

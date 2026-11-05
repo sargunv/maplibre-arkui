@@ -142,15 +142,16 @@ export class MapView extends XComponentController implements GestureTarget {
 
   // FFI raises no event as a gesture ends, so the view reads where the camera
   // came to rest, after the gesture's changes. A rotation that ends near north
-  // eases to it first, unless input moves the camera again.
+  // eases to it first, unless input or the app moves the camera again: then
+  // the camera rests when that ends.
   gestureEnded(rotated: boolean): void {
     this.events.onGestureEnd();
     const map = this.map;
-    if (map === undefined) {
+    if (map === undefined || this.disposed) {
       return;
     }
     map.getCamera().then((result: CameraQueryResult) => {
-      if (this.map !== map || !this.gestures.idle) {
+      if (this.map !== map || !this.gestures.idle || map.getSnapshot().transitionInProgress) {
         return;
       }
       const bearing = rotated ? snapBearing(result.camera.bearing) : undefined;

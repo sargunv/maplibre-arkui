@@ -325,13 +325,14 @@ Decided:
   from rotating and staggered fingers from pinching, an exclusive two-finger
   pitch, the fling and zoom and rotation momentum, and staged momentum when
   fingers lift one at a time. Momentum runs on `displaySync` as UPDATE deltas,
-  and a new touch or the app's camera call stops it. A rotation that ends within
-  7° of north eases to it.
+  and a new touch or the app's camera call stops it; the app's call leaves a
+  gesture that fingers still make alone. A rotation that ends within 7° of north
+  eases to it, unless the app moved the camera as the gesture ended.
 - ArkUI's `TapGesture`s zoom in at a double tap and out at a two-finger tap,
-  with FFI's animated deltas. A tap and then a drag zooms. The wheel zooms at
-  the pointer (`onAxisEvent`), a touchpad pinch zooms (`PinchGesture`), and the
-  arrows, Shift and the arrows, and plus and minus pan, rotate, pitch, and zoom
-  a focused map.
+  with FFI's animated deltas. A tap and then a drag zooms while `pan` is on. The
+  wheel zooms at the pointer (`onAxisEvent`), a touchpad pinch zooms
+  (`PinchGesture`), and the arrows, Shift and the arrows, and plus and minus
+  pan, rotate, pitch, and zoom a focused map.
 - One `gestures: MapGestureOptions` param of booleans, in Map Kit's style:
   `pan`, `zoom`, `rotate`, `pitch`, and `cooperative`, which needs two fingers
   to pan so one-finger drags and the plain wheel scroll a parent, and Ctrl and

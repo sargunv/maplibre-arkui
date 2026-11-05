@@ -70,6 +70,7 @@ struct Index {
       },
       onGestureStart: () => {
         testMap.gestureStarts++;
+        testMap.onGestureStart();
       },
       onGestureEnd: () => {
         testMap.gestureEnds++;

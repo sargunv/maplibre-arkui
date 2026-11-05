@@ -20,7 +20,10 @@ import { CameraDelta, GesturePhase, ScreenPoint } from '@maplibre/native-ffi';
 export interface MapGestureOptions {
   /** Drag with one finger or the mouse, or two fingers, to move the map. */
   pan?: boolean;
-  /** Pinch, double tap, two-finger tap, double tap and drag, wheel, and keys. */
+  /**
+   * Pinch, double tap, two-finger tap, wheel, and keys, and double tap and
+   * drag while `pan` is on.
+   */
   zoom?: boolean;
   /** Twist two fingers. A rotation that ends near north snaps to it. */
   rotate?: boolean;
@@ -72,7 +75,8 @@ const MIN_SPAN = 37.8;
 const QUICK_ZOOM_MS = 300;
 const QUICK_ZOOM_SLOP = 60;
 const QUICK_ZOOM_LEVELS = 4;
-const TAP_SLOP = 10;
+// A tap, and each tap of a double tap, may move this far.
+export const TAP_SLOP = 10;
 // Momentum on release.
 const VELOCITY_WINDOW_MS = 100;
 const FLING_MIN_SPEED = 250;
@@ -351,15 +355,21 @@ export class MapGestures {
     return true;
   }
 
-  /** Stops momentum, and ends the gesture it belongs to. */
+  /**
+   * Stops momentum, and ends the gesture it belongs to. Fingers that are down
+   * keep moving the camera.
+   */
   stop(): void {
-    this.stopMomentum();
-    this.finish();
+    if (this.momentum !== undefined) {
+      this.stopMomentum();
+      this.finish();
+    }
   }
 
-  /** Stops input for good, as the map leaves. */
+  /** Stops input for good, as the map leaves, and ends what it started. */
   dispose(): void {
-    this.stopMomentum();
+    this.cancel();
+    this.endStep();
     this.frames?.off('frame');
     this.frames = undefined;
   }
@@ -367,7 +377,8 @@ export class MapGestures {
   // The first touch of a sequence stops momentum. A press soon after a tap may
   // start a quick zoom.
   private press(time: number, point: TouchPoint): void {
-    this.stop();
+    this.stopMomentum();
+    this.finish();
     this.claimed = false;
     this.staged = undefined;
     this.down = point;
@@ -590,7 +601,6 @@ export class MapGestures {
       this.moving = true;
       this.rotated = false;
       delta.gesturePhase = GesturePhase.begin;
-      this.target.gestureStarted();
     } else {
       delta.gesturePhase = GesturePhase.update;
     }
@@ -598,6 +608,11 @@ export class MapGestures {
       this.rotated = true;
     }
     this.target.applyCameraDelta(delta);
+    // After the change, so a camera change that the app makes as the gesture
+    // starts follows it.
+    if (delta.gesturePhase === GesturePhase.begin) {
+      this.target.gestureStarted();
+    }
   }
 
   // Ends the gesture. A rotation that ends near north snaps to it.
@@ -626,11 +641,11 @@ export class MapGestures {
   // A step that animates on its own, such as a double tap's zoom. It ends when
   // the animation does, unless other input replaced it.
   private animate(delta: CameraDelta): void {
-    this.stop();
+    this.stopMomentum();
+    this.finish();
     this.endStep();
     const step = ++this.step;
     this.moving = true;
-    this.target.gestureStarted();
     delta.animation = {
       durationMs: GESTURE_ANIMATION_MS,
       endHandler: {
@@ -642,6 +657,7 @@ export class MapGestures {
       },
     };
     this.target.applyCameraDelta(delta);
+    this.target.gestureStarted();
   }
 
   private endStep(): void {

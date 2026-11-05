@@ -26,6 +26,9 @@ export class TestMap {
   errors: string[] = [];
   gestureStarts: number = 0;
   gestureEnds: number = 0;
+  // What a case does as a gesture starts, as an app would.
+  onGestureStart: () => void = () => {
+  };
   controller: MapController = new MapController({ camera: { zoom: 1 } });
   scroller: Scroller = new Scroller();
   // The page's UI context, once the page appears.

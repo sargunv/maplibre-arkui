@@ -124,6 +124,29 @@ export default function gestureInputTest(): void {
       expect(moved).assertLarger(170);
       expect(moved).assertLessOrEqual(200);
       near(camera().center.latitude, 0, 0.5);
+      // The observable camera rests there too.
+      await until('the controller\'s camera rests', () =>
+        testMap.controller.camera?.center.longitude === camera().center.longitude);
+    });
+
+    it('keeps one gesture when the app moves the camera as it starts', 0, async () => {
+      await reset();
+      const c = center(await mapBounds());
+      const starts = testMap.gestureStarts;
+      const ends = testMap.gestureEnds;
+      // As an app that stops following a location does.
+      testMap.onGestureStart = () => {
+        testMap.controller.cancelCameraTransitions();
+      };
+      try {
+        await gesture(() => driver.swipe(c.x + vp2px(100), c.y, c.x - vp2px(100), c.y, vp2px(200)));
+      } finally {
+        testMap.onGestureStart = () => {
+        };
+      }
+      expect(testMap.gestureStarts - starts).assertEqual(1);
+      expect(testMap.gestureEnds - ends).assertEqual(1);
+      expect(camera().center.longitude / degreesPerVp(ZOOM)).assertLarger(170);
     });
 
     it('coasts past the end of a fast drag', 0, async () => {
@@ -247,9 +270,17 @@ export default function gestureInputTest(): void {
         expect(testMap.scroller.currentOffset().yOffset).assertEqual(0);
         expect(camera().center.longitude).assertLarger(5);
 
-        // The wheel zooms with Ctrl only.
+        // The wheel scrolls the page, and zooms with Ctrl only.
+        const zoom = camera().zoom;
+        const wheelStarts = testMap.gestureStarts;
+        await driver.mouseScroll(c, true, 3);
+        await until('the wheel scrolls the page', () => testMap.scroller.currentOffset().yOffset > 0);
+        expect(testMap.gestureStarts).assertEqual(wheelStarts);
+        expect(camera().zoom).assertEqual(zoom);
+        testMap.scroller.scrollTo({ xOffset: 0, yOffset: 0 });
+        await until('the page scrolls back', () => testMap.scroller.currentOffset().yOffset === 0);
         await gesture(() => driver.mouseScroll(c, false, 2, KeyCode.KEYCODE_CTRL_LEFT));
-        expect(camera().zoom).assertLarger(ZOOM);
+        expect(camera().zoom).assertLarger(zoom);
       } finally {
         testMap.gestures = {};
       }
