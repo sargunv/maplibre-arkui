@@ -54,8 +54,10 @@ Status:
   makes. Rendering runs on a library thread.
 - [#1655][ffi-1655] adds an [ArkUI example][ffi-example-arkui]: a map page with
   touch gestures, in under 500 lines of ArkTS.
-- [v0.202610.3][ffi-release] predates all of these, and the facade isn't on
-  OHPM yet. The backend packages there are the older, self-contained form.
+- [v0.202610.3][ffi-release] includes the TypeScript binding but predates
+  the facade, the VSync pacing, the window attach, and the example. Its
+  backend packages are the older, self-contained form, and the facade isn't on
+  OHPM yet.
 - [HarmonyOS platform support in MapLibre Native (#4315)][native-4315], merged.
 
 This stage is done when an FFI release with these changes, including the
@@ -258,8 +260,8 @@ Questions:
   outside the library ([#1701][compose-1701], [#1703][compose-1703]). ArkTS has
   no `internal`; a HAR controls its public API only through what `Index.ets`
   exports.
-- Queries need an attached surface, because FFI puts them on the render
-  session.
+- Feature queries need an attached render session, which can use a window or
+  an offscreen target.
 
 References:
 
