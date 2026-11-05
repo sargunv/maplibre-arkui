@@ -168,9 +168,10 @@ export class MapController {
         easing: options?.easing,
         transitionId: options?.transitionId,
         endHandler: {
+          // Settle first, so a throwing app handler can't leave it pending.
           callback: (end: CameraTransitionEnd) => {
-            appHandler?.(end);
             resolve(end.outcome);
+            appHandler?.(end);
           },
         },
       };

@@ -94,6 +94,25 @@ export default function mapControllerTest(): void {
       expect(camera(map).zoom).assertClose(6, 0.001);
     });
 
+    it('resolves an animation whose end handler throws', 0, async () => {
+      let handled = false;
+      const outcome = await map.updateCamera({
+        mode: CameraUpdateMode.ease,
+        camera: { zoom: 7 },
+        animation: {
+          durationMs: 100,
+          endHandler: {
+            callback: () => {
+              handled = true;
+              throw new Error('the app handler failed');
+            },
+          },
+        },
+      });
+      expect(outcome).assertEqual(CameraTransitionOutcome.completed);
+      expect(handled).assertTrue();
+    });
+
     it('resolves an animation that a later one replaces', 0, async () => {
       const first = map.updateCamera({
         mode: CameraUpdateMode.ease,
