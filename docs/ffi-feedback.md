@@ -283,9 +283,28 @@ release. Each entry names the FFI commit it was seen at.
   `lp_scene_is_resource_referenced` <- `llvmpipe_flush_resource`, reached from
   Skia's texture uploads and draws. The stage 2 crash above was on MapLibre's
   render thread. Two GL contexts rendering on two threads at once in one process
-  is the common factor, which fits a llvmpipe race more than an FFI bug.
-  Suggested fix: as above, check on a device with a GPU; if only the emulator
-  crashes, report it to Oniro with both stacks.
+  is the common factor.
+
+  **A `glFinish()` before FFI's `eglSwapBuffers` stops it.** With FFI at
+  `11ffaaf6`, this repository's suite (48 cases, with the scale bar and markers
+  on during some of them) finished in 3 of 6 runs; the other 3 crashed as above.
+  With one line added to `OpenGLSurfaceBackend::swap_surface()` in
+  `src/render/opengl/opengl_surface_session.cpp`, at the same commit, it
+  finished in 6 of 6:
+
+  ```diff
+   #elif defined(MLN_FFI_OPENGL_PROVIDER_EGL)
+  +    mln::platform::glFinish();
+       if (
+         eglSwapBuffers(
+  ```
+
+  So the compositor reads a window buffer that FFI's render thread is still
+  drawing: llvmpipe doesn't honor the release fence that `eglSwapBuffers` hands
+  the native window, or FFI's swap doesn't wait for one. Suggested fix: on
+  OpenHarmony, finish (or wait on a fence) before the swap, at least under
+  llvmpipe, and check whether a GPU driver needs it too.
+
 - **The webpack build that FFI's example uses rejects more ArkUI.** In SDK 6.1,
   besides the limits in stage 1 and 2: (a) any component written directly in a
   `ForEach` item, even `ForEach(items, (n: number) => { Column() {} })`, fails

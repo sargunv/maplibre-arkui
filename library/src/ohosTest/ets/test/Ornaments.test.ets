@@ -103,14 +103,14 @@ export default function ornamentsTest(): void {
     // style has no layers, which keeps the map from requesting their tiles.
     it('collects the attribution of the style sources', 0, async () => {
       const attribution = '<a href="https://example.com/">Example &amp; Co</a> &copy; Test';
-      testMap.style = JSON.stringify({
-        version: 8,
-        sources: {
-          a: { type: 'vector', tiles: ['file:///nonexistent/{z}/{x}/{y}.pbf'], attribution: attribution },
-          b: { type: 'vector', tiles: ['file:///nonexistent/{z}/{x}/{y}.pbf'], attribution: attribution },
-        },
-        layers: [],
-      });
+      const source: Record<string, Object> = {
+        'type': 'vector',
+        'tiles': ['file:///nonexistent/{z}/{x}/{y}.pbf'],
+        'attribution': attribution,
+      };
+      const sources: Record<string, Object> = { 'a': source, 'b': source };
+      const style: Record<string, Object> = { 'version': 8, 'sources': sources, 'layers': [] as Object[] };
+      testMap.style = JSON.stringify(style);
       await until('the attribution shows', () => map.attributions.length > 0);
       expect(JSON.stringify(map.attributions)).assertEqual(JSON.stringify([attribution]));
       const driver = Driver.create();
