@@ -22,6 +22,16 @@ map.setStyleLayerProperty('places', 'circle-color', color);
 `new Expression(json)` and `call(operator, ...args)` cover the operators that
 have no function.
 
+## The style
+
+`controller.map` is MapLibre Native FFI's `MapHandle`, whose style API adds and
+changes sources, layers, images, and feature state, and
+`controller.renderSession` queries features at a point in vp. Add sources and
+layers in `onStyleLoaded`, since each style starts without them. The package
+re-exports the FFI types these take, declares GeoJSON's types for ArkTS
+literals, and adds `readPixelMap()`, which turns a `PixelMap` into the image
+that `setStyleImage()` takes.
+
 ## Snapshots
 
 `snapshot()` renders a still image of a map that isn't on screen, as a

@@ -7,45 +7,8 @@ import {
   MapController,
 } from '@maplibre/arkui';
 
-import { FrameCallback } from '@ohos.arkui.UIContext';
-
 import { STYLE, testMap } from '../testability/TestMaps';
-
-class Poll extends FrameCallback {
-  private readonly check: () => void;
-
-  constructor(check: () => void) {
-    super();
-    this.check = check;
-  }
-
-  onFrame(frameTimeInNano: number): void {
-    this.check();
-  }
-}
-
-// Waits for `condition`, checking it each frame, and fails after `timeoutMs`.
-// It doesn't poll with timers: OpenHarmony's main thread can lose a timer's
-// wakeup while nothing else wakes its event loop.
-function until(what: string, condition: () => boolean, timeoutMs: number = 15000): Promise<void> {
-  const context = testMap.context;
-  if (context === undefined) {
-    return Promise.reject(new Error('The test page has not appeared'));
-  }
-  const start = Date.now();
-  return new Promise<void>((resolve, reject) => {
-    const check = (): void => {
-      if (condition()) {
-        resolve();
-      } else if (Date.now() - start > timeoutMs) {
-        reject(new Error(`Timed out waiting until ${what}`));
-      } else {
-        context.postFrameCallback(new Poll(check));
-      }
-    };
-    check();
-  });
-}
+import { until } from './until';
 
 function camera(controller: MapController): CameraPosition {
   const current = controller.getCamera();

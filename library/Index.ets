@@ -78,3 +78,35 @@ export type {
   RuntimeOptions,
   UrlQueryParameter,
 } from '@maplibre/native-ffi';
+
+// The style and query API is FFI's, through `MapController.map` and
+// `MapController.renderSession`. These are the FFI types it takes and
+// returns, and what ArkUI apps need besides.
+export {
+  GeoJsonSourceDataHandle,
+  MaplibreError,
+  MapProjectionHandle,
+  Status,
+  StyleLayerVisibility,
+  StyleSourceType,
+} from '@maplibre/native-ffi';
+export type {
+  CommandCompletion,
+  FeatureId,
+  FeatureStateSelector,
+  GeoJsonSourceOptions,
+  PremultipliedRgba8Image,
+  RenderedFeature,
+  RenderedFeatureQueryOptions,
+  RenderedQueryGeometry,
+  ScreenBox,
+  ScreenPoint,
+  SourceFeature,
+  SourceFeatureQueryOptions,
+  StyleImageInfo,
+  StyleImageOptions,
+  StyleLayerInfo,
+  StyleSourceInfo,
+} from '@maplibre/native-ffi';
+export type { GeoJsonFeature, GeoJsonFeatureCollection, GeoJsonGeometry, GeoJsonPosition } from './src/main/ets/GeoJson';
+export { readPixelMap } from './src/main/ets/StyleImage';
