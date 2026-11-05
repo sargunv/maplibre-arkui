@@ -324,6 +324,8 @@ export class MapView extends XComponentController implements GestureTarget {
       controller.attributions = [];
     }
     this.reconciler?.styleUnloaded();
+    // Before the new load, which can throw, so no earlier load still counts.
+    this.loading = undefined;
     let loading: Promise<CommandCompletion>;
     try {
       loading = loadStyle(map, this.style);
