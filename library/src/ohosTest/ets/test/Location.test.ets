@@ -224,6 +224,22 @@ export default function locationTest(): void {
       }
     });
 
+    it('reaches the zoom it follows with while locations come quickly', 0, async () => {
+      await reset();
+      const map = testMap.controller;
+      map.followUserLocation({ zoom: 14 });
+      // A location every few frames replaces each move before it ends.
+      for (let i = 0; i < 8; i++) {
+        testMap.userLocation = fix(1 + i * 0.001, 1);
+        const sent = Date.now();
+        while (Date.now() - sent < 150) {
+          await nextFrame();
+        }
+      }
+      await until('the camera reaches the last location', () => restsAt(1.007, 1));
+      expect(camera().zoom).assertClose(14, 0.001);
+    });
+
     it('stops following as a gesture starts, until the app resumes', 0, async () => {
       await reset();
       const map = testMap.controller;
