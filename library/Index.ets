@@ -2,3 +2,4 @@
 
 export { RuntimeHandle } from '@maplibre/native-ffi';
 export { RuntimeStatus } from './src/main/ets/RuntimeStatus';
+export * from './src/main/ets/Expressions';

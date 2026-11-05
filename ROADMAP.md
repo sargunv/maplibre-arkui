@@ -325,6 +325,37 @@ References:
 - [ArkTS migration rules][arkts-migration], especially the rules on generics,
   utility types, enums, and type predicates
 
+Decisions (`library/src/main/ets/Expressions.ets`):
+
+- Expressions are untyped. SDK 6.1's ArkTS compiler accepts a `Box<number>` as a
+  `Box<string>` when no member uses `T`, so `Expression<T>` would check nothing
+  without a brand field, and with one every feature property would need a type
+  assertion, as `asNumber()` is in MapLibre Compose; colors, strings, and named
+  values would all be strings anyway. MapLibre checks types when it parses an
+  expression, and the layer property APIs of stages 5 and 7 can name the type
+  they expect in their parameter docs.
+- Free functions named after their operators in camelCase (`featureState`,
+  `interpolate`), with words for symbols (`eq`, `add`) and `cases` for `case`, a
+  reserved word. Arguments take an `Expression` or a plain number, string,
+  boolean, or null, written bare. Arrays and objects take `literal()`, since the
+  style reads a bare array as a call. Stops, match cases, and conditions are
+  tuples: `interpolate(linear(), zoom(), [[0, 1], [10, 4]])`.
+- An escape hatch for the rest: `new Expression(json)` takes style-spec JSON as
+  is, and `call(operator, ...args)` calls any operator. The subset covers
+  feature data, zoom, ramps, decisions, comparisons, math, conversions, strings,
+  colors, `format`, and `image`.
+- `Expression.json` is a plain JSON value, which FFI's style functions take as
+  is (FFI calls `JSON.stringify` on it). `toString()` is the JSON text, cached,
+  and `equals()` compares it, which is what stage 7 needs for diffing.
+- No unit conversion: style pixels are vp when the map's scale factor is
+  `vp2px(1)`, as in FFI's example. Text sizes in fp would need the font scale,
+  which stage 7 can apply as MapLibre Compose does for sp.
+- ArkUI writes 8-digit hex colors alpha first (`#80ff0000`), and the style spec
+  alpha last (`#ff000080`). Layer properties in stage 7 could take ArkUI's
+  `ResourceColor` and convert it, rather than pass strings through.
+- The hypium suite checks the JSON of each function and parses and evaluates the
+  expressions with FFI's `StyleExpressionHandle`, without a map.
+
 ## Stage 7: Declarative map content
 
 Goal: apps declare sources and layers from app state. The library applies

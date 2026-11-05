@@ -59,7 +59,24 @@ release. Each entry names the FFI commit it was seen at.
   second try succeeded. This is in devices-cli rather than FFI, which
   `tools/devices/ohos-key` shares. Suggested fix: have devices-cli wait until
   the lock screen is gone before it reports the device. (`power-shell suspend`
-  to reproduce it hangs `hdc shell` until the emulator is released.)
+  to reproduce it hangs `hdc shell` until the emulator is released.) The first
+  `hdc install` after a boot can also fail with "code:301 error: user not
+  exist", which a retry fixes.
+
+## Stage 6: expressions (FFI `5c4c9084`, `11ffaaf6`)
+
+- **`StyleExpressionHandle.evaluate` doesn't document the JSON of colors,
+  formatted text, and images.** On the emulator, a color evaluates to
+  `["rgba", r, g, b, a]` with channels from 0 to 255; formatted text to
+  `["format", text, {options}, ...]` with its colors in that form; and an image
+  to `{"available": true, "name": "park"}`. Colors also come back with float
+  noise from MapLibre's premultiplied storage: `'#ff000080'` gives
+  `["rgba",254.99998474121094,0,0,0.5]`, and an HCL interpolation from red to
+  red gives `["rgba",254.99998474121094,0.00019044788496103138,...]`, so a test
+  has to round. Suggested fix: document these shapes in
+  `mln_style_expression_evaluate`, and round un-premultiplied channels that are
+  within float error of an integer. The header on main (`11ffaaf6`) still says
+  only that the result is JSON.
 
 [42012958276]:
   https://github.com/maplibre/maplibre-native-ffi/actions/runs/42012958276
