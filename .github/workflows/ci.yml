@@ -32,22 +32,20 @@ jobs:
       - run: mise run check
 
   # Builds the library HAR, the demo HAP, and the test HAP against the FFI
-  # packages that FFI's CI packed at the pinned commit. It doesn't boot the
-  # emulator, which needs KVM and a 1.4 GB image.
+  # packages that FFI's CI packed at the pinned commit, then runs the hypium
+  # suite on the Oniro emulator, which needs KVM, as MapLibre Native FFI's CI
+  # does. The packages upload before the suite runs, so a failed suite keeps
+  # them.
   build:
-    name: build
+    name: build and test
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    env:
-      # The Oniro image and devices-cli serve only the tasks that run on the
-      # emulator.
-      MISE_DISABLE_TOOLS: http:oniro-emulator,go:github.com/sargunv/devices-cli,core:go
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The OpenHarmony SDK is too large to cache well, so each run fetches it,
-      # as MapLibre Native FFI's CI does.
+      # The OpenHarmony SDK and the emulator image are too large to cache well,
+      # so each run fetches them, as MapLibre Native FFI's CI does.
       - uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
         with:
           cache: false
@@ -65,3 +63,27 @@ jobs:
             build/test/entry_test.hap
           if-no-files-found: error
           retention-days: ${{ github.event_name == 'pull_request' && 1 || 30 }}
+      # The runner image has KVM but no system QEMU, which the emulator runs
+      # on. The rule lets the runner's user open /dev/kvm.
+      - name: Set up the emulator host
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes qemu-system-x86
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo udevadm settle --timeout=10
+          test -r /dev/kvm && test -w /dev/kvm
+      - name: Boot the emulator
+        run: mise exec -- scripts/ohos-key.sh
+      # Mesa's llvmpipe can crash the app while maps render, which ends the
+      # suite without a tally; the task runs it again, up to 3 runs in all.
+      - name: Run the hypium suite
+        run: mise run --no-deps test
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: emulator-logs
+          path: ~/.local/state/devices-cli/logs
+          if-no-files-found: ignore
+          retention-days: 7

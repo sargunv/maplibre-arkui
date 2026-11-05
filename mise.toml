@@ -109,6 +109,7 @@ flag "--device <key>" help="The hdc connect key of the device, which defaults to
 depends = ["demo:build"]
 run = '''
 device=${usage_device:-$(scripts/ohos-key.sh)}
+scripts/wake-device.sh "$device"
 hdc -t "$device" install -r build/demo/entry.hap
 hdc -t "$device" shell aa start -a EntryAbility -b org.maplibre.arkui.demo
 '''
@@ -126,6 +127,7 @@ scripts/build-hap.sh library/src/ohosTest build/test x86_64 \
 description = "Build the library's hypium suite and run it on this worktree's emulator or the device that --device names."
 usage = '''
 flag "--device <key>" help="The hdc connect key of the device, which defaults to this worktree's emulator"
+flag "--attempts <n>" default="3" help="Runs to try when the app crashes before hypium's tally, as llvmpipe can on the emulator"
 '''
 depends = ["test:build"]
-run = 'scripts/run-tests.sh "${usage_device:-$(scripts/ohos-key.sh)}" build/test/entry_test.hap'
+run = 'scripts/run-tests.sh "${usage_device:-$(scripts/ohos-key.sh)}" build/test/entry_test.hap "$usage_attempts"'
