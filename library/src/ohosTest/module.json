@@ -1,0 +1,37 @@
+{
+  "app": {
+    "bundleName": "org.maplibre.arkui.test",
+    "vendor": "maplibre",
+    "versionCode": 1,
+    "versionName": "1.0.0",
+    "apiReleaseType": "Release",
+    "debug": true,
+    "bundleType": "app",
+    "icon": "$media:icon",
+    "label": "$string:label"
+  },
+  "module": {
+    "name": "entry_test",
+    "type": "entry",
+    "description": "$string:label",
+    "mainElement": "TestAbility",
+    "deviceTypes": ["default"],
+    "deliveryWithInstall": true,
+    "installationFree": false,
+    "virtualMachine": "ark",
+    "compileMode": "esmodule",
+    "pages": "$profile:main_pages",
+    "requestPermissions": [{ "name": "ohos.permission.INTERNET" }],
+    "abilities": [
+      {
+        "name": "TestAbility",
+        "srcEntry": "./ets/testability/TestAbility.ets",
+        "exported": true,
+        "icon": "$media:icon",
+        "label": "$string:label",
+        "startWindowIcon": "$media:icon",
+        "startWindowBackground": "$color:background"
+      }
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+// hk runs the checks for pre-commit, `mise run check`, and `mise run fix`.
+//
+// No formatter or linter outside the OpenHarmony SDK understands ArkTS (.ets),
+// so dprint leaves those files alone. ets-loader applies the ArkTS rules when
+// the build tasks compile them.
+
+amends "package://github.com/jdx/hk/releases/download/v2.11.1/hk@2.11.1#/Config.pkl"
+
+import "package://github.com/jdx/hk/releases/download/v2.11.1/hk@2.11.1#/Builtins.pkl"
+
+steps {
+  ["dprint"] = Builtins.dprint
+  ["jactionlint"] = Builtins.jactionlint
+  ["shellcheck"] = Builtins.shellcheck
+}

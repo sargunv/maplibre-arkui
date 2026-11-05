@@ -1,0 +1,131 @@
+# https://mise.jdx.dev
+# Mise pins the tools and runs the repository's tasks. See AGENTS.md.
+
+min_version = "2026.10.24"
+
+[settings]
+experimental = true
+pin = true
+lockfile = true
+# A lock adds only this platform's entries instead of rebuilding every
+# platform, which fails for tools that some platforms lack.
+lockfile_mode = "merge"
+# The OpenHarmony SDK and the emulator image are gigabytes, so a Git hook or
+# `mise run check` never installs them on the way. `mise install` does.
+auto_install_disable_tools = ["ohos-sdk", "http:oniro-emulator"]
+
+[vars]
+# The MapLibre Native FFI commit whose OHPM packages the library builds against.
+# FFI isn't on OHPM in the form this library needs, so `ffi:download` fetches
+# the packages that FFI's CI packed at this commit, and `ffi:pack` packs them
+# from a checkout. See AGENTS.md.
+ffi_commit = "5c4c9084ab442ed62e48c6ced764396eae2cdc80"
+# Oniro publishes its emulator image against the matching OpenHarmony release,
+# so the SDK and the image share this version, as in MapLibre Native FFI.
+ohos_sdk_version = "6.1"
+
+[tools]
+"github:jdx/hk" = "2.11.1"
+"aqua:dprint/dprint" = "0.64.3"
+"aqua:jdx/jactionlint" = "2.4.0"
+"aqua:koalaman/shellcheck" = "0.11.0"
+"aqua:jqlang/jq" = "1.8.2"
+# Fetches FFI's CI packages in `ffi:download`.
+"aqua:cli/cli" = "2.103.3"
+# ets-loader, the SDK's ArkTS compiler front end, runs on Node.
+"core:node" = "26.13.0"
+# The SDK packs and signs HAPs with Java tools.
+"core:java" = "zulu-25.38.109.0"
+# devices-cli gives each worktree its own emulator. It has no releases, so mise
+# builds it with Go.
+"core:go" = "1.27.3"
+"go:github.com/sargunv/devices-cli" = { version = "v0.0.0-20261029084046-1fb50144e197", os = [
+  "linux",
+  "macos",
+] }
+# mise has no registry entry for the OpenHarmony SDK, so it resolves through
+# the plugin in .mise/plugins, which the preinstall hook links. The plugin
+# unpacks the SDK with python3 from the host.
+ohos-sdk = { version = "{{vars.ohos_sdk_version}}", os = ["linux", "macos"] }
+"http:oniro-emulator" = { version = "{{vars.ohos_sdk_version}}", url = "https://github.com/eclipse-oniro4openharmony/device_board_oniro/releases/download/v{{ version }}/oniro_emulator.zip", checksum = "sha256:a30e01f1b161e0fdcd91263f30f29cc92bfa49c1776d5ee2c46caefef055b2da", size = "1449068188", bin_path = ".", os = [
+  "linux",
+  "macos",
+] }
+# hypium, the OpenHarmony test framework. The test task parses the report it
+# prints, so it is pinned.
+"http:hypium" = { version = "1.0.29", url = "https://ohpm.openharmony.cn/ohpm/@ohos/hypium/-/hypium-{{ version }}.har", format = "tar.gz", checksum = "sha256:c81d27c4098d9d3beafffa9602e5f45388bf8107a766bdbca1c8494e67074798", bin_path = ".", os = [
+  "linux",
+  "macos",
+] }
+
+[hooks]
+preinstall = ["mise plugins link --force ohos-sdk .mise/plugins/ohos-sdk"]
+postinstall = [
+  "mise plugins link --force ohos-sdk .mise/plugins/ohos-sdk",
+  "hk install --mise",
+]
+
+[tasks.check]
+description = "Run every formatter and linter check."
+run = "hk check --all"
+
+[tasks.fix]
+description = "Apply every formatter and linter fix."
+run = "hk fix --all"
+
+[tasks."ffi:download"]
+description = "Download the FFI OHPM packages that FFI's CI packed at the pinned commit into build/ffi."
+run = 'scripts/ffi-download.sh "{{vars.ffi_commit}}" build/ffi'
+
+[tasks."ffi:pack"]
+description = "Pack the FFI OHPM packages from the FFI checkout that FFI_DIR names into build/ffi."
+usage = '''
+arg "[preset]" default="ohos-x64-egl" help="The FFI OpenHarmony preset to build"
+'''
+run = '''
+scripts/ffi-pack.sh "${FFI_DIR:?FFI_DIR must name a MapLibre Native FFI checkout}" "$usage_preset" build/ffi
+if [[ $(<build/ffi/COMMIT) != "{{vars.ffi_commit}}" ]]; then
+  echo "warning: FFI_DIR is not at the pinned FFI commit, {{vars.ffi_commit}}; CI builds against that one" >&2
+fi
+'''
+
+[tasks.pack]
+description = "Pack the library into an OHPM source HAR in build/har."
+run = "scripts/pack-har.sh library build/har"
+
+[tasks."demo:build"]
+description = "Build and sign the demo HAP for the x64 emulator against the packed library and build/ffi."
+depends = ["pack"]
+run = '''
+scripts/build-hap.sh demo/entry/src/main build/demo x86_64 \
+  build/har/maplibre-arkui.har build/ffi/native-ffi.har build/ffi/native-ffi-opengl.har
+'''
+
+[tasks.demo]
+description = "Build the demo, then install and start it on this worktree's emulator or the device that --device names."
+usage = '''
+flag "--device <key>" help="The hdc connect key of the device, which defaults to this worktree's emulator"
+'''
+depends = ["demo:build"]
+run = '''
+device=${usage_device:-$(scripts/ohos-key.sh)}
+hdc -t "$device" install -r build/demo/entry.hap
+hdc -t "$device" shell aa start -a EntryAbility -b org.maplibre.arkui.demo
+'''
+
+[tasks."test:build"]
+description = "Build and sign the library's hypium suite for the x64 emulator against the packed library and build/ffi."
+depends = ["pack"]
+run = '''
+scripts/build-hap.sh library/src/ohosTest build/test x86_64 \
+  build/har/maplibre-arkui.har build/ffi/native-ffi.har build/ffi/native-ffi-opengl.har \
+  "$(mise where http:hypium)/package"
+'''
+
+[tasks.test]
+description = "Build the library's hypium suite and run it on this worktree's emulator or the device that --device names."
+usage = '''
+flag "--device <key>" help="The hdc connect key of the device, which defaults to this worktree's emulator"
+'''
+depends = ["test:build"]
+run = 'scripts/run-tests.sh "${usage_device:-$(scripts/ohos-key.sh)}" build/test/entry_test.hap'

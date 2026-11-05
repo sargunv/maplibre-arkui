@@ -109,6 +109,22 @@ Questions:
   example][ffi-example-arkui]).
 - Test framework. FFI runs its ArkTS suite with hypium on the emulator.
 
+Decided (see `AGENTS.md`):
+
+- One source HAR, `@maplibre/arkui` in `library/`, at API 20. It depends on the
+  facade; the demo installs the facade and `-opengl`. A separate controls HAR
+  waits for stage 8.
+- FFI is pinned by commit in `mise.toml`. CI downloads the `ohpm-packages-*`
+  artifact of FFI's CI run for that commit, which expires after 30 days, so the
+  pin moves with FFI main; locally `ffi:pack` packs them from a checkout.
+- HAPs build without hvigor, adapting FFI's scripts. ets-loader's webpack build
+  needs two small patches, for imported `@ComponentV2` structs and for source
+  HAR record names. It ignores `@kit.*` imports.
+- The Oniro emulator through devices-cli, and hypium in a test ability with a
+  window, following DevEco's ohosTest layout. CI builds the HAR and both HAPs
+  but doesn't boot the emulator yet.
+- No formatter understands `.ets`; ets-loader's ArkTS checks run in the build.
+
 References:
 
 - [HAR packages][oh-har], [converting HAR to HSP][oh-har-to-hsp], and
