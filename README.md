@@ -7,9 +7,8 @@ with touch, mouse, and keyboard gestures, with a compass, scale bar,
 attribution, and zoom buttons. It pins ArkUI content to coordinates, moves its
 camera from code, shows and follows the user's location, builds style
 expressions, draws content that the app declares from its state, changes the
-style, and renders snapshots. It re-exports FFI's
-request handlers, offline regions, and logs. See [ROADMAP.md](ROADMAP.md) for
-the plan.
+style, and renders snapshots. It re-exports FFI's request handlers, offline
+regions, and logs. See [ROADMAP.md](ROADMAP.md) for the plan.
 
 ## Using it
 
