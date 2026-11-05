@@ -112,13 +112,4 @@ export type { GeoJsonFeature, GeoJsonFeatureCollection, GeoJsonGeometry, GeoJson
 export { readPixelMap } from './src/main/ets/StyleImage';
 
 export { MapMarker } from './src/main/ets/MapMarker';
-export {
-  defaultScaleBarUnits,
-  MapAttribution,
-  MapCompass,
-  MapScaleBar,
-  MapZoomButtons,
-  scaleBarLength,
-  ScaleBarUnits,
-} from './src/main/ets/Ornaments';
-export type { ScaleBarLength } from './src/main/ets/Ornaments';
+export { MapAttribution, MapCompass, MapScaleBar, MapZoomButtons, ScaleBarUnits } from './src/main/ets/Ornaments';

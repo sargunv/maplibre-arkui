@@ -222,11 +222,14 @@ export class MapView extends XComponentController {
     map.listStyleSources().then((sources: readonly StyleSourceInfo[]) => {
       const attributions: string[] = [];
       for (const source of sources) {
-        if (source.attribution !== '' && !attributions.includes(source.attribution)) {
-          attributions.push(source.attribution);
+        const attribution = source.attribution.trim();
+        if (attribution !== '' && !attributions.includes(attribution)) {
+          attributions.push(attribution);
         }
       }
-      if (controller.map === map && controller.styleLoaded) {
+      // Sources change often, as their data does, so keep an unchanged list.
+      if (controller.map === map && controller.styleLoaded &&
+        JSON.stringify(attributions) !== JSON.stringify(controller.attributions)) {
         controller.attributions = attributions;
       }
     }).catch((error: Error) => this.fail(error));

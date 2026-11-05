@@ -1,13 +1,5 @@
 import { describe, expect, it } from '@ohos/hypium';
-import {
-  CameraUpdateMode,
-  defaultScaleBarUnits,
-  LatLng,
-  MapProjectionHandle,
-  scaleBarLength,
-  ScaleBarUnits,
-  ScreenPoint,
-} from '@maplibre/arkui';
+import { CameraUpdateMode, LatLng, MapProjectionHandle, ScaleBarUnits, ScreenPoint } from '@maplibre/arkui';
 import { Driver, MatchPattern, ON } from '@ohos.UiTest';
 
 import { STYLE, testMap } from '../testability/TestMaps';
@@ -21,35 +13,41 @@ function near(a: number, b: number, tolerance: number): boolean {
   return Math.abs(a - b) <= tolerance;
 }
 
+const map = testMap.controller;
+
+async function jumpTo(latitude: number, zoom: number): Promise<void> {
+  await map.updateCamera({
+    mode: CameraUpdateMode.jump,
+    camera: { center: { latitude: latitude, longitude: 10 }, zoom: zoom, bearing: 0, pitch: 0 },
+  });
+  await until('the frame shows the camera', () => near(map.frameCamera?.zoom ?? 0, zoom, 0.001));
+}
+
+// The scale bar in these units shows this label.
+async function expectScaleBar(units: ScaleBarUnits, label: string): Promise<void> {
+  testMap.scaleBar = units;
+  const bar = await Driver.create().waitForComponent(ON.text(label), 5000);
+  expect(bar !== null && bar !== undefined).assertTrue();
+}
+
 export default function ornamentsTest(): void {
   describe('Ornaments', () => {
-    const map = testMap.controller;
-
     it('measures the scale bar at the zoom and latitude of the frame', 0, async () => {
-      testMap.scaleBar = true;
       await until('the style loads', () => map.styleLoaded);
-      await map.updateCamera({
-        mode: CameraUpdateMode.jump,
-        camera: { center: { latitude: 60, longitude: 10 }, zoom: 5, bearing: 0, pitch: 0 },
-      });
-      await until('the frame shows the camera', () => near(map.frameCamera?.zoom ?? 0, 5, 0.001));
       // At 60 degrees, a meter spans twice as many vp as at the equator.
-      const metersPerPixel = map.metersPerPixelAtLatitude(60) ?? 0;
-      expect(metersPerPixel).assertClose(EQUATOR_METERS_PER_PIXEL / 32 / 2, 0.01);
-
-      const metric = scaleBarLength(metersPerPixel, 100, ScaleBarUnits.METRIC);
-      expect(metric.label).assertEqual('100 km');
-      expect(metric.width).assertClose(100000 / metersPerPixel, 0.001);
-      const imperial = scaleBarLength(metersPerPixel, 100, ScaleBarUnits.IMPERIAL);
-      expect(imperial.label).assertEqual('50 mi');
-      expect(scaleBarLength(0.5, 100, ScaleBarUnits.METRIC).label).assertEqual('50 m');
-      expect(scaleBarLength(0.5, 100, ScaleBarUnits.IMPERIAL).label).assertEqual('100 ft');
-
-      // The bar on the map shows the same distance in the system's units.
-      const shown = defaultScaleBarUnits() === ScaleBarUnits.METRIC ? metric.label : imperial.label;
-      const bar = await Driver.create().waitForComponent(ON.text(shown), 5000);
-      expect(bar !== null && bar !== undefined).assertTrue();
-      testMap.scaleBar = false;
+      await jumpTo(60, 5);
+      expect(map.metersPerPixelAtLatitude(60) ?? 0).assertClose(EQUATOR_METERS_PER_PIXEL / 32 / 2, 0.01);
+      try {
+        // The bar is at most 100 vp, which spans 122 km, or 76 mi, here, and
+        // 60 m, or 196 ft, at zoom 16.
+        await expectScaleBar(ScaleBarUnits.metric, '100 km');
+        await expectScaleBar(ScaleBarUnits.imperial, '50 mi');
+        await jumpTo(60, 16);
+        await expectScaleBar(ScaleBarUnits.metric, '50 m');
+        await expectScaleBar(ScaleBarUnits.imperial, '100 ft');
+      } finally {
+        testMap.scaleBar = undefined;
+      }
     });
 
     it('turns the map north when the compass is tapped', 0, async () => {
@@ -73,29 +71,32 @@ export default function ornamentsTest(): void {
         camera: { center: { latitude: 15, longitude: 25 }, zoom: 4, bearing: 30, pitch: 20 },
       });
       testMap.marker = coordinate;
-      await until('the frame shows the camera', () => near(map.frameCamera?.bearing ?? 0, 30, 0.001));
-      const context = testMap.context!;
-      await until('the marker is placed', () => context.getComponentUtils().getRectangleById('marker').size.width > 0);
+      try {
+        await until('the frame shows the camera', () => near(map.frameCamera?.bearing ?? 0, 30, 0.001));
+        const context = testMap.context!;
+        await until('the marker is placed', () => context.getComponentUtils().getRectangleById('marker').size.width > 0);
 
-      // The controller projects with the frame's view, as FFI does.
-      const handle = map.map!;
-      const projection = MapProjectionHandle.create(handle.getSnapshot().view);
-      const expected: ScreenPoint = projection.pixelForLatLng(coordinate);
-      projection.release();
-      const point = map.pixelForLatLng(coordinate)!;
-      expect(point.x).assertClose(expected.x, 0.01);
-      expect(point.y).assertClose(expected.y, 0.01);
-      expect(map.latLngForPixel(point)?.latitude).assertClose(coordinate.latitude, 0.0001);
+        // The controller projects with the frame's view, as FFI does.
+        const handle = map.map!;
+        const projection = MapProjectionHandle.create(handle.getSnapshot().view);
+        const expected: ScreenPoint = projection.pixelForLatLng(coordinate);
+        projection.release();
+        const point = map.pixelForLatLng(coordinate)!;
+        expect(point.x).assertClose(expected.x, 0.01);
+        expect(point.y).assertClose(expected.y, 0.01);
+        expect(map.latLngForPixel(point)?.latitude).assertClose(coordinate.latitude, 0.0001);
 
-      // The marker's bottom center sits on that point of the map.
-      const utils = context.getComponentUtils();
-      const box = utils.getRectangleById('marker');
-      const host = utils.getRectangleById('map-host');
-      const x = context.px2vp(box.windowOffset.x + box.size.width / 2 - host.windowOffset.x);
-      const y = context.px2vp(box.windowOffset.y + box.size.height - host.windowOffset.y);
-      expect(x).assertClose(expected.x, 1);
-      expect(y).assertClose(expected.y, 1);
-      testMap.marker = undefined;
+        // The marker's bottom center sits on that point of the map.
+        const utils = context.getComponentUtils();
+        const box = utils.getRectangleById('marker');
+        const host = utils.getRectangleById('map-host');
+        const x = context.px2vp(box.windowOffset.x + box.size.width / 2 - host.windowOffset.x);
+        const y = context.px2vp(box.windowOffset.y + box.size.height - host.windowOffset.y);
+        expect(x).assertClose(expected.x, 1);
+        expect(y).assertClose(expected.y, 1);
+      } finally {
+        testMap.marker = undefined;
+      }
     });
 
     // MapLibre Native reads the attribution of tiled sources only, so the

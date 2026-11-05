@@ -546,10 +546,10 @@ Decided:
   5 times a power of ten in metric or imperial units, by the system region by
   default. The attribution is the style's sources' HTML, without repeats, in
   `MapController.attributions`, which it reads again when a source changes (a
-  TileJSON's attribution arrives after the style). It shows as text with
-  `UrlStyle` links and folds to an info button. No MapLibre logo: no source's
-  terms require it, MapLibre GL JS hides it by default, and it needs a 14 KB
-  vector or HAR resources.
+  TileJSON's attribution arrives after the style). `StyledString.fromHtml` turns
+  it into text with links, and it folds to an info button. No MapLibre logo: no
+  source's terms require it, MapLibre GL JS hides it by default, and it needs a
+  14 KB vector or HAR resources.
 - Ornaments use the system's color resources (`sys.color.*`) and icons
   (`sys.media.*`), so they follow dark mode and need no HAR resources. The scale
   bar uses fixed colors that read on any map. Their accessibility labels are

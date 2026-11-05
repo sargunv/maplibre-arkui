@@ -57,6 +57,7 @@ export struct MapCompass {
     .animation({ duration: 200 })
     .hitTestBehavior(this.shown ? HitTestMode.Default : HitTestMode.None)
     .accessibilityText('Compass')
+    .accessibilityLevel(this.shown ? 'auto' : 'no-hide-descendants')
     .onClick(() => {
       this.controller.updateCamera({
         mode: CameraUpdateMode.ease,
@@ -114,29 +115,27 @@ export struct MapZoomButtons {
 /** The units of a `MapScaleBar`. */
 export enum ScaleBarUnits {
   /** Meters and kilometers. */
-  METRIC,
+  metric,
   /** Feet and miles. */
-  IMPERIAL,
+  imperial,
 }
 
-/** A distance that a scale bar shows: its label, and its width in vp. */
-export interface ScaleBarLength {
+// A distance that a scale bar shows: its label, and its width in vp.
+interface ScaleBarLength {
   label: string;
   width: number;
 }
 
-/**
- * The longest round distance, 1, 2, or 5 times a power of ten, that fits in
- * `maxWidth` vp at `metersPerPixel` meters per vp. It counts in kilometers or
- * miles once one fits.
- */
-export function scaleBarLength(metersPerPixel: number, maxWidth: number, units: ScaleBarUnits): ScaleBarLength {
+// The longest round distance, 1, 2, or 5 times a power of ten, that fits in
+// `maxWidth` vp at `metersPerPixel` meters per vp. It counts in kilometers or
+// miles once one fits.
+function scaleBarLength(metersPerPixel: number, maxWidth: number, units: ScaleBarUnits): ScaleBarLength {
   const meters = metersPerPixel * maxWidth;
-  const small = units === ScaleBarUnits.METRIC ? 1 : 0.3048;
-  const large = units === ScaleBarUnits.METRIC ? 1000 : 1609.344;
+  const small = units === ScaleBarUnits.metric ? 1 : 0.3048;
+  const large = units === ScaleBarUnits.metric ? 1000 : 1609.344;
   const unit = meters >= large ? large : small;
   const value = roundDown(meters / unit);
-  const symbol = units === ScaleBarUnits.METRIC ? (unit === large ? 'km' : 'm') : (unit === large ? 'mi' : 'ft');
+  const symbol = units === ScaleBarUnits.metric ? (unit === large ? 'km' : 'm') : (unit === large ? 'mi' : 'ft');
   return { label: `${value} ${symbol}`, width: value * unit / metersPerPixel };
 }
 
@@ -151,9 +150,9 @@ function roundDown(value: number): number {
 // Feet and miles in the United States and the countries that use its units.
 const IMPERIAL_REGIONS: string[] = ['US', 'AS', 'GU', 'MP', 'PR', 'VI', 'UM', 'LR', 'MM'];
 
-/** The units of the system's region: imperial in the US, Liberia, and Myanmar. */
-export function defaultScaleBarUnits(): ScaleBarUnits {
-  return IMPERIAL_REGIONS.includes(i18n.System.getSystemRegion()) ? ScaleBarUnits.IMPERIAL : ScaleBarUnits.METRIC;
+// The units of the system's region: imperial in the US, Liberia, and Myanmar.
+function defaultScaleBarUnits(): ScaleBarUnits {
+  return IMPERIAL_REGIONS.includes(i18n.System.getSystemRegion()) ? ScaleBarUnits.imperial : ScaleBarUnits.metric;
 }
 
 /**
@@ -247,74 +246,33 @@ export struct MapAttribution {
     }
   }
 
+  // The attributions are HTML, which StyledString converts with their links.
   private showText(): void {
-    this.text.setStyledString(attributionText(this.controller.attributions));
-  }
-}
-
-// The attributions as text, with their links. Attribution HTML is links,
-// entities, and text; other tags are dropped.
-function attributionText(attributions: string[]): StyledString {
-  const text = new MutableStyledString('');
-  const link = new RegExp('<a\\s[^>]*href\\s*=\\s*["\']([^"\']*)["\'][^>]*>(.*?)</a>', 'gis');
-  attributions.forEach((html: string, index: number) => {
-    if (index > 0) {
-      text.appendStyledString(new StyledString('  '));
+    const attributions = this.controller.attributions;
+    if (attributions.length === 0) {
+      return;
     }
-    let rest = 0;
-    let match = link.exec(html);
-    while (match !== null) {
-      text.appendStyledString(new StyledString(plainText(html.substring(rest, match.index))));
-      const label = plainText(match[2]);
-      const start = text.length;
-      text.appendStyledString(new StyledString(label));
-      // MutableStyledString rejects an empty range.
-      if (label.length > 0) {
+    StyledString.fromHtml(attributions.join('  ')).then((html: StyledString) => {
+      if (attributions !== this.controller.attributions) {
+        return;
+      }
+      const text = new MutableStyledString('');
+      text.appendStyledString(html);
+      text.setStyle({
+        start: 0,
+        length: text.length,
+        styledKey: StyledStringKey.FONT,
+        styledValue: new TextStyle({ fontSize: LengthMetrics.vp(12), fontColor: $r('sys.color.font_secondary') }),
+      });
+      for (const link of text.getStyles(0, text.length, StyledStringKey.URL)) {
         text.setStyle({
-          start: start,
-          length: label.length,
-          styledKey: StyledStringKey.URL,
-          styledValue: new UrlStyle(decodeEntities(match[1])),
-        });
-        text.setStyle({
-          start: start,
-          length: label.length,
+          start: link.start,
+          length: link.length,
           styledKey: StyledStringKey.DECORATION,
           styledValue: new DecorationStyle({ type: TextDecorationType.Underline }),
         });
       }
-      rest = match.index + match[0].length;
-      match = link.exec(html);
-    }
-    text.appendStyledString(new StyledString(plainText(html.substring(rest))));
-  });
-  if (text.length > 0) {
-    text.setStyle({
-      start: 0,
-      length: text.length,
-      styledKey: StyledStringKey.FONT,
-      styledValue: new TextStyle({ fontSize: LengthMetrics.vp(12), fontColor: $r('sys.color.font_secondary') }),
-    });
+      this.text.setStyledString(text);
+    }).catch((error: Error) => console.error(`MapLibre: ${error.message}`));
   }
-  return text;
-}
-
-function plainText(html: string): string {
-  return decodeEntities(html.replace(new RegExp('<[^>]*>', 'g'), ''));
-}
-
-const ENTITIES: Map<string, string> = new Map([
-  ['amp', '&'], ['lt', '<'], ['gt', '>'], ['quot', '"'], ['apos', '\''], ['nbsp', '\u00a0'], ['copy', '\u00a9'],
-  ['reg', '\u00ae'],
-]);
-
-function decodeEntities(text: string): string {
-  return text.replace(new RegExp('&(#x[0-9a-f]+|#[0-9]+|[a-z]+);', 'gi'), (entity: string, name: string) => {
-    if (name.startsWith('#x') || name.startsWith('#X')) {
-      return String.fromCodePoint(parseInt(name.substring(2), 16));
-    } else if (name.startsWith('#')) {
-      return String.fromCodePoint(parseInt(name.substring(1), 10));
-    }
-    return ENTITIES.get(name.toLowerCase()) ?? entity;
-  });
 }

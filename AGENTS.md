@@ -133,8 +133,9 @@ model for adding it.
   `setTimeout` poll.
 - The webpack build's ESM tsconfig omits some built-in components, such as
   `NodeContainer`, `ContentSlot`, and `SymbolGlyph`, so `.ets` files can't use
-  them yet. It also rejects `layoutGravity`, and components written directly in
-  a `ForEach` item; have the item call a `@Builder`.
+  them yet. It also rejects `layoutGravity`. In a `ForEach` item, a built-in
+  component fails to build, and a custom component with a trailing closure
+  builds but silently loses that content; have the item call a `@Builder`.
 - ets-loader only warns when code breaks the ArkTS rules, so `build-hap.sh`
   fails on the errors in its `ArkTSLinter_output.json`.
 - The library owns each runtime's one FFI event handler. Code that needs a

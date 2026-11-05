@@ -1,4 +1,4 @@
-import { LatLng, MapLibreMap, MapMarker } from '@maplibre/arkui';
+import { LatLng, MapLibreMap, MapMarker, MapScaleBar, ScaleBarUnits } from '@maplibre/arkui';
 
 import { testMap } from '../TestMaps';
 
@@ -21,6 +21,12 @@ struct Index {
     }
   }
 
+  // It reads the units itself, since a builder's arguments don't update it.
+  @Builder
+  scaleBar() {
+    MapScaleBar({ controller: testMap.controller, units: testMap.scaleBar ?? ScaleBarUnits.metric })
+  }
+
   build() {
     Column() {
       if (testMap.shown) {
@@ -28,7 +34,6 @@ struct Index {
           controller: testMap.controller,
           style: testMap.style,
           cameraBounds: testMap.cameraBounds,
-          scaleBarEnabled: testMap.scaleBar,
           onStyleLoaded: () => {
             testMap.styleLoads++;
           },
@@ -36,6 +41,9 @@ struct Index {
             testMap.errors.push(error.message);
           },
         }) {
+          if (testMap.scaleBar !== undefined) {
+            this.scaleBar()
+          }
           if (testMap.marker !== undefined) {
             this.marker(testMap.marker)
           }
