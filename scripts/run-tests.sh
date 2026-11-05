@@ -21,8 +21,8 @@ module=$(jq -er .module.name <<<"$manifest")
 "${hdc[@]}" install -r "$hap"
 report=$(mktemp)
 trap 'rm -f "$report"' EXIT
-# A case that never settles would hold `aa test` until its own timeout.
-timeout "${MAPLIBRE_ARKUI_TEST_TIMEOUT:-600}" "${hdc[@]}" shell aa test -b "$bundle" -m "$module" \
+# hypium fails a case that doesn't settle within the per-case timeout.
+"${hdc[@]}" shell aa test -b "$bundle" -m "$module" \
   -s unittest /ets/testrunner/OpenHarmonyTestRunner -s timeout 60000 |
   tr -d '\r' | tee "$report"
 
