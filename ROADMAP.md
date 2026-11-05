@@ -12,9 +12,22 @@ references listed for it.
 
 ## Guiding ideas
 
-- Keep the concepts of MapLibre Compose, and express them in ArkUI idioms. When
-  ArkUI has no equivalent of a Compose feature, follow ArkUI instead of
-  imitating Compose.
+In order of priority:
+
+- Simple, clear code. A map that behaves well with simple code beats one that
+  matches MapLibre Compose, this roadmap, or any other reference exactly.
+- Idiomatic ArkTS and ArkUI over imitating MapLibre Compose. Compose is a
+  sibling toolkit and a reference for what a map library needs. When its shape
+  conflicts with what ArkUI developers expect, follow ArkUI.
+- Modern over legacy. Use state management V2 (`@ComponentV2`, `@ObservedV2`,
+  `@Param`, `@Event`) and current APIs, and don't support V1 idioms. The
+  minimum API level is the one FFI requires.
+- Wrap FFI only where wrapping helps. MapLibre Compose wraps all of its engine
+  because it shares one API with MapLibre GL JS. This library has no such
+  constraint, so it can re-export FFI types and expose FFI handles where that
+  is already idiomatic ArkTS.
+- Gestures are intricate. Study ArkUI's gesture idioms and the MapLibre Compose
+  [interaction source][compose-interaction-src] before designing them.
 - Build the imperative core first. Every declarative feature sits on imperative
   operations that apps can also call. MapLibre Native FFI renders, paces frames,
   and moves the camera, but it doesn't recognize input or provide widgets or
@@ -34,10 +47,11 @@ references listed for it.
   literal types, but string-literal unions compile and ship in third-party
   libraries; check them against static ArkTS before relying on them.
 
-## Stage 0: An FFI release with OpenHarmony window support
+## Stage 0: Build against FFI main
 
-MapLibre Native FFI's ArkTS bindings are done on main. The released version
-doesn't have what this library needs yet.
+MapLibre Native FFI's ArkTS bindings are done on main, but the released version
+doesn't have what this library needs yet. This library doesn't wait for a
+release. It builds against FFI main, and what it learns informs that release.
 
 Status:
 
@@ -60,11 +74,11 @@ Status:
   OHPM yet.
 - [HarmonyOS platform support in MapLibre Native (#4315)][native-4315], merged.
 
-This stage is done when an FFI release with these changes, including the
-facade, is on OHPM. Until then, work can start from the `ohpm-packages-*` HARs
-that FFI's CI uploads, or by packing them from a checkout
+Until FFI publishes these packages, the library uses the `ohpm-packages-*`
+HARs that FFI's CI uploads, or HARs packed from a checkout of FFI main
 ([install guide][ffi-install-ts]). The documented `pack-ohpm` command packs
-`ohos-arm64-egl` only; the emulator needs `ohos-x64-egl`.
+`ohos-arm64-egl` only; the emulator needs `ohos-x64-egl`. Record each FFI gap
+or bug the library hits, so it can be fixed upstream before the release.
 
 Read first: the [ArkUI example][ffi-example-arkui], the
 [OpenHarmony platform header][ffi-ohos-h], and the guides to
@@ -176,17 +190,14 @@ Questions:
   in components. FFI reads the camera synchronously, so per-frame values
   needn't be traced. MapLibre Compose puts per-frame geometry in one immutable
   `Viewport` value ([#1909][compose-1909]).
-- Support for apps that use state management V1. A V1 parent can hold a V2
-  state object as a plain field, but can't decorate it
-  ([mixing V1 and V2][oh-v1-v2-mix]).
 - Camera animations as Promises, and how they are cancelled. FFI reports when
   each camera transition completes, is cancelled, or is replaced.
 - Camera constraints, and camera padding apart from viewport insets
   ([#1428][compose-1428]).
-- Access to the FFI map for features this library doesn't wrap yet. MapLibre
-  Compose lends the platform map to a callback, marked delicate and
-  experimental ([#1184][compose-1184]). Queries need FFI's render session, not
-  only its map.
+- Access to the FFI map and render session for features this library doesn't
+  wrap. MapLibre Compose lends the platform map to a callback, marked delicate
+  and experimental ([#1184][compose-1184]); here, exposing the FFI handles
+  directly may be simpler.
 
 References:
 
@@ -197,8 +208,8 @@ References:
 - State management V2: [overview][oh-state-overview],
   [@ComponentV2][oh-componentv2], [@ObservedV2 and @Trace][oh-observedv2],
   [@Param][oh-param], [@Event][oh-event], [@Computed][oh-computed],
-  [@Monitor][oh-monitor], [addMonitor and clearMonitor][oh-addmonitor],
-  [MVVM with V2][oh-mvvm-v2], and [migrating from V1][oh-v1-v2-migration]
+  [@Monitor][oh-monitor], [addMonitor and clearMonitor][oh-addmonitor], and
+  [MVVM with V2][oh-mvvm-v2]
 - [State management best practices][hw-state-best-practices]: don't make values
   the UI never reads into state, and group fields that change together
 - [Map Kit `MapComponent`][hw-mapkit]
@@ -247,6 +258,7 @@ and queries.
 
 Questions:
 
+- Which parts of FFI's style API to wrap and which to re-export.
 - Handle lifetime across style reloads. In MapLibre Compose, a handle is null
   until the style is ready, each loaded style publishes new handles
   ([#1157][compose-1157]), and an expired handle reads null and ignores writes
@@ -654,8 +666,6 @@ All of these are imperative controller APIs:
 [oh-state-overview]: https://github.com/openharmony/docs/blob/master/en/application-dev/ui/state-management/arkts-state-management-overview.md
 [oh-uiability-lifecycle]: https://github.com/openharmony/docs/blob/master/en/application-dev/application-models/uiability-lifecycle.md
 [oh-unittest]: https://github.com/openharmony/docs/blob/master/en/application-dev/application-test/unittest-guidelines.md
-[oh-v1-v2-migration]: https://github.com/openharmony/docs/blob/master/en/application-dev/ui/state-management/arkts-v1-v2-migration.md
-[oh-v1-v2-mix]: https://github.com/openharmony/docs/blob/master/en/application-dev/ui/state-management/arkts-v1-v2-mixusage.md
 [oh-xcomponent]: https://github.com/openharmony/docs/blob/master/en/application-dev/reference/apis-arkui/arkui-ts/ts-basic-components-xcomponent.md
 [oh-xcomponent-guide]: https://github.com/openharmony/docs/blob/master/en/application-dev/ui/napi-xcomponent-guidelines.md
 [ohpm]: https://ohpm.openharmony.cn/
