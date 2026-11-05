@@ -12,4 +12,9 @@ steps {
   ["dprint"] = Builtins.dprint
   ["jactionlint"] = Builtins.jactionlint
   ["shellcheck"] = Builtins.shellcheck
+  // The READMEs' ArkTS examples are in the demo, whose build compiles them.
+  ["doc-examples"] {
+    glob = List("README.md", "library/README.md", "demo/entry/src/main/ets/docs/*.ets")
+    check = "scripts/check-doc-examples.sh README.md library/README.md"
+  }
 }

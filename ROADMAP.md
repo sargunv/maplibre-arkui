@@ -1,14 +1,15 @@
 # maplibre-arkui roadmap
 
-maplibre-arkui is a planned ArkUI library for MapLibre Native on HarmonyOS and
+maplibre-arkui is an ArkUI library for MapLibre Native on HarmonyOS and
 OpenHarmony. It is a cousin of [MapLibre Compose][compose], and it builds on the
 ArkTS bindings of [MapLibre Native FFI][ffi]. MapLibre Compose now runs on FFI
 too ([#1817][compose-1817]), so its `maplibreNativeMain` source set is the
 closest prior art.
 
-This roadmap orders the work and collects references for each stage. It does not
-fix the API. Each stage settles its own API by prototyping against the
-references listed for it.
+This roadmap orders the work and collects references for each stage. Each stage
+settled its own API by prototyping against the references listed for it, and
+records what it decided. Every stage is done; [Status](#status) sums up each
+one's follow-ups, and [Next](#next) and [Later](#later) hold the remaining work.
 
 ## Guiding ideas
 
@@ -46,6 +47,38 @@ In order of priority:
   only for declared interfaces without methods. The guide also forbids literal
   types, but string-literal unions compile and ship in third-party libraries;
   check them against static ArkTS before relying on them.
+
+## Status
+
+Each stage is done, in the pull request it names; the follow-ups are the work it
+left, which [Next](#next) collects.
+
+- Stage 0, build against FFI main (#1, #2): done. Follow-up: switch to FFI's
+  OHPM packages once FFI publishes the facade, and keep the commit pin within
+  FFI's 30-day artifact window until then.
+- Stage 1, project setup (#2, #4): done. Follow-up: the emulator suite in CI,
+  which hasn't run on GitHub yet.
+- Stage 2, a map on screen (#5): done. Follow-ups: several maps at once on a
+  device (the emulator's llvmpipe crashes), density changes, Vulkan.
+- Stage 3, map state and camera (#5): done. Follow-ups: camera padding apart
+  from the fit's, saving the camera across process death.
+- Stage 4, gestures (#9): done. Follow-ups: thresholds and feel on a device,
+  long press, mouse right-drag rotation, touchpad two-finger pan, a held key
+  that moves every frame, haptics, a public input handler for custom hosts.
+- Stage 5, the style API (#7): done. Follow-up: FFI's late feature state
+  repaint.
+- Stage 6, expressions (#3): done.
+- Stage 7, declarative content (#10): done. Follow-ups: per-layer click
+  handlers, `fp` text sizes, anchoring to content layers.
+- Stage 8, ornaments and overlays (#8): done. Follow-ups: localized labels, a
+  logo, markers that point to off-screen coordinates, collapsing the attribution
+  on a gesture.
+- Stage 9, location (#11, in review): done. Follow-ups: the compass heading,
+  styling the indicator, a zoom gesture that keeps following, a real device.
+- Stage 10, requests, offline, snapshots, logs (#6): done. Follow-up: following
+  the device's connectivity with `setNetworkStatus()`.
+- Stage 11, guidelines, docs, and release prep: done, except the license and the
+  publish.
 
 ## Stage 0: Build against FFI main
 
@@ -774,7 +807,8 @@ References:
 ## Stage 11: Guidelines, documentation, and release
 
 Goal: written API guidelines, a documentation site, and publication on ohpm.
-Early previews can ship from any earlier stage.
+Early previews can ship from any earlier stage. Done without the docs site and
+the publish, which waits for the license and FFI's packages.
 
 Questions:
 
@@ -800,6 +834,53 @@ References:
   requirements][oh-forum-publish]
 - [awesome-harmony-library][awesome-harmony], to compare popular packages
 
+Decided:
+
+- `docs/api-guidelines.md` writes down the conventions the code follows, and how
+  they differ from MapLibre Compose's. The ArkTS style guide's UPPER_SNAKE
+  constants hold for internal constants; enum members follow FFI's
+  lowerCamelCase. Options are interfaces of optional fields, which grow without
+  breaking callers. Doc comments are prose with backticks, without JSDoc tags.
+- The repository's `README.md` is the guide, and `library/README.md` the ohpm
+  page. No docs site yet: the guide's examples are in the demo's `ets/docs/`,
+  which the demo build compiles and `mise run check` matches against both
+  READMEs, so they can't drift from the API.
+- `@maplibre/arkui`, version `0.1.0-preview.1`, with a `CHANGELOG.md` that names
+  each version, as OHPM's review requires. `mise run pack` makes a HAR that
+  `ohpm prepublish` accepts once the FFI dependency names a published version
+  and the repository has a license; it warns until then. `AGENTS.md` lists the
+  release steps. The license is the owner's decision, and blocks publishing.
+- `mise run test` runs the hypium suite once; a run that the llvmpipe crash ends
+  without hypium's tally fails, and isn't retried. CI doesn't run the suite
+  until that crash is fixed (see Next).
+
+## Next
+
+- **Publish.** Pick a license; move the FFI dependency to the facade's OHPM
+  version once FFI publishes it, and build CI against OHPM instead of FFI's CI
+  artifacts; then `ohpm publish`. See `AGENTS.md`, Releasing.
+- **CI on the emulator.** Run the hypium suite on the Oniro emulator in CI, as
+  FFI's CI does, once the llvmpipe crash is fixed. Locally, during stage 11,
+  only 2 of 18 runs of the suite finished; the rest crashed. At that rate a CI
+  job fails most of the time, so it can't gate merges yet.
+- **The llvmpipe crash.** Mesa's llvmpipe crashes the app on the emulator while
+  maps render, and more often with ArkUI content moving over them. A device with
+  a GPU tells an emulator bug from an FFI race between render threads
+  (`docs/ffi-feedback.md`).
+- **Real devices.** Check gestures (thresholds, momentum, the feel of pinch and
+  rotate), location from Location Kit, several maps at once, and Vulkan on a
+  phone and a tablet.
+- **Compass heading.** Turn the location indicator and a following camera with
+  the device's heading from `@ohos.sensor`.
+- **Per-layer click handlers.** A layer's `onClick` as a rendered query at the
+  tap, filtered to the layers that have one.
+- **Static ArkTS.** Find out what the SDK's static and dynamic declaration split
+  means for third-party HARs, and check the API against static ArkTS (literal
+  types, the `Record` literals). Static ArkTS may reach native code through ANI
+  rather than Node-API, which FFI's binding uses.
+- **Smaller follow-ups.** The ones under [Status](#status), and those in
+  `docs/api-guidelines.md`.
+
 ## Later
 
 - **Android and iOS through ArkUI-X.** ArkUI-X added cross-platform XComponent
@@ -808,9 +889,6 @@ References:
   runtime packages for ArkUI-X on Android and iOS. Community reports describe
   slow maintenance and API gaps. ([GitCode][arkuix], [docs][arkuix-docs], [6.0.0
   release][arkuix-600], [overview][arkuix-overview])
-- **Static ArkTS.** Find out what the SDK's static and dynamic declaration split
-  means for third-party HARs. Static ArkTS may reach native code through ANI
-  rather than Node-API, which FFI's binding uses.
 - **Native components.** Use ContentSlot and the NDK node API if hosting from
   ArkTS limits performance.
 - **Compose on HarmonyOS.** [ovCompose][ovcompose], [KuiklyUI][kuikly], and

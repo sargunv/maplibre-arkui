@@ -385,5 +385,21 @@ release. Each entry names the FFI commit it was seen at.
   `displaySync` frames, which works. Suggested fix: a sentence and a sketch in
   the "Apply gestures" section of `guides/camera.mdx`.
 
+## Stage 11: release prep (FFI `5c4c9084`)
+
+- **Without a backend, importing the facade fails with a `TypeError`.** A
+  library like this one depends on `@maplibre/native-ffi`, and the app has to
+  install a backend itself, since ohpm has no peer dependencies, so a missing
+  backend is the likeliest install mistake. The demo built with the facade and
+  no backend crashed at start with
+  `TypeError: Cannot read property mln_c_version of undefined`, at `bindAddon`
+  in `@maplibre/native-ffi/index.js`, because
+  `import addon from "libmaplibre_native_ffi.so"` gives `undefined`
+  (`.proof/no-backend-jscrash.log` in this worktree). Suggested fix: in
+  `src/arkts.ts` or `bindAddon`, throw an error that names the packages, such as
+  "install @maplibre/native-ffi-opengl or @maplibre/native-ffi-vulkan, at this
+  facade's version", when the addon is missing. The ABI check already covers a
+  backend of another version.
+
 [42012958276]:
   https://github.com/maplibre/maplibre-native-ffi/actions/runs/42012958276

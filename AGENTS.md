@@ -9,7 +9,10 @@ ideas set the priorities.
 ```
 library/                 @maplibre/arkui, a source HAR
   Index.ets              the public API: only what this exports is public
-  oh-package.json5       name, version, API floor (20), FFI dependency
+  oh-package.json5       name, version, API floor (20), FFI dependency, and
+                         the metadata ohpm shows
+  README.md              the ohpm page: install and quick start
+  CHANGELOG.md           a section per version, which pack-har.sh requires
   src/main/ets/
     Expressions.ets      style expressions: functions that build style-spec JSON
     GeoJson.ets          GeoJSON types, so ArkTS can write GeoJSON literals
@@ -45,10 +48,14 @@ demo/entry/src/main/     the demo app's only module (module.json holds the app's
                          of it and queries on tap, and a location page
                          (LocationDemo.ets) with Location Kit and a simulated
                          walk
+  ets/docs/              the READMEs' examples: QuickStart.ets (a page of its
+                         own) and Examples.ets (a page of tabs)
 scripts/                 the build, pack, FFI, and device scripts the tasks run
 .mise/plugins/ohos-sdk/  mise plugin for the OpenHarmony SDK, identical to FFI's;
                          linked by scripts/link-ohos-sdk-plugin.sh
+docs/api-guidelines.md   the public API's conventions
 docs/ffi-feedback.md     FFI gaps and bugs found here, for upstream
+README.md                the user guide
 build/                   outputs (gitignored): ffi/, har/, demo/, test/
 .proof/                  screenshots and logs of runs (gitignored)
 ```
@@ -60,7 +67,9 @@ Oniro emulator image (1.4 GB), which no other command installs on its own. The
 SDK plugin unpacks with the host's `python3`, and the scripts use `perl` and
 `unzip`.
 
-- `mise run check` / `mise run fix`: formatters and linters through hk.
+- `mise run check` / `mise run fix`: formatters and linters through hk, and
+  `scripts/check-doc-examples.sh`, which checks that each `ets` block of the
+  READMEs is in the demo's `ets/docs/`.
 - `mise run ffi:download`: fetch the FFI packages that FFI's CI packed at
   `vars.ffi_commit` into `build/ffi`. Needs `gh` signed in.
 - `FFI_DIR=<checkout> mise run ffi:pack [preset]`: pack them from an FFI
@@ -71,9 +80,16 @@ SDK plugin unpacks with the host's `python3`, and the scripts use `perl` and
   install, and start it on this worktree's emulator (`--device <key>` for
   another device).
 - `mise run test:build` / `mise run test`: build the hypium suite, or build and
-  run it on the emulator. It fails unless hypium reports every case passed.
+  run it on the emulator. It fails unless hypium reports every case passed. A
+  run that ends without hypium's tally crashed, most likely in llvmpipe (see
+  `docs/ffi-feedback.md`); that crash is FFI's to fix, not a reason to retry.
 - `scripts/ohos-key.sh`: print this worktree's emulator key, booting it if
-  needed. `devices-cli release` stops it.
+  needed. `devices-cli release` stops it. It runs `scripts/wake-device.sh`,
+  which turns the screen on, keeps it on for a day, and swipes the lock screen
+  away, since the emulator locks after it sleeps and `aa start` and the UI cases
+  fail behind the lock screen. A device named with `--device` is left as it is.
+  Don't run `power-shell suspend`: `hdc shell` hangs until the emulator is
+  released.
 - Screenshot:
   `hdc -t "$(scripts/ohos-key.sh)" shell snapshot_display -f /data/local/tmp/x.jpeg`,
   then `hdc -t ... file recv /data/local/tmp/x.jpeg .proof/x.jpeg`.
@@ -111,11 +127,33 @@ and bump the pin within 30 days or CI breaks. Building FFI in CI instead would
 mean building MapLibre Native, which is far slower.
 
 CI (`.github/workflows/ci.yml`) runs `mise run check` and builds the HAR, the
-demo HAP, and the test HAP. CI hasn't run yet; if `ffi:download` gets a 403
-because the job's token can't read another repository's artifacts, give it a
-repository secret with a fine-grained token that reads public repositories. It
-doesn't boot the emulator yet; FFI's CI does on runners with KVM, which is the
-model for adding it.
+demo HAP, and the test HAP. It doesn't run the hypium suite, which llvmpipe's
+crash makes fail most runs (ROADMAP.md, Next). CI hasn't run on GitHub yet; if
+`ffi:download` gets a 403 because the job's token can't read another
+repository's artifacts, give it a repository secret with a fine-grained token
+that reads public repositories.
+
+## Releasing
+
+Nothing is published yet. `mise run pack` warns about what keeps the HAR off
+ohpm. To publish:
+
+1. Add a `LICENSE` at the repository's root, which `pack-har.sh` copies into the
+   HAR, and its SPDX name as `license` in `library/oh-package.json5`. This is
+   the owner's decision, and blocks publishing.
+2. Once FFI publishes `@maplibre/native-ffi` and its backends on OHPM, set the
+   dependency in `library/oh-package.json5` to that exact version, such as
+   `"@maplibre/native-ffi": "0.202612.0"`. FFI breaks its API in most releases,
+   and the backend the app installs must match the facade, so pin it exactly,
+   and tell apps that version in the READMEs' install line
+   (`ohpm install @maplibre/arkui @maplibre/native-ffi-opengl@<version>`). Then
+   `vars.ffi_commit` and `ffi:download` can give way to the published packages.
+3. Set `version` and add its section to `library/CHANGELOG.md`.
+4. `mise run pack`, then `ohpm prepublish build/har/maplibre-arkui.har` with
+   DevEco's or the command-line tools' ohpm, which isn't part of this
+   repository's toolchain. It warns that the HAR has source code, which a source
+   HAR does. Then `ohpm publish build/har/maplibre-arkui.har`. OHPM lists the
+   version after a review, which checks the README's install line.
 
 ## Project invariants
 
@@ -154,6 +192,10 @@ model for adding it.
   `Index.ets`; wrap them only where ArkUI needs it.
 - Test cases don't need the network, except the resource transform case, which
   rewrites a URL to a real style.
+- Code in the READMEs goes in `ets` blocks, which dprint leaves alone, and each
+  block is lines of `demo/entry/src/main/ets/docs/`: change both together.
+- `docs/api-guidelines.md` describes the public API as it is; a change that
+  departs from it changes it too.
 - The build has no resource table, so `.ets` files can't use `$r()`; load files
   from `resources/rawfile` with `getRawFileContentSync()`.
 - The style and query API is FFI's, through `MapController.map` and

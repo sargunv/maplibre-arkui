@@ -20,24 +20,24 @@ export interface JsonObject extends Record<string, JsonValue> {}
  * stands for a color where the expression expects one, as CSS writes it:
  * `'#ff0000'`, `'rgba(255, 0, 0, 0.5)'`, or `'#ff000080'`, whose alpha comes
  * last, unlike ArkUI's `'#80ff0000'`. An array isn't an argument; wrap it in
- * {@link literal}.
+ * `literal()`.
  */
 export type ExpressionInput = Expression | string | number | boolean | null;
 
 /**
  * A style expression, which the map evaluates for each feature or zoom level.
  *
- * Build one with the functions of this module, such as {@link get},
- * {@link interpolate}, and {@link match}. For an operator that they don't
- * cover, use {@link call}, or construct an expression from its style-spec
+ * Build one with the functions of this module, such as `get()`,
+ * `interpolate()`, and `match()`. For an operator that they don't
+ * cover, use `call()`, or construct an expression from its style-spec
  * JSON. MapLibre checks the expression's types when it parses the
  * expression, not this library.
  *
  * Pass an expression to FFI's style functions as is: they call
- * `JSON.stringify`, which writes its style-spec JSON through {@link toJSON}.
+ * `JSON.stringify`, which writes its style-spec JSON through `toJSON()`.
  *
- * An expression is immutable. Two expressions are {@link equals} when their
- * JSON is the same.
+ * An expression is immutable. `equals()` compares two expressions by their
+ * JSON.
  */
 export class Expression {
   /** The expression's style-spec JSON. */
@@ -134,7 +134,7 @@ export function geometryType(): Expression {
 
 /**
  * The map's zoom level. MapLibre accepts it only as the input of a top-level
- * {@link interpolate} or {@link step}.
+ * `interpolate()` or `step()`.
  */
 export function zoom(): Expression {
   return call('zoom');
@@ -153,8 +153,8 @@ export function lineProgress(): Expression {
 // Ramps
 
 /**
- * How {@link interpolate} computes the values between its stops. Create one
- * with {@link linear}, {@link exponential}, or {@link cubicBezier}.
+ * How `interpolate()` computes the values between its stops. Create one
+ * with `linear()`, `exponential()`, or `cubicBezier()`.
  */
 export class Interpolation {
   /** The interpolation's style-spec JSON, such as `['linear']`. */
@@ -183,7 +183,7 @@ export function cubicBezier(x1: number, y1: number, x2: number, y2: number): Int
   return new Interpolation(['cubic-bezier', x1, y1, x2, y2]);
 }
 
-/** An input value and the output at it, for {@link interpolate} and {@link step}. */
+/** An input value and the output at it, for `interpolate()` and `step()`. */
 export type Stop = [number, ExpressionInput];
 
 // Appends the stops to `json`, the start of a ramp, as the spec's flat list.
@@ -209,13 +209,13 @@ export function interpolate(type: Interpolation, input: ExpressionInput,
   return ramp(['interpolate', type.json, jsonOf(input)], stops);
 }
 
-/** Interpolates colors like {@link interpolate}, in the HCL color space. */
+/** Interpolates colors like `interpolate()`, in the HCL color space. */
 export function interpolateHcl(type: Interpolation, input: ExpressionInput,
   stops: Stop[]): Expression {
   return ramp(['interpolate-hcl', type.json, jsonOf(input)], stops);
 }
 
-/** Interpolates colors like {@link interpolate}, in the CIELAB color space. */
+/** Interpolates colors like `interpolate()`, in the CIELAB color space. */
 export function interpolateLab(type: Interpolation, input: ExpressionInput,
   stops: Stop[]): Expression {
   return ramp(['interpolate-lab', type.json, jsonOf(input)], stops);
@@ -236,10 +236,10 @@ export function step(input: ExpressionInput, fallback: ExpressionInput,
 
 // Decisions
 
-/** A label of a {@link match} case: one value, or any of several. */
+/** A label of a `match()` case: one value, or any of several. */
 export type MatchLabel = string | number | string[] | number[];
 
-/** A label and the output of a {@link match} when the input equals it. */
+/** A label and the output of a `match()` when the input equals it. */
 export type MatchCase = [MatchLabel, ExpressionInput];
 
 /**
@@ -261,7 +261,7 @@ export function match(input: ExpressionInput, cases: MatchCase[],
   return new Expression(json);
 }
 
-/** A condition and the output of {@link cases} when it's the first true one. */
+/** A condition and the output of `cases()` when it's the first true one. */
 export type Condition = [ExpressionInput, ExpressionInput];
 
 /**
@@ -449,14 +449,14 @@ export function rgba(red: ExpressionInput, green: ExpressionInput, blue: Express
   return call('rgba', red, green, blue, alpha);
 }
 
-/** The style's image named `name`, for `icon-image` or a {@link format} section. */
+/** The style's image named `name`, for `icon-image` or a `format()` section. */
 export function image(name: ExpressionInput): Expression {
   return call('image', name);
 }
 
-/** A section of {@link format}ted text and how it overrides the layer's text style. */
+/** A section of `format()` text and how it overrides the layer's text style. */
 export interface FormatSection {
-  /** The section's text, or an {@link image}. */
+  /** The section's text, or an `image()`. */
   text: ExpressionInput;
   /** Scales the layer's `text-size`. */
   fontScale?: ExpressionInput;

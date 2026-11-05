@@ -27,9 +27,11 @@ export type LayerPredicate = (layer: StyleLayerInfo) => boolean;
  * differs.
  */
 export interface MapContent {
+  /** The sources that the layers draw, besides the base style's. */
   sources?: MapSource[];
   /** The layers, from bottom to top among those with the same `below`. */
   layers?: MapLayer[];
+  /** The images that the layers name, such as in `icon-image`. */
   images?: MapImage[];
 }
 
@@ -49,6 +51,7 @@ export interface MapContent {
  * source and the layers that draw it.
  */
 export interface MapSource {
+  /** The source's ID, unique in the content and the base style. */
   id: string;
   /** The source's style-spec JSON without its ID: its `type` and what that type takes. */
   json: Record<string, Object>;
@@ -69,6 +72,7 @@ export interface MapSource {
  * in place, and a change to `type`, `source`, or `sourceLayer` replaces it.
  */
 export interface MapLayer {
+  /** The layer's ID, unique in the content and the base style. */
   id: string;
   /** `'fill'`, `'line'`, `'circle'`, `'symbol'`, `'fill-extrusion'`, `'raster'`, and so on. */
   type: string;
@@ -76,8 +80,11 @@ export interface MapLayer {
   source?: string;
   /** The layer of a vector source that the layer draws. */
   sourceLayer?: string;
+  /** Which features the layer draws: those for which it's true. */
   filter?: Expression;
+  /** The zoom from which the layer shows. */
   minZoom?: number;
+  /** The zoom from which the layer hides. */
   maxZoom?: number;
   /** Paint properties by their style-spec names, as expressions or plain values. */
   paint?: Record<string, Object>;
@@ -96,9 +103,11 @@ export interface MapLayer {
 
 /** An image for symbol layers' `icon-image` and patterns, such as from `readPixelMap()`. */
 export interface MapImage {
+  /** The name that layers give the image, unique in the content and the base style. */
   id: string;
   /** The pixels. A new object replaces the image; the map doesn't compare pixels. */
   image: PremultipliedRgba8Image;
+  /** How the style draws the image, such as its `pixelRatio`. */
   options?: StyleImageOptions;
 }
 

@@ -15,7 +15,7 @@ import { readPixelMap } from './StyleImage';
 export const USER_LOCATION_LAYER = 'maplibre-arkui-user-location';
 
 /** How `MapController.followUserLocation()` moves the camera. */
-export interface FollowLocationOptions {
+export interface FollowUserLocationOptions {
   /** The zoom that the camera eases to as it starts to follow. Keeps the zoom by default. */
   zoom?: number;
   /**

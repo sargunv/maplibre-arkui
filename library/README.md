@@ -1,146 +1,77 @@
 # @maplibre/arkui
 
-ArkUI components for MapLibre Native on HarmonyOS and OpenHarmony: a
-`MapLibreMap` component, a `MapController` that reads and moves its camera,
-content declared as data, and `snapshot()` for still images. Early, and not on
-ohpm yet; see the [repository](https://github.com/sargunv/maplibre-arkui).
+ArkUI components for [MapLibre Native] maps on HarmonyOS and OpenHarmony, built
+on [MapLibre Native FFI]:
 
-## Gestures
+- `MapLibreMap`, a map that moves with touch, mouse, touchpad, and keyboard
+  gestures, with a compass, scale bar, attribution, and zoom buttons
+- `MapController`, which reads and moves the camera, with observable state
+- `MapMarker`, ArkUI content pinned to a coordinate
+- The user's location from Location Kit, and a camera that follows it
+- Map content (sources, layers, and images) declared as data from the app's
+  state, and functions that build style expressions
+- `snapshot()`, a still image of a map
+- MapLibre Native FFI's style API, request handlers, offline regions, and logs
 
-The map pans, zooms, rotates, and pitches with touch, the wheel, a touchpad
-pinch, and keys, and takes the drags that start on it from a scrolling parent.
-`gestures` turns some off; `cooperative` leaves one-finger drags to the parent.
-`onGestureStart` and `onGestureEnd` report the user moving the camera.
+This is a preview. It uses state management V2 (`@ComponentV2`) and needs API 20
+or later.
 
-```ets
-MapLibreMap({ controller: this.map, style: STYLE, gestures: { pitch: false, cooperative: true } })
+## Install
+
+```sh
+ohpm install @maplibre/arkui @maplibre/native-ffi-opengl@<FFI version>
 ```
 
-## Style expressions
+`@maplibre/arkui` depends on FFI's facade, `@maplibre/native-ffi`, and the app
+installs one backend for it, `@maplibre/native-ffi-opengl`, since ohpm has no
+peer dependencies. The backend's version must be the facade's, which this
+package's `oh-package.json5` names; `ohpm list` shows it.
 
-Build [style expressions] with functions named after their operators, and pass
-them to FFI's style functions:
+An app that loads styles or tiles from the network requests
+`ohos.permission.INTERNET` in its `module.json5`.
 
-```ets
-import { get, interpolate, linear, match, zoom } from '@maplibre/arkui';
-
-const radius = interpolate(linear(), zoom(), [[0, 2], [12, get('size')]]);
-const color = match(get('kind'), [['park', '#8c8'], [['lake', 'river'], '#88c']], '#ccc');
-map.setStyleLayerProperty('places', 'circle-radius', radius);
-map.setStyleLayerProperty('places', 'circle-color', color);
-```
-
-`new Expression(json)` and `call(operator, ...args)` cover the operators that
-have no function.
-
-## Map content
-
-Declare the sources, layers, and images to draw over the style as a `MapContent`
-value, and pass it to `MapLibreMap`'s `content`, such as from a `@Computed`
-getter over the app's state. The map changes only what differs from the content
-it applied, adds it again to each style it loads, and places each layer on top
-or under the base-style layer that its `below` names or picks:
+## Quick start
 
 ```ets
-@Computed
-get content(): MapContent {
-  return {
-    sources: [{ id: 'places', json: { 'type': 'geojson', 'data': this.places } }],
-    layers: [{
-      id: 'places', type: 'circle', source: 'places', paint: { 'circle-color': this.color },
-      below: (layer: StyleLayerInfo) => layer.type === 'symbol',
-    }],
-  };
-}
-```
+import { CameraUpdateMode, MapController, MapLibreMap } from '@maplibre/arkui';
 
-Give it a new value to change it: the map doesn't see changes made inside a
-value it has. It compares properties and GeoJSON data by their JSON, and images
-by reference. A source or layer that the map rejects goes to `onMapError` and
-stays out until it changes. `snapshot()` takes the same content.
-
-## The style API
-
-`controller.map` is MapLibre Native FFI's `MapHandle`, whose style API adds and
-changes sources, layers, images, and feature state, and
-`controller.renderSession` queries features at a point in vp. What an app adds
-through it is gone in the next style, so add it in `onStyleLoaded` (feature
-state of a source re-added under the same ID can carry over). The package
-re-exports the FFI types these take, declares GeoJSON's types for ArkTS
-literals, and adds `readPixelMap()`, which turns a `PixelMap` into the image
-that `setStyleImage()` and `MapImage` take.
-
-On an idle map, a feature state change draws only from the frame after the one
-that applies it. Until FFI fixes that, request one after the change, for example
-with `map.discarding.requestRepaint()` from a delayed frame callback, as the
-repository's demo does.
-
-## Snapshots
-
-`snapshot()` renders a still image of a map that isn't on screen, as a
-`PixelMap` for an `Image`:
-
-```ets
-@Local preview: image.PixelMap | undefined = undefined;
-
-async aboutToAppear(): Promise<void> {
-  this.preview = await snapshot({
-    style: 'https://tiles.openfreemap.org/styles/liberty',
-    width: 320,
-    height: 200,
+@Entry
+@ComponentV2
+struct MapPage {
+  private controller: MapController = new MapController({
     camera: { center: { latitude: 48.8584, longitude: 2.2945 }, zoom: 14 },
   });
+
+  build() {
+    Stack({ alignContent: Alignment.Bottom }) {
+      MapLibreMap({
+        controller: this.controller,
+        style: 'https://tiles.openfreemap.org/styles/liberty',
+        onMapError: (error: Error) => console.error(error.message),
+      })
+      Button('Fly to New York')
+        .margin(64)
+        .onClick(() => {
+          this.controller.updateCamera({
+            mode: CameraUpdateMode.fly,
+            camera: { center: { latitude: 40.7128, longitude: -74.006 }, zoom: 12 },
+            animation: { durationMs: 3000 },
+          }).catch((error: Error) => console.error(error.message));
+        })
+    }
+    .width('100%')
+    .height('100%')
+  }
 }
 ```
 
-For an image of a `MapLibreMap`, pass its style, its `content`, and its
-controller's camera, through `cameraToOptions()`, when `getCamera()` returns
-one. Without `camera`, the image uses the style's default camera; with it, the
-fields it leaves out take MapLibre's defaults, not the style's.
+## Guide
 
-## Requests, offline regions, and logs
+The [repository's README][guide] is the guide: the map and its camera, gestures,
+ornaments and markers, map content and expressions, the style API, the user's
+location, snapshots, requests, offline regions, and logs. Its examples build in
+the repository's demo app, which shows each feature.
 
-These are [MapLibre Native FFI]'s API, which this package re-exports. Maps and
-snapshots share a default runtime unless the app passes its own; set request
-handlers on it, before or after maps appear:
-
-```ets
-const runtime = await getDefaultRuntime();
-runtime.discarding.setResourceTransform({
-  rules: [{
-    flags: UrlMatchFlag.glob,
-    url: 'https://tiles.example.com/**',
-    parameters: [{ name: 'key', value: API_KEY }],
-  }],
-});
-```
-
-For other rewrites, pass a `callback` instead of `rules`; it must answer every
-request. On OpenHarmony, FFI has no header transform: serve the requests that
-need headers with `runtime.setResourceProvider()` instead. See FFI's [network
-guide].
-
-The default runtime's cache database is `maplibre-cache.db` in the app's files
-directory, so [offline regions] last between launches. The library owns the
-runtime's event handler, so watch a download's progress with
-`addRuntimeEventListener()`:
-
-```ets
-const region = await runtime.createOfflineRegion(definition, new util.TextEncoder().encodeInto('Paris'));
-addRuntimeEventListener(runtime, (event: RuntimeEvent) => {
-  const payload = event.payload;
-  if (payload.kind === 'offlineRegionStatus' && payload.value.regionId === region.id) {
-    this.status = payload.value.status;
-  }
-});
-await runtime.setOfflineRegionObserved(region.id, RuntimeEventFlag.offlineRegionStatusChanged);
-await runtime.setOfflineRegionDownloadState(region.id, OfflineRegionDownloadState.active);
-```
-
-MapLibre logs to hilog with the tag `MapLibreNative`. To take the logs, call
-`setLogCallback()`; its `platformSeverities` keeps some in hilog too.
-
+[guide]: https://github.com/sargunv/maplibre-arkui#readme
+[MapLibre Native]: https://github.com/maplibre/maplibre-native
 [MapLibre Native FFI]: https://maplibre.org/maplibre-native-ffi/
-[network guide]: https://maplibre.org/maplibre-native-ffi/guides/network/
-[offline regions]: https://maplibre.org/maplibre-native-ffi/guides/offline/
-[style expressions]: https://maplibre.org/maplibre-style-spec/expressions/

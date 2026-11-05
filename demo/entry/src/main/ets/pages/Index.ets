@@ -8,6 +8,7 @@ import {
   MapMarker,
 } from '@maplibre/arkui';
 
+import { DocExamples } from '../docs/Examples';
 import { Engine } from './Engine';
 import { LocationDemo } from './LocationDemo';
 import { StyleDemo } from './StyleDemo';
@@ -111,6 +112,13 @@ struct Index {
             Button('Location').margin(4).onClick(() => {
               this.stack.pushPathByName('location', null);
             })
+            Button('Quick start').margin(4).onClick(() => {
+              this.getUIContext().getRouter().pushUrl({ url: 'docs/QuickStart' })
+                .catch((error: Error) => this.message = error.message);
+            })
+            Button('README examples').margin(4).onClick(() => {
+              this.stack.pushPathByName('docs', null);
+            })
           }
         }
         .padding(12)
@@ -165,6 +173,8 @@ struct Index {
       ScrollingMap()
     } else if (name === 'location') {
       LocationDemo()
+    } else if (name === 'docs') {
+      DocExamples()
     }
   }
 
