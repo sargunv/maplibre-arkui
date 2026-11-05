@@ -216,6 +216,8 @@ export default function locationTest(): void {
         testMap.userLocation = fix(5.8, 6.8, 10, 0, 180);
         await until('the camera reaches the resting location', () => restsAt(5.8, 6.8));
         expect(camera().bearing).assertClose(90, 0.001);
+        // The hidden arrow keeps its course, so the next one eases from it.
+        expect(await requireMap().getStyleLayerProperty(USER_LOCATION_LAYER, 'bearing') as number).assertEqual(90);
         map.stopFollowingUserLocation();
       } finally {
         testMap.compass = true;
