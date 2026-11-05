@@ -192,6 +192,26 @@ export default function gestureInputTest(): void {
       await until('the bearing snaps to north', () => Math.abs(wrap(camera().bearing)) < 0.001);
     });
 
+    it('keeps a camera jump that the app makes as the gesture ends', 0, async () => {
+      await reset();
+      const c = center(await mapBounds());
+      testMap.onGestureEnd = () => {
+        testMap.controller.updateCamera({ mode: CameraUpdateMode.jump, camera: { bearing: 5 } });
+      };
+      try {
+        await gesture(async () => {
+          await driver.injectMultiPointerAction(twist(c, vp2px(100), 10, 10, 20), vp2px(200));
+        });
+        // A snap would start once the map reports the bearing; give it time.
+        let frames = 0;
+        await until('a moment passes', () => ++frames > 30);
+        near(wrap(camera().bearing), 5, 0.001);
+      } finally {
+        testMap.onGestureEnd = () => {
+        };
+      }
+    });
+
     it('pitches when two fingers move up together', 0, async () => {
       await reset();
       const c = center(await mapBounds());

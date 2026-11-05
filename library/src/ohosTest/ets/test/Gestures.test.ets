@@ -182,6 +182,32 @@ export default function gesturesTest(): void {
       }
     });
 
+    it('leaves a fling alone when the wheel it ignores ends', 0, async () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      gestures.options = { zoom: false };
+      const end = drag(gestures, 0, [touch(1, 100, 100)], [touch(1, 100, 300)], 10, 10);
+      gestures.touch(end + 5, []);
+      gestures.wheel(-1, false);
+      gestures.axisEnded();
+      expect(camera.ends).assertEqual(0);
+      await until('the fling ends', () => camera.ends === 1);
+      expect(camera.starts).assertEqual(1);
+    });
+
+    it('stops a fling whose options change', 0, async () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      const end = drag(gestures, 0, [touch(1, 100, 100)], [touch(1, 100, 300)], 10, 10);
+      gestures.touch(end + 5, []);
+      gestures.options = { pan: false };
+      expect(camera.ends).assertEqual(1);
+      const count = camera.deltas.length;
+      let frames = 0;
+      await until('a few frames pass', () => ++frames > 5);
+      expect(camera.deltas.length).assertEqual(count);
+    });
+
     it('starts a touchpad pinch afresh after one is cancelled', 0, () => {
       const camera = new Recorder();
       const gestures = new MapGestures(camera);

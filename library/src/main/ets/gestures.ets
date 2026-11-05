@@ -108,11 +108,12 @@ export class MapGestures {
     return this.currentOptions;
   }
 
-  // Momentum that waits for the last finger may be for a motion that's now
-  // off, so it goes.
+  // Momentum, running or waiting for the last finger, may be for a motion
+  // that's now off, so it goes.
   set options(options: MapGestureOptions) {
     this.currentOptions = options;
     this.staged = undefined;
+    this.stop();
   }
 
   // The touches that are down, in the order they went down, and those where
@@ -164,6 +165,9 @@ export class MapGestures {
   // Where the mouse or a touchpad pinch last was.
   private pointer: ScreenPoint | undefined = undefined;
   private pinchScale: number = 1;
+  // Whether the wheel or a touchpad pinch opened the gesture that's under way,
+  // so that their end doesn't end another input's gesture.
+  private axisOwned: boolean = false;
 
   constructor(target: GestureTarget) {
     this.target = target;
@@ -279,7 +283,7 @@ export class MapGestures {
       return;
     }
     if (event.action === AxisAction.END) {
-      this.finish();
+      this.axisEnded();
       return;
     }
     // The begin and end of a notch carry its value too, so only its updates
@@ -296,6 +300,7 @@ export class MapGestures {
     }
     this.stop();
     this.move({ scale: Math.pow(2, -value * WHEEL_LEVELS_PER_UNIT), anchor: this.pointer });
+    this.axisOwned = true;
   }
 
   /**
@@ -319,13 +324,14 @@ export class MapGestures {
     // The event's pinch center is in window coordinates, and the axis events
     // of the pinch have the map's.
     this.move({ scale: step, anchor: this.pointer });
+    this.axisOwned = true;
   }
 
   /** The map's pinch gesture ended. */
   onPinchEnd(event: GestureEvent): void {
     this.pinchScale = 1;
     if (event.sourceTool === SourceTool.TOUCHPAD) {
-      this.finish();
+      this.axisEnded();
     }
   }
 
@@ -335,7 +341,12 @@ export class MapGestures {
    */
   pinchCancelled(): void {
     this.pinchScale = 1;
-    if (this.touches.length === 0) {
+    this.axisEnded();
+  }
+
+  /** The wheel or a touchpad pinch ended: so does the gesture they opened. */
+  axisEnded(): void {
+    if (this.axisOwned) {
       this.finish();
     }
   }
@@ -661,6 +672,7 @@ export class MapGestures {
 
   // Ends the gesture. A rotation that ends near north snaps to it.
   private finish(): void {
+    this.axisOwned = false;
     if (this.phaseOpen) {
       this.phaseOpen = false;
       this.moving = false;

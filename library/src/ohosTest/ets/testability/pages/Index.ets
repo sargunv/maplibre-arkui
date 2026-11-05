@@ -74,6 +74,7 @@ struct Index {
       },
       onGestureEnd: () => {
         testMap.gestureEnds++;
+        testMap.onGestureEnd();
       },
     }) {
       if (testMap.scaleBar !== undefined) {

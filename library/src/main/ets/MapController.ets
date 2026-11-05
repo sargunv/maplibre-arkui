@@ -185,7 +185,7 @@ export class MapController {
   /** Stops every camera animation where it is, and a gesture's momentum. */
   async cancelCameraTransitions(): Promise<void> {
     const map = this.requireMap();
-    this.view?.gestures.stop();
+    this.view?.takeOverCamera();
     await map.cancelCameraTransitions();
   }
 
@@ -244,7 +244,7 @@ export class MapController {
       return Promise.reject(new Error('No MapLibreMap shows this MapController'));
     }
     // The app's camera change takes over from a gesture's momentum.
-    this.view?.gestures.stop();
+    this.view?.takeOverCamera();
     return new Promise<CameraTransitionOutcome>((resolve, reject) => {
       const appHandler = options?.endHandler?.callback;
       const animation: AnimationOptions = {

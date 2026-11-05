@@ -9,6 +9,7 @@ import {
   CameraBounds,
   CameraDelta,
   CameraQueryResult,
+  CameraTransitionOutcome,
   CameraUpdateMode,
   LogicalSize,
   MapHandle,
@@ -55,6 +56,8 @@ export class MapView extends XComponentController implements GestureTarget {
   };
   private controller: MapController | undefined = undefined;
   private disposed: boolean = false;
+  // How many times the app has moved the camera, which ends a gesture's say.
+  private cameraTakeovers: number = 0;
   // The map from when it's created, which the view disposes.
   private created: MapHandle | undefined = undefined;
   private style: string = '';
@@ -131,9 +134,21 @@ export class MapView extends XComponentController implements GestureTarget {
     this.applyBounds();
   }
 
-  // Gestures move the map once it's ready; input before then is dropped.
+  // Gestures move the map once it's ready; input before then is dropped, and
+  // an animated step ends at once, so the gestures don't wait for it.
   applyCameraDelta(delta: CameraDelta): void {
-    this.map?.discarding.applyCameraDelta(delta);
+    const map = this.map;
+    if (map === undefined) {
+      delta.animation?.endHandler?.callback?.({ outcome: CameraTransitionOutcome.closed, generation: BigInt(0) });
+      return;
+    }
+    map.discarding.applyCameraDelta(delta);
+  }
+
+  /** The app moves the camera, which takes over from the gestures. */
+  takeOverCamera(): void {
+    this.cameraTakeovers++;
+    this.gestures.stop();
   }
 
   gestureStarted(): void {
@@ -145,13 +160,17 @@ export class MapView extends XComponentController implements GestureTarget {
   // eases to it first, unless input or the app moves the camera again: then
   // the camera rests when that ends.
   gestureEnded(rotated: boolean): void {
+    // The app may move the camera as the gesture ends; then that move reports
+    // where the camera rests, and nothing snaps it.
+    const takeovers = this.cameraTakeovers;
     this.events.onGestureEnd();
     const map = this.map;
     if (map === undefined || this.disposed) {
       return;
     }
     map.getCamera().then((result: CameraQueryResult) => {
-      if (this.map !== map || !this.gestures.idle || map.getSnapshot().transitionInProgress) {
+      if (this.map !== map || !this.gestures.idle || this.cameraTakeovers !== takeovers ||
+        map.getSnapshot().transitionInProgress) {
         return;
       }
       const bearing = rotated ? snapBearing(result.camera.bearing) : undefined;
