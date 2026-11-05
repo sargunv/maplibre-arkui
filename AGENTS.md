@@ -80,10 +80,9 @@ SDK plugin unpacks with the host's `python3`, and the scripts use `perl` and
   install, and start it on this worktree's emulator (`--device <key>` for
   another device).
 - `mise run test:build` / `mise run test`: build the hypium suite, or build and
-  run it on the emulator. It fails unless hypium reports every case passed. When
-  the app crashes before hypium's tally, as llvmpipe can on the emulator, it
-  runs the suite again, up to `--attempts` runs (3); a failed case fails at
-  once.
+  run it on the emulator. It fails unless hypium reports every case passed. A
+  run that ends without hypium's tally crashed, most likely in llvmpipe (see
+  `docs/ffi-feedback.md`); that crash is FFI's to fix, not a reason to retry.
 - `scripts/ohos-key.sh`: print this worktree's emulator key, booting it if
   needed. `devices-cli release` stops it. It runs `scripts/wake-device.sh`,
   which turns the screen on, keeps it on for a day, and swipes the lock screen
