@@ -17,6 +17,9 @@ jobs:
     name: check
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      # Keeps `mise run check` from installing the rest of the tools.
+      MISE_AUTO_INSTALL: "false"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

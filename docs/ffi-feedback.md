@@ -34,6 +34,12 @@ release. Each entry names the FFI commit it was seen at.
   `mise plugins link --force` is global, so each repository's hook relinks the
   plugin to its own copy. Suggested fix: move it to a repository of its own and
   reference it from `[plugins]`, as its `metadata.lua` already anticipates.
+- **The SDK plugin puts a broken `diff` on PATH.** `env_keys.lua` adds the SDK's
+  `toolchains/` to PATH for `hdc`, and that directory also ships `diff`,
+  `restool`, `idl`, and others. Its `diff` rejects `-r` and still exits 0, so
+  `diff -r a b && echo same` prints `same` in an FFI `ohos` shell. Suggested
+  fix, as this repository's copy does: link `hdc` into a `bin/` directory in
+  `post_install.lua` and put only that on PATH.
 - **Packed HAR names differ between CI and local packs.** CI names them
   `native-ffi-0.202601.0-dev.0.har` and `pack-ohpm` names them
   `native-ffi-0.0.0.har`, so consumers glob or rename them (`ffi-download.sh`,

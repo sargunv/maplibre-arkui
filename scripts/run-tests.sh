@@ -5,15 +5,17 @@
 #   run-tests.sh <hdc connect key> <test HAP>
 #
 # The HAP's module runs ets/testrunner/OpenHarmonyTestRunner, which starts the
-# suite. `aa test` exits 0 whatever the cases did, so hypium's tally decides.
+# suite, and its module.json names the bundle and the module. `aa test` exits 0
+# whatever the cases did, so hypium's tally decides.
 set -euo pipefail
 
 usage="usage: run-tests.sh <hdc connect key> <test HAP>"
 device=${1:?$usage}
 hap=${2:?$usage}
 hdc=(hdc -t "$device")
-bundle=org.maplibre.arkui.test
-module=entry_test
+manifest=$(unzip -p "$hap" module.json)
+bundle=$(jq -er .app.bundleName <<<"$manifest")
+module=$(jq -er .module.name <<<"$manifest")
 
 "${hdc[@]}" uninstall "$bundle" >/dev/null 2>&1 || true
 "${hdc[@]}" install -r "$hap"

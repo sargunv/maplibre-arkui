@@ -8,11 +8,14 @@ export default function runtimeHandleTest(): void {
       const map = runtime.createMap({
         initialExtent: { width: 256, height: 256, scaleFactor: 1 },
       });
-      await map.ready;
-      const result = await map.getCamera();
-      expect(result.camera.zoom).assertEqual(0);
-      map.dispose();
-      runtime.dispose();
+      try {
+        await map.ready;
+        const result = await map.getCamera();
+        expect(result.camera.zoom).assertEqual(0);
+      } finally {
+        map.dispose();
+        runtime.dispose();
+      }
     });
   });
 }

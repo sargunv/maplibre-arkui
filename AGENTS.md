@@ -17,7 +17,8 @@ library/                 @maplibre/arkui, a source HAR
 demo/entry/src/main/     the demo app's only module (module.json holds the app's
                          fields too, as FFI's ArkUI example does)
 scripts/                 the build, pack, FFI, and device scripts the tasks run
-.mise/plugins/ohos-sdk/  mise plugin for the OpenHarmony SDK, copied from FFI
+.mise/plugins/ohos-sdk/  mise plugin for the OpenHarmony SDK, copied from FFI;
+                         it puts only hdc on PATH, through bin/
 docs/ffi-feedback.md     FFI gaps and bugs found here, for upstream
 build/                   outputs (gitignored): ffi/, har/, demo/, test/
 .proof/                  screenshots and logs of runs (gitignored)
@@ -60,7 +61,9 @@ keys. It takes the packages as ohpm would install them:
 
 - The library HAR's sources join the module's `ets/`, and the module's imports
   of `@maplibre/arkui` become relative imports of them. The tests and the demo
-  build against the packed HAR, as an app would.
+  build against the packed HAR. The script ignores package dependencies, and the
+  packed HAR still names FFI by its `file:` path in this repository, so ohpm
+  can't install it into an app until FFI is on OHPM.
 - JavaScript packages (FFI's facade, hypium) stay external and become records of
   their own. The backend supplies the native libraries.
 - `scripts/ets-loader-patches.cjs` fixes two bugs in the webpack build for
@@ -79,8 +82,11 @@ and bump the pin within 30 days or CI breaks. Building FFI in CI instead would
 mean building MapLibre Native, which is far slower.
 
 CI (`.github/workflows/ci.yml`) runs `mise run check` and builds the HAR, the
-demo HAP, and the test HAP. It doesn't boot the emulator yet; FFI's CI does on
-runners with KVM, which is the model for adding it.
+demo HAP, and the test HAP. CI hasn't run yet; if `ffi:download` gets a 403
+because the job's token can't read another repository's artifacts, give it a
+repository secret with a fine-grained token that reads public repositories. It
+doesn't boot the emulator yet; FFI's CI does on runners with KVM, which is the
+model for adding it.
 
 ## Project invariants
 
