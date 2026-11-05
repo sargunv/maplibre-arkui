@@ -32,8 +32,10 @@ release. Each entry names the FFI commit it was seen at.
 - **The OpenHarmony SDK mise plugin can't be shared.** Other repositories have
   to copy `.mise/plugins/ohos-sdk`, as this one does, and
   `mise plugins link --force` is global, so each repository's hook relinks the
-  plugin to its own copy. Suggested fix: move it to a repository of its own and
-  reference it from `[plugins]`, as its `metadata.lua` already anticipates.
+  plugin to its own copy. In stage 2, a link to a worktree that had been removed
+  broke every SDK task here until it was relinked. Suggested fix: move it to a
+  repository of its own and reference it from `[plugins]`, as its `metadata.lua`
+  already anticipates.
 - **The SDK plugin puts a broken `diff` on PATH.** `env_keys.lua` adds the SDK's
   `toolchains/` to PATH for `hdc`, and that directory also ships `diff`,
   `restool`, `idl`, and others. Its `diff` rejects `-r` and still exits 0, so
@@ -50,7 +52,8 @@ release. Each entry names the FFI commit it was seen at.
   lose the wakeup. This repository's suite runs hypium from a `TestAbility` that
   loads a page, as DevEco's ohosTest template does, with unpatched hypium
   1.0.29, and has passed every run so far. Worth trying in FFI's suite before
-  keeping the patch.
+  keeping the patch. (Stage 2 found the lost wakeup in the cases themselves; see
+  below.)
 - **`pack-hap` needs Python only to edit the profile JSON.** `jq` does it, as in
   this repository's `scripts/pack-hap.sh`. Minor.
 - **The emulator can reject the first launch after it boots.** Right after
@@ -60,6 +63,86 @@ release. Each entry names the FFI commit it was seen at.
   `tools/devices/ohos-key` shares. Suggested fix: have devices-cli wait until
   the lock screen is gone before it reports the device. (`power-shell suspend`
   to reproduce it hangs `hdc shell` until the emulator is released.)
+
+## Stages 2 and 3: map component and camera (FFI `5c4c9084`)
+
+- **ArkTS can't import the `Camera` type by its name.** ArkUI has a built-in
+  `Camera` component, and ets-loader rejects
+  `import { Camera } from '@maplibre/native-ffi'` in an `.ets` file with "The
+  module name 'Camera' can not be the same as the inner component name". This
+  library imports and re-exports it as `CameraPosition`. Suggested fix: note the
+  alias in the TypeScript install guide's ArkTS section, or rename the type in
+  the TypeScript binding (MapLibre Compose and Map Kit call it
+  `CameraPosition`).
+- **`MapHandle.getSnapshot()` throws before the map is ready, though `ready`'s
+  doc says the map takes calls before then.** Reading the snapshot right after
+  `RuntimeHandle.createMap()` threw
+  `invalidState: map creation has not succeeded`. Commands queue, but the
+  synchronous reads don't. Suggested fix: say in `ready`'s doc that
+  `getSnapshot()` and other synchronous reads need it to settle first.
+- **A runtime has one event handler, so maps that share a runtime need a
+  dispatcher, and a library that sets it takes it from the app.**
+  `RuntimeHandle.setEventHandler()` replaces the handler for the runtime and all
+  its maps. This library shares one runtime between maps, so it sets the handler
+  once and routes events by `event.source` (`runtime.ets`, about 20 lines); an
+  app that passes its own runtime loses its handler. Suggested fix: a per-map
+  event handler (the map already has its own event mask), or several handlers
+  per runtime.
+- **`MapHandle.setStyleJson()` stringifies its argument.** It takes `unknown`
+  and passes it through `JSON.stringify` (`native/runtime.c`), so a style
+  document held as text, as ArkUI apps get it from a rawfile or a param, has to
+  be parsed first; passing the text would load a JSON string. This library calls
+  `JSON.parse` first. Suggested fix: take a string as the document itself, or
+  say in the doc that a string is a JSON value, not a document.
+- **A style that fails to load reports an empty reason.** Loading
+  `file:///nonexistent/style.json` raised `mapLoadingFailed` with the message
+  `loading style failed: ` and nothing after the colon. Suggested fix: include
+  the URL and the failure (not found, HTTP status) in the message.
+- **OpenHarmony's lost timer wakeup also hangs test cases that poll.** A case
+  that waited with a `setTimeout` loop hung for the whole 600 s run once the app
+  went idle, the bug that FFI's `test/arkts/node/timers.ts` describes. Waiting
+  with `UIContext.postFrameCallback()` works in a windowed test ability, with no
+  native addon. Suggested fix: mention it in the ArkTS testing notes, since any
+  downstream suite that polls hits it.
+- **ets-loader's webpack build can't compile `NodeContainer` or `ContentSlot`.**
+  In ESM mode it reads `tsconfig.esm.json`, whose list of built-in components
+  lacks them and others that `tsconfig.json` has (`FolderStack`,
+  `MovingPhotoView`, ...), so a page that uses one fails with "does not meet UI
+  component syntax". FFI's example build has the same limit. Suggested fix: note
+  it next to the example's other build limits; a build that needs them could
+  pass ts-loader a config with the full list.
+- **The ArkUI example's surface-replacement path doesn't run on the emulator.**
+  On the Oniro emulator a `SURFACE` XComponent kept its surface when the app
+  went to the background, behind a `Navigation` push, under `visibility(None)`,
+  and when its `ComponentContent` left an overlay; `onSurfaceDestroyed` fired
+  only when the component was destroyed. This library keeps the
+  `releaseTarget()` and `setOhosSurfaceTarget()` handling, but can't test it
+  there. Suggested fix: if FFI knows a trigger (a device that drops surfaces in
+  the background, or a fold), name it in the window guide so downstream tests
+  can reproduce it.
+- **Maps crash the app on the Oniro emulator, more often the more maps run.**
+  The process dies with `SIGSEGV(SEGV_MAPERR)` on a MapLibre render thread in
+  the emulator's Mesa llvmpipe: `lp_scene_is_resource_referenced` <-
+  `lp_setup_is_resource_referenced` <- `llvmpipe_flush_resource`, reached from
+  `libmaplibre-native-c.so` through `glDrawElements`, `glTexSubImage2D`,
+  `glClear`, or `ohos_create_image_from_native_buffer`. It reproduces with FFI
+  alone: a copy of `examples/arkui` whose page shows N of the example's own
+  `MapController` maps (each with its own runtime, pacer, and `coreWorker`
+  session; FFI `5c4c9084` HARs, OpenHarmony 6.1.0.31 image) crashed within
+  seconds in 3 of 3 starts with three maps, within 30 s in 4 of 8 starts with
+  two, and in 1 of 5 starts with one. In this library's demo, the same crash
+  came within three pushes of the two-map page over the first page's map (three
+  sessions) in three runs, not at all in fifteen pushes of another run, and once
+  with one map during a fly. The sessions use dedicated, unshared EGL contexts,
+  and the process also runs ArkUI's own `RSRenderThread` on llvmpipe, so this
+  looks like a llvmpipe race between contexts on different threads rather than a
+  misuse in FFI, but it hasn't been checked on a device with a GPU. Suggested
+  fix: try two maps on a device; if only the emulator crashes, report it to
+  Oniro with these stacks and note in the OpenHarmony guide that the emulator
+  can't run several maps (or many frames of one) reliably; if devices crash too,
+  look at how the render threads share EGL state. The full fault logs are in the
+  stage 2 worktree's gitignored `.proof/` (`ffi-repro-cppcrash-*.log`,
+  `review-cppcrash*.log`).
 
 ## Stage 6: expressions (FFI `5c4c9084`, `11ffaaf6`)
 

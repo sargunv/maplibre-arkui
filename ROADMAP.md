@@ -167,6 +167,34 @@ Questions:
   another density needs a new map.
 - Vulkan or OpenGL on devices. FFI hasn't tested Vulkan presentation.
 
+Decided:
+
+- `MapLibreMap`, a `@ComponentV2` struct around an XComponent, adapts FFI's
+  example. It creates the FFI map when it appears, attaches a render session to
+  the XComponent's surface, resizes the session with it, and releases the
+  session and the map when it disappears. A `style` param takes a URL or a style
+  document as JSON.
+- `SURFACE`. FFI tests it, ArkUI content draws over it, and on the Oniro
+  emulator its surface outlived going to the background, a `Navigation` push,
+  `visibility(None)`, and removal from an overlay; ArkUI destroyed it only with
+  the component. The session still releases a destroyed surface and takes the
+  next one, as FFI requires. `TEXTURE` waits for a need, such as transforms or
+  same-frame overlays in stage 8.
+- Hidden pages and the background need no code. The frame pacer follows VSync,
+  which stops while the window is hidden, so nothing depends on `onPageShow`.
+- One shared default runtime, created on first use and kept for the app's life;
+  an app passes its own through the `runtime` param. A runtime has one event
+  handler, so the library sets it and passes each event to its map. One frame
+  pacer serves every session.
+- The scale factor is `vp2px(1)` when the map is created. A density change still
+  needs a new map. OpenGL only, through `-opengl`.
+- Not yet proven: several maps at once. On the Oniro emulator the process
+  crashes at random in Mesa's llvmpipe while maps render, with FFI's own example
+  too, and more often the more maps render: the demo's two-map page over its
+  first map has crashed within three pushes and has also survived fifteen. See
+  `docs/ffi-feedback.md`; telling an emulator bug from an FFI one needs a device
+  with a GPU.
+
 References:
 
 - [XComponent reference][oh-xcomponent] and the [XComponent native rendering
@@ -210,6 +238,36 @@ Questions:
   wrap. MapLibre Compose lends the platform map to a callback, marked delicate
   and experimental ([#1184][compose-1184]); here, exposing the FFI handles
   directly may be simpler.
+
+Decided:
+
+- `MapController`, ArkUI's name for a handle that an app creates and passes to a
+  component, as with `XComponentController`, and Map Kit's
+  `MapComponentController`. It holds what outlives the component, so a map that
+  comes back starts where the last one left the camera. The component is the
+  presentation, and runtimes are shared, so there is no third object.
+- `@ObservedV2` with two `@Trace` fields: `camera`, where the camera last came
+  to rest, and `styleLoaded`. Nothing per frame is traced; `getCamera()` reads
+  FFI's snapshot synchronously.
+- The camera methods take FFI's types: `updateCamera(CameraUpdate)` and
+  `fitCameraToLatLngBounds(bounds, CameraFitUpdate)`. They resolve with FFI's
+  `CameraTransitionOutcome` (completed, cancelled, replaced, or closed when the
+  map leaves first) and reject only when the map rejects the command. Resolving
+  keeps a cancelled or replaced move that nobody awaits from becoming an
+  unhandled rejection, and Map Kit's `animateCameraStatus` resolves the same
+  way.
+- The methods need a map that is ready, and reject without one, rather than
+  waiting for a map as MapLibre Compose does. The starting camera goes to the
+  constructor.
+- Limits are a `cameraBounds` param that takes FFI's `BoundOptions`; limits it
+  leaves out return to the map's defaults.
+- `@Event` callbacks: `onStyleLoaded`, `onCameraIdle` (Map Kit's name), and
+  `onMapError`.
+- `runtime`, `map`, and `renderSession` on the controller expose the FFI
+  handles. The library re-exports the FFI types its API uses; FFI's `Camera` is
+  `CameraPosition`, because ArkUI reserves `Camera` for a built-in component.
+- Not yet: camera padding apart from the fit's, a per-frame viewport and
+  projection, and saving the camera across process death.
 
 References:
 
