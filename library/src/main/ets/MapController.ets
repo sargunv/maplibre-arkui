@@ -182,9 +182,11 @@ export class MapController {
       }));
   }
 
-  /** Stops every camera animation where it is. */
+  /** Stops every camera animation where it is, and a gesture's momentum. */
   async cancelCameraTransitions(): Promise<void> {
-    await this.requireMap().cancelCameraTransitions();
+    const map = this.requireMap();
+    this.view?.gestures.stop();
+    await map.cancelCameraTransitions();
   }
 
   /**
@@ -241,6 +243,8 @@ export class MapController {
     if (map === undefined) {
       return Promise.reject(new Error('No MapLibreMap shows this MapController'));
     }
+    // The app's camera change takes over from a gesture's momentum.
+    this.view?.gestures.stop();
     return new Promise<CameraTransitionOutcome>((resolve, reject) => {
       const appHandler = options?.endHandler?.callback;
       const animation: AnimationOptions = {

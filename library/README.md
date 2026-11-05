@@ -5,6 +5,17 @@ ArkUI components for MapLibre Native on HarmonyOS and OpenHarmony: a
 `snapshot()` for still images. Early, and not on ohpm yet; see the
 [repository](https://github.com/sargunv/maplibre-arkui).
 
+## Gestures
+
+The map pans, zooms, rotates, and pitches with touch, the wheel, a touchpad
+pinch, and keys, and takes the drags that start on it from a scrolling parent.
+`gestures` turns some off; `cooperative` leaves one-finger drags to the parent.
+`onGestureStart` and `onGestureEnd` report the user moving the camera.
+
+```ets
+MapLibreMap({ controller: this.map, style: STYLE, gestures: { pitch: false, cooperative: true } })
+```
+
 ## Style expressions
 
 Build [style expressions] with functions named after their operators, and pass

@@ -323,5 +323,35 @@ release. Each entry names the FFI commit it was seen at.
   imports it as `FrameView`. Suggested fix, minor: consider `MapViewState` in
   the binding.
 
+## Stage 4: gestures (FFI `5c4c9084`)
+
+- **Ending a gesture raises no event, so an app can't tell the camera came to
+  rest.** `mapCameraDidChange` arrives for each `GesturePhase.update` delta,
+  while `gestureInProgress` is still true, and the `GesturePhase.end` delta that
+  clears it raises nothing. On the emulator, the demo's camera text, which this
+  library updated from that event once nothing moved the camera, stayed at its
+  value from before a pinch after the pinch ended, and updated only when the
+  last update's event happened to be read after the end. This library now
+  queries `getCamera()` after it sends the end and reports that camera
+  (`MapView.gestureEnded`). Suggested fix: raise `mapCameraDidChange` (or a
+  gesture-ended event) when a delta's phase ends the gesture, or document that
+  apps must query.
+- **A replaced animated delta loses the rest of its change.** Deltas are
+  relative, so when a second animated delta replaces the first mid-way, the part
+  of the first that hadn't run is gone: pressing the zoom-in key twice within
+  300 ms on the emulator zoomed from 14 to 15.84, not 16
+  (`.proof/stage4/16-two-quick-zoom-keys.jpeg` in this worktree). Double taps,
+  key repeats, and held arrow keys hit it. This library accepts it for now.
+  Suggested fix: an option on `CameraDelta` to add the remainder of the
+  transition it replaces, or a note in `mln_camera_transition_outcome`'s docs
+  that relative deltas don't compose.
+- **The camera guide could say how to do momentum.** It says the app recognizes
+  gestures and applies deltas, and FFI has no inertia, which is fine, but a pan
+  with zoom momentum about a pinch's center can't be one animated delta
+  (`anchor` combines with `offset` only without a duration), and two animated
+  deltas replace each other. This library runs momentum as UPDATE deltas on
+  `displaySync` frames, which works. Suggested fix: a sentence and a sketch in
+  the "Apply gestures" section of `guides/camera.mdx`.
+
 [42012958276]:
   https://github.com/maplibre/maplibre-native-ffi/actions/runs/42012958276

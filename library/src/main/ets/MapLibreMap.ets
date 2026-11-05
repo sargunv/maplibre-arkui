@@ -1,5 +1,6 @@
 import { BoundOptions, Camera as CameraPosition, RuntimeHandle } from '@maplibre/native-ffi';
 
+import { MapGestureOptions } from './gestures';
 import { MapController } from './MapController';
 import { MapView } from './MapView';
 import { MapAttribution, MapCompass, MapScaleBar, MapZoomButtons } from './Ornaments';
@@ -28,8 +29,18 @@ const BOTTOM_END: LocalizedAlignRuleOptions = {
   end: { anchor: CONTAINER, align: HorizontalAlign.End },
 };
 
+// A pan, pinch, or rotation this far claims the touches from a parent, such as
+// a Scroll, and a tap may move this far.
+const CLAIM_DISTANCE = 5;
+const TAP_DISTANCE = 10;
+
 /**
  * A MapLibre map, which fills the size that its parent gives it.
+ *
+ * Touch, the mouse, a touchpad, and keys move the camera; `gestures` chooses
+ * which. The map takes the drags that start on it from a scrolling parent,
+ * unless `gestures.cooperative` leaves one-finger drags to the parent. Content
+ * above the map that handles its own gestures keeps them.
  *
  * ```ets
  * private map: MapController = new MapController({
@@ -70,6 +81,8 @@ export struct MapLibreMap {
    * listen with `addRuntimeEventListener()` instead of setting one.
    */
   @Param @Once runtime: RuntimeHandle | undefined = undefined;
+  /** Which gestures move the map. All of them do, by default. */
+  @Param gestures: MapGestureOptions = {};
   /**
    * Whether the map shows a `MapCompass` at its top end, which shows while the
    * map is rotated or tilted.
@@ -104,14 +117,26 @@ export struct MapLibreMap {
   /** The style failed to load, or the map failed to render. */
   @Event onMapError: (error: Error) => void = (error: Error) => {
   };
+  /**
+   * The user started to move the camera, such as to stop following a
+   * location.
+   */
+  @Event onGestureStart: () => void = () => {
+  };
+  /** The camera stopped moving from the user's input, after any momentum. */
+  @Event onGestureEnd: () => void = () => {
+  };
 
   private view: MapView = new MapView(this.getUIContext(), {
     onStyleLoaded: () => this.onStyleLoaded(),
     onCameraIdle: (camera: CameraPosition) => this.onCameraIdle(camera),
     onMapError: (error: Error) => this.onMapError(error),
+    onGestureStart: () => this.onGestureStart(),
+    onGestureEnd: () => this.onGestureEnd(),
   });
 
   aboutToAppear(): void {
+    this.view.gestures.options = this.gestures;
     this.view.start(this.controller, this.runtime, this.style, this.cameraBounds);
   }
 
@@ -129,11 +154,47 @@ export struct MapLibreMap {
     this.view.setBounds(this.cameraBounds);
   }
 
+  @Monitor('gestures')
+  gesturesChanged(): void {
+    this.view.gestures.options = this.gestures;
+  }
+
+  // ArkUI's gestures decide whether the map owns a touch, against a scrolling
+  // parent and content above the map, and MapGestures moves the camera from the
+  // raw touches once one of them starts. The pan needs two fingers when one
+  // finger shouldn't move the map, so a parent scrolls instead. Taps zoom.
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
       XComponent({ type: XComponentType.SURFACE, controller: this.view })
         .width('100%')
         .height('100%')
+        .hitTestBehavior(this.anyGesture() ? HitTestMode.Default : HitTestMode.None)
+        .focusable(true)
+        .focusOnTouch(true)
+        .onTouch((event: TouchEvent) => this.view.gestures.onTouch(event))
+        .onAxisEvent((event: AxisEvent) => this.view.gestures.onAxis(event))
+        .onKeyEvent((event: KeyEvent): boolean => this.view.gestures.onKey(event))
+        .gesture(GestureGroup(GestureMode.Parallel,
+          PanGesture({ fingers: this.panFingers(), distance: CLAIM_DISTANCE })
+            .onActionStart(() => this.view.gestures.claim()),
+          PinchGesture({ distance: CLAIM_DISTANCE })
+            .onActionStart(() => this.view.gestures.claim())
+            .onActionUpdate((event: GestureEvent) => this.view.gestures.onPinch(event))
+            .onActionEnd((event: GestureEvent) => this.view.gestures.onPinchEnd(event)),
+          RotationGesture()
+            .onActionStart(() => this.view.gestures.claim()),
+          TapGesture({ count: 2, distanceThreshold: TAP_DISTANCE })
+            .onAction((event: GestureEvent) => {
+              const finger = event.fingerList[0];
+              this.view.gestures.doubleTap(finger.localX, finger.localY);
+            }),
+          TapGesture({ fingers: 2, distanceThreshold: TAP_DISTANCE })
+            .onAction((event: GestureEvent) => {
+              const fingers = event.fingerList;
+              const x = fingers.reduce((sum: number, finger: FingerInfo) => sum + finger.localX, 0);
+              const y = fingers.reduce((sum: number, finger: FingerInfo) => sum + finger.localY, 0);
+              this.view.gestures.twoFingerTap(x / fingers.length, y / fingers.length);
+            })))
       this.content()
       RelativeContainer() {
         if (this.scaleBarEnabled) {
@@ -165,5 +226,15 @@ export struct MapLibreMap {
     .width('100%')
     .height('100%')
     .clip(true)
+  }
+
+  private anyGesture(): boolean {
+    const gestures = this.gestures;
+    return gestures.pan !== false || gestures.zoom !== false || gestures.rotate !== false ||
+      gestures.pitch !== false;
+  }
+
+  private panFingers(): number {
+    return this.gestures.pan !== false && this.gestures.cooperative !== true ? 1 : 2;
   }
 }

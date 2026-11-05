@@ -7,6 +7,8 @@ import {
   BoundOptions,
   Camera as CameraPosition,
   CameraBounds,
+  CameraDelta,
+  CameraQueryResult,
   CameraUpdateMode,
   LogicalSize,
   MapHandle,
@@ -22,6 +24,7 @@ import {
   StyleSourceInfo,
 } from '@maplibre/native-ffi';
 
+import { GESTURE_ANIMATION_MS, GestureTarget, MapGestures, snapBearing } from './gestures';
 import { MapController } from './MapController';
 import { addRuntimeEventListener, getDefaultRuntime, getFramePacer, removeRuntimeEventListener } from './runtime';
 
@@ -30,13 +33,17 @@ export interface MapViewEvents {
   onStyleLoaded: () => void;
   onCameraIdle: (camera: CameraPosition) => void;
   onMapError: (error: Error) => void;
+  onGestureStart: () => void;
+  onGestureEnd: () => void;
 }
 
-export class MapView extends XComponentController {
+export class MapView extends XComponentController implements GestureTarget {
   runtime: RuntimeHandle | undefined = undefined;
   // The map once it's ready. Before then, its snapshot isn't readable.
   map: MapHandle | undefined = undefined;
   session: RenderSessionHandle | undefined = undefined;
+  // The input that moves the map, which the component binds.
+  readonly gestures: MapGestures = new MapGestures(this);
 
   private readonly context: UIContext;
   private readonly events: MapViewEvents;
@@ -124,8 +131,44 @@ export class MapView extends XComponentController {
     this.applyBounds();
   }
 
+  // Gestures move the map once it's ready; input before then is dropped.
+  applyCameraDelta(delta: CameraDelta): void {
+    this.map?.discarding.applyCameraDelta(delta);
+  }
+
+  gestureStarted(): void {
+    this.events.onGestureStart();
+  }
+
+  // FFI raises no event as a gesture ends, so the view reads where the camera
+  // came to rest, after the gesture's changes. A rotation that ends near north
+  // eases to it first, unless input moves the camera again.
+  gestureEnded(rotated: boolean): void {
+    this.events.onGestureEnd();
+    const map = this.map;
+    if (map === undefined) {
+      return;
+    }
+    map.getCamera().then((result: CameraQueryResult) => {
+      if (this.map !== map || !this.gestures.idle) {
+        return;
+      }
+      const bearing = rotated ? snapBearing(result.camera.bearing) : undefined;
+      if (bearing !== undefined) {
+        map.discarding.updateCamera({
+          mode: CameraUpdateMode.ease,
+          camera: { bearing: bearing },
+          animation: { durationMs: GESTURE_ANIMATION_MS },
+        });
+      } else {
+        this.cameraIdle(result.camera);
+      }
+    }).catch((error: Error) => this.fail(error));
+  }
+
   dispose(): void {
     this.disposed = true;
+    this.gestures.dispose();
     const runtime = this.runtime;
     const map = this.created;
     const session = this.session;
@@ -201,11 +244,8 @@ export class MapView extends XComponentController {
       // The camera changes at the end of each jump and animation. Report it
       // once nothing moves it any more.
       const snapshot = map.getSnapshot();
-      if (!snapshot.transitionInProgress && !snapshot.gestureInProgress) {
-        if (controller !== undefined) {
-          controller.camera = snapshot.view.camera;
-        }
-        this.events.onCameraIdle(snapshot.view.camera);
+      if (!snapshot.transitionInProgress && !snapshot.gestureInProgress && this.gestures.idle) {
+        this.cameraIdle(snapshot.view.camera);
       }
     } else if (event.type === RuntimeEventType.mapSourceChanged) {
       // A source's attribution can arrive after the style, with its TileJSON.
@@ -233,6 +273,14 @@ export class MapView extends XComponentController {
         controller.attributions = attributions;
       }
     }).catch((error: Error) => this.fail(error));
+  }
+
+  private cameraIdle(camera: CameraPosition): void {
+    const controller = this.controller;
+    if (controller !== undefined && controller.map === this.map) {
+      controller.camera = camera;
+    }
+    this.events.onCameraIdle(camera);
   }
 
   // A style that fails to load reports mapLoadingFailed.

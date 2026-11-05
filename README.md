@@ -2,11 +2,12 @@
 
 An ArkUI library for [MapLibre Native] on HarmonyOS and OpenHarmony, built on
 the ArkTS bindings of [MapLibre Native FFI]. It is a cousin of [MapLibre
-Compose]. It's early: the package, `@maplibre/arkui`, shows a map with a
-compass, scale bar, attribution, and zoom buttons, pins ArkUI content to
-coordinates, moves its camera, builds style expressions, changes the style, and
-renders snapshots, without gestures yet. It re-exports FFI's request handlers,
-offline regions, and logs. See [ROADMAP.md](ROADMAP.md) for the plan.
+Compose]. It's early: the package, `@maplibre/arkui`, shows a map that moves
+with touch, mouse, and keyboard gestures, with a compass, scale bar,
+attribution, and zoom buttons. It pins ArkUI content to coordinates, moves its
+camera from code, builds style expressions, changes the style, and renders
+snapshots. It re-exports FFI's request handlers, offline regions, and logs. See
+[ROADMAP.md](ROADMAP.md) for the plan.
 
 ## Using it
 
@@ -62,6 +63,22 @@ MapLibreMap({ controller: this.map, style: STYLE, scaleBarEnabled: true }) {
     Text('Paris')
   }
 }
+```
+
+Drag, pinch, twist, and drag two fingers up or down to pan, zoom, rotate, and
+pitch; double tap to zoom in and tap with two fingers to zoom out. The wheel, a
+touchpad pinch, and the arrow and plus and minus keys work too. `gestures` turns
+some off, and `cooperative` leaves one-finger drags to a scrolling parent:
+
+```ts
+MapLibreMap({
+  controller: this.map,
+  style: "https://tiles.openfreemap.org/styles/liberty",
+  gestures: { rotate: false, cooperative: true },
+  onGestureStart: () => {
+    this.following = false;
+  },
+});
 ```
 
 `MapController` reads and moves the camera from anywhere: its `camera` and
