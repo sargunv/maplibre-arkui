@@ -99,10 +99,21 @@ const KEY_PITCH = 10;
  * from a `Pan`, `Pinch`, or `Rotation` gesture starting.
  */
 export class MapGestures {
-  options: MapGestureOptions = {};
+  private currentOptions: MapGestureOptions = {};
   /** The map's height, which a quick zoom measures its drag against. */
   height: number = 0;
   private readonly target: GestureTarget;
+
+  get options(): MapGestureOptions {
+    return this.currentOptions;
+  }
+
+  // Momentum that waits for the last finger may be for a motion that's now
+  // off, so it goes.
+  set options(options: MapGestureOptions) {
+    this.currentOptions = options;
+    this.staged = undefined;
+  }
 
   // The touches that are down, in the order they went down, and those where
   // recognition last restarted.
@@ -590,11 +601,15 @@ export class MapGestures {
 
   // The momentum of the motion so far, if the last finger lifted at `time`.
   private plan(time: number): Momentum | undefined {
+    const options = this.options;
+    const pan = this.panning && options.pan !== false;
+    const zoom = (this.zooming || this.quickZooming) && options.zoom !== false;
+    const rotate = this.rotating && options.rotate !== false;
     return Momentum.plan(
-      this.panning ? this.panX.perSecond(time) : 0,
-      this.panning ? this.panY.perSecond(time) : 0,
-      this.zooming || this.quickZooming ? this.zoom.perSecond(time) : 0,
-      this.rotating ? this.turn.perSecond(time) : 0,
+      pan ? this.panX.perSecond(time) : 0,
+      pan ? this.panY.perSecond(time) : 0,
+      zoom ? this.zoom.perSecond(time) : 0,
+      rotate ? this.turn.perSecond(time) : 0,
       this.anchor);
   }
 

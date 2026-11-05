@@ -203,6 +203,25 @@ export default function gesturesTest(): void {
       expect(gestures.idle).assertTrue();
     });
 
+    it('releases without momentum for a motion turned off just before', 0, () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      const end = drag(gestures, 0, [touch(1, 100, 100)], [touch(1, 100, 300)], 10, 10);
+      gestures.options = { pan: false };
+      gestures.touch(end + 5, []);
+      expect(camera.ends).assertEqual(1);
+
+      // A pinch's momentum waits for its last finger.
+      const pinch = new Recorder();
+      const pinching = new MapGestures(pinch);
+      const last = drag(pinching, 0, [touch(1, 150, 300), touch(2, 250, 300)],
+        [touch(1, 50, 300), touch(2, 350, 300)], 20, 16);
+      pinching.touch(last + 5, [touch(2, 350, 300)]);
+      pinching.options = { zoom: false };
+      pinching.touch(last + 10, []);
+      expect(pinch.ends).assertEqual(1);
+    });
+
     it('pinches about the fingers without panning or rotating', 0, () => {
       const camera = new Recorder();
       const gestures = new MapGestures(camera);
