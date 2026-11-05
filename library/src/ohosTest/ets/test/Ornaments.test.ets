@@ -45,6 +45,11 @@ export default function ornamentsTest(): void {
         await jumpTo(60, 16);
         await expectScaleBar(ScaleBarUnits.metric, '50 m');
         await expectScaleBar(ScaleBarUnits.imperial, '100 ft');
+        // At 85 degrees and zoom 22, 100 vp spans 0.16 m, or 0.53 ft, so the
+        // bar counts in fractions rather than growing past 100 vp.
+        await jumpTo(85, 22);
+        await expectScaleBar(ScaleBarUnits.metric, '0.1 m');
+        await expectScaleBar(ScaleBarUnits.imperial, '0.5 ft');
       } finally {
         testMap.scaleBar = undefined;
       }

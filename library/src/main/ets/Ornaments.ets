@@ -139,10 +139,13 @@ function scaleBarLength(metersPerPixel: number, maxWidth: number, units: ScaleBa
   return { label: `${value} ${symbol}`, width: value * unit / metersPerPixel };
 }
 
-// The largest of 1, 2, and 5 times a power of ten that's at most `value`, and
-// at least 1.
+// The largest of 1, 2, and 5 times a power of ten that's at most `value`, which
+// can be below 1, as at high zoom near the poles.
 function roundDown(value: number): number {
-  const power = Math.pow(10, Math.floor(Math.log10(Math.max(value, 1))));
+  if (!(value > 0)) {
+    return 0;
+  }
+  const power = Math.pow(10, Math.floor(Math.log10(value)));
   const digit = value / power;
   return (digit >= 5 ? 5 : digit >= 2 ? 2 : 1) * power;
 }
