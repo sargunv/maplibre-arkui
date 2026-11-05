@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      # Keeps `mise run check` from installing the rest of the tools.
+      MISE_AUTO_INSTALL: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
+        with:
+          install_args:
+            github:jdx/hk aqua:dprint/dprint aqua:jdx/jactionlint
+            aqua:koalaman/shellcheck
+      - run: mise run check
+
+  # Builds the library HAR, the demo HAP, and the test HAP against the FFI
+  # packages that FFI's CI packed at the pinned commit. It doesn't boot the
+  # emulator, which needs KVM and a 1.4 GB image.
+  build:
+    name: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      # The Oniro image and devices-cli serve only the tasks that run on the
+      # emulator.
+      MISE_DISABLE_TOOLS: http:oniro-emulator,go:github.com/sargunv/devices-cli,core:go
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The OpenHarmony SDK is too large to cache well, so each run fetches it,
+      # as MapLibre Native FFI's CI does.
+      - uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
+        with:
+          cache: false
+      - run: mise run ffi:download
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - run: mise run demo:build
+      - run: mise run test:build
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: packages
+          path: |
+            build/har/maplibre-arkui.har
+            build/demo/entry.hap
+            build/test/entry_test.hap
+          if-no-files-found: error
+          retention-days: ${{ github.event_name == 'pull_request' && 1 || 30 }}

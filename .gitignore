@@ -1,0 +1,4 @@
+build/
+.proof/
+mise.local.toml
+mise.*.local.toml
