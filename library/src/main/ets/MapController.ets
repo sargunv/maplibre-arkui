@@ -18,7 +18,7 @@ import {
 } from '@maplibre/native-ffi';
 import geoLocationManager from '@ohos.geoLocationManager';
 
-import { FollowLocationOptions, course } from './location';
+import { FollowUserLocationOptions, course } from './location';
 import { MapView } from './MapView';
 
 /** Options for a new `MapController`. */
@@ -74,7 +74,7 @@ export class MapController {
   private projection: MapProjectionHandle | undefined = undefined;
   private view: MapView | undefined = undefined;
   private readonly startCamera: CameraOptions | undefined;
-  private followOptions: FollowLocationOptions = {};
+  private followOptions: FollowUserLocationOptions = {};
   // The zoom that the next move to follow the location takes.
   private followZoom: number | undefined = undefined;
 
@@ -211,7 +211,7 @@ export class MapController {
    * rest of the camera stays as the app leaves it. A camera change that the
    * app makes while following lasts until the next location.
    */
-  followUserLocation(options?: FollowLocationOptions): void {
+  followUserLocation(options?: FollowUserLocationOptions): void {
     this.followOptions = options ?? {};
     this.followZoom = options?.zoom;
     this.followingUserLocation = true;

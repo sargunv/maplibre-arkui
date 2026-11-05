@@ -27,6 +27,7 @@ function noContent() {
 export struct MapMarker {
   /** The controller of the map that the content is on. */
   @Require @Param controller: MapController;
+  /** Where the content goes. A new value moves it. */
   @Require @Param coordinate: LatLng;
   /**
    * The point of the content that sits on the coordinate, from its top-left
@@ -34,6 +35,7 @@ export struct MapMarker {
    * of its bottom edge, for a pin.
    */
   @Param anchor: Position = { x: '50%', y: '100%' };
+  /** The content, in the trailing closure. */
   @BuilderParam content: () => void = noContent;
 
   @Computed

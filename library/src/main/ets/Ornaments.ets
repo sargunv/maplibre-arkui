@@ -16,6 +16,7 @@ const ORNAMENT_SIZE = 40;
  */
 @ComponentV2
 export struct MapCompass {
+  /** The controller of the map it's for. */
   @Require @Param controller: MapController;
   /** Whether it shows while the map faces north and looks straight down. */
   @Param alwaysShown: boolean = false;
@@ -71,6 +72,7 @@ export struct MapCompass {
 /** Buttons that zoom the map in and out by one level. */
 @ComponentV2
 export struct MapZoomButtons {
+  /** The controller of the map it's for. */
   @Require @Param controller: MapController;
 
   build() {
@@ -164,7 +166,9 @@ function defaultScaleBarUnits(): ScaleBarUnits {
  */
 @ComponentV2
 export struct MapScaleBar {
+  /** The controller of the map it's for. */
   @Require @Param controller: MapController;
+  /** The units: by default, imperial in the regions that use them, and metric elsewhere. */
   @Param units: ScaleBarUnits = defaultScaleBarUnits();
   /** The longest the bar grows, in vp. */
   @Param maxWidth: number = 100;
@@ -204,6 +208,7 @@ export struct MapScaleBar {
  */
 @ComponentV2
 export struct MapAttribution {
+  /** The controller of the map it's for. */
   @Require @Param controller: MapController;
   @Local expanded: boolean = true;
   private text: TextController = new TextController();
