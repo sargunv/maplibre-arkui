@@ -85,11 +85,12 @@ SDK plugin unpacks with the host's `python3`, and the scripts use `perl` and
   runs the suite again, up to `--attempts` runs (3); a failed case fails at
   once.
 - `scripts/ohos-key.sh`: print this worktree's emulator key, booting it if
-  needed. `devices-cli release` stops it. `scripts/wake-device.sh <key>` turns
-  the screen on and swipes the lock screen away; `demo` and `test` run it, since
-  the emulator locks after it sleeps and `aa start` and the UI cases fail behind
-  the lock screen. Don't run `power-shell suspend`: `hdc shell` hangs until the
-  emulator is released.
+  needed. `devices-cli release` stops it. It runs `scripts/wake-device.sh`,
+  which turns the screen on, keeps it on for a day, and swipes the lock screen
+  away, since the emulator locks after it sleeps and `aa start` and the UI cases
+  fail behind the lock screen. A device named with `--device` is left as it is.
+  Don't run `power-shell suspend`: `hdc shell` hangs until the emulator is
+  released.
 - Screenshot:
   `hdc -t "$(scripts/ohos-key.sh)" shell snapshot_display -f /data/local/tmp/x.jpeg`,
   then `hdc -t ... file recv /data/local/tmp/x.jpeg .proof/x.jpeg`.
@@ -126,9 +127,9 @@ every target passes, so pick the newest main commit whose CI has the artifact,
 and bump the pin within 30 days or CI breaks. Building FFI in CI instead would
 mean building MapLibre Native, which is far slower.
 
-CI (`.github/workflows/ci.yml`) runs `mise run check`, builds the HAR, the demo
-HAP, and the test HAP, and runs the hypium suite on the Oniro emulator, with
-QEMU and KVM set up as FFI's CI does. CI hasn't run on GitHub yet; if
+CI (`.github/workflows/ci.yml`) runs `mise run check` and builds the HAR, the
+demo HAP, and the test HAP. It doesn't run the hypium suite, which llvmpipe's
+crash makes fail most runs (ROADMAP.md, Next). CI hasn't run on GitHub yet; if
 `ffi:download` gets a 403 because the job's token can't read another
 repository's artifacts, give it a repository secret with a fine-grained token
 that reads public repositories.

@@ -18,7 +18,6 @@ usage="usage: run-tests.sh <hdc connect key> <test HAP> [attempts]"
 device=${1:?$usage}
 hap=${2:?$usage}
 attempts=${3:-3}
-scripts="$(cd "$(dirname "$0")" && pwd)"
 hdc=(hdc -t "$device")
 manifest=$(unzip -p "$hap" module.json)
 bundle=$(jq -er .app.bundleName <<<"$manifest")
@@ -27,7 +26,6 @@ report=$(mktemp)
 trap 'rm -f "$report"' EXIT
 
 for ((attempt = 1; attempt <= attempts; attempt++)); do
-  "$scripts/wake-device.sh" "$device"
   "${hdc[@]}" uninstall "$bundle" >/dev/null 2>&1 || true
   "${hdc[@]}" install -r "$hap"
   # hypium fails a case that doesn't settle within the per-case timeout.

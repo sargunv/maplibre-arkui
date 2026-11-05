@@ -56,8 +56,8 @@ left, which [Next](#next) collects.
 - Stage 0, build against FFI main (#1, #2): done. Follow-up: switch to FFI's
   OHPM packages once FFI publishes the facade, and keep the commit pin within
   FFI's 30-day artifact window until then.
-- Stage 1, project setup (#2, #4): done. Stage 11 added the emulator suite to
-  CI, which hasn't run on GitHub yet.
+- Stage 1, project setup (#2, #4): done. Follow-up: the emulator suite in CI,
+  which hasn't run on GitHub yet.
 - Stage 2, a map on screen (#5): done. Follow-ups: several maps at once on a
   device (the emulator's llvmpipe crashes), density changes, Vulkan.
 - Stage 3, map state and camera (#5): done. Follow-ups: camera padding apart
@@ -850,20 +850,19 @@ Decided:
   `ohpm prepublish` accepts once the FFI dependency names a published version
   and the repository has a license; it warns until then. `AGENTS.md` lists the
   release steps. The license is the owner's decision, and blocks publishing.
-- CI runs the hypium suite on the Oniro emulator, as FFI's CI does, and runs it
-  again when the app crashes before hypium's tally, up to 3 runs, since llvmpipe
-  crashes it on the emulator. A failed case fails at once.
+- `mise run test` runs the hypium suite again when the app crashes before
+  hypium's tally, up to 3 runs, since llvmpipe crashes it on the emulator. A
+  failed case fails at once. CI doesn't run the suite yet.
 
 ## Next
 
 - **Publish.** Pick a license; move the FFI dependency to the facade's OHPM
   version once FFI publishes it, and build CI against OHPM instead of FFI's CI
   artifacts; then `ohpm publish`. See `AGENTS.md`, Releasing.
-- **CI on the emulator.** Watch the first runs on GitHub's runners: their time,
-  how often llvmpipe crashes, and whether 3 runs are enough. Locally, during
-  stage 11, only 2 of 18 runs of the suite finished; the rest crashed, mostly in
-  the cases that inject gestures. At that rate CI fails most of the time, so the
-  crash needs a fix before the suite can gate merges.
+- **CI on the emulator.** Run the hypium suite on the Oniro emulator in CI, as
+  FFI's CI does, once the llvmpipe crash is fixed. Locally, during stage 11,
+  only 2 of 18 runs of the suite finished; the rest crashed. At that rate a CI
+  job fails most of the time, so it can't gate merges yet.
 - **The llvmpipe crash.** Mesa's llvmpipe crashes the app on the emulator while
   maps render, and more often with ArkUI content moving over them. A device with
   a GPU tells an emulator bug from an FFI race between render threads

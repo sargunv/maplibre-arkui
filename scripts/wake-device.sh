@@ -4,9 +4,9 @@
 #
 #   wake-device.sh <hdc connect key>
 #
-# The Oniro emulator turns its screen off after a while and shows the lock
-# screen when it wakes. `aa start` then fails, and hypium's UI cases fail
-# behind it. The swipe dismisses a lock screen without a passcode, as the
+# For the Oniro emulator; ohos-key.sh runs it. The emulator turns its screen off
+# after a while and shows the lock screen when it wakes. `aa start` then fails,
+# and hypium's UI cases fail behind it. The swipe dismisses a lock screen without a passcode, as the
 # emulator's is.
 set -euo pipefail
 

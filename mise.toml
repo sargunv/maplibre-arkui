@@ -109,7 +109,6 @@ flag "--device <key>" help="The hdc connect key of the device, which defaults to
 depends = ["demo:build"]
 run = '''
 device=${usage_device:-$(scripts/ohos-key.sh)}
-scripts/wake-device.sh "$device"
 hdc -t "$device" install -r build/demo/entry.hap
 hdc -t "$device" shell aa start -a EntryAbility -b org.maplibre.arkui.demo
 '''
