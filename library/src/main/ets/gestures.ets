@@ -263,18 +263,27 @@ export class MapGestures {
   /** Takes an axis event of the map: the mouse wheel zooms at the pointer. */
   onAxis(event: AxisEvent): void {
     this.pointer = { x: event.x, y: event.y };
-    if (event.action === AxisAction.END || event.action === AxisAction.CANCEL) {
+    if (event.action === AxisAction.CANCEL) {
+      this.pinchCancelled();
+      return;
+    }
+    if (event.action === AxisAction.END) {
       this.finish();
       return;
     }
     // The begin and end of a notch carry its value too, so only its updates
     // zoom.
-    const value = event.getVerticalAxisValue();
-    const ctrl = event.getModifierKeyState?.(['Ctrl']) ?? false;
-    if (event.action !== AxisAction.UPDATE || value === 0 || this.options.zoom === false ||
-      (this.options.cooperative === true && !ctrl)) {
+    if (event.action === AxisAction.UPDATE) {
+      this.wheel(event.getVerticalAxisValue(), event.getModifierKeyState?.(['Ctrl']) ?? false);
+    }
+  }
+
+  /** Zooms at the pointer by a wheel update of `value`, with Ctrl held or not. */
+  wheel(value: number, ctrl: boolean): void {
+    if (value === 0 || this.options.zoom === false || (this.options.cooperative === true && !ctrl)) {
       return;
     }
+    this.stop();
     this.move({ scale: Math.pow(2, -value * WHEEL_LEVELS_PER_UNIT), anchor: this.pointer });
   }
 
@@ -283,20 +292,39 @@ export class MapGestures {
    * `onTouch`, so only a touchpad pinch moves the camera here.
    */
   onPinch(event: GestureEvent): void {
-    if (event.sourceTool !== SourceTool.TOUCHPAD || this.options.zoom === false) {
+    if (event.sourceTool === SourceTool.TOUCHPAD) {
+      this.touchpadPinch(event.scale);
+    }
+  }
+
+  /** Zooms by a touchpad pinch that has reached `scale` since it started. */
+  touchpadPinch(scale: number): void {
+    if (this.options.zoom === false) {
       return;
     }
-    const scale = event.scale / this.pinchScale;
-    this.pinchScale = event.scale;
+    this.stop();
+    const step = scale / this.pinchScale;
+    this.pinchScale = scale;
     // The event's pinch center is in window coordinates, and the axis events
     // of the pinch have the map's.
-    this.move({ scale: scale, anchor: this.pointer });
+    this.move({ scale: step, anchor: this.pointer });
   }
 
   /** The map's pinch gesture ended. */
   onPinchEnd(event: GestureEvent): void {
     this.pinchScale = 1;
     if (event.sourceTool === SourceTool.TOUCHPAD) {
+      this.finish();
+    }
+  }
+
+  /**
+   * The map's pinch gesture was cancelled. A touchpad pinch ends here; a touch
+   * pinch ends with its touches.
+   */
+  pinchCancelled(): void {
+    this.pinchScale = 1;
+    if (this.touches.length === 0) {
       this.finish();
     }
   }

@@ -159,6 +159,40 @@ export default function gesturesTest(): void {
       expect(camera.deltas.length).assertEqual(count);
     });
 
+    it('stops momentum when the wheel or a touchpad pinch takes over', 0, async () => {
+      for (const wheel of [true, false]) {
+        const camera = new Recorder();
+        const gestures = new MapGestures(camera);
+        const end = drag(gestures, 0, [touch(1, 100, 100)], [touch(1, 100, 300)], 10, 10);
+        gestures.touch(end + 5, []);
+        if (wheel) {
+          gestures.wheel(-1, false);
+        } else {
+          gestures.touchpadPinch(1.5);
+        }
+        // The fling's gesture ends, then the new input starts its own.
+        expect(camera.ends).assertEqual(1);
+        expect(camera.starts).assertEqual(2);
+        expect(camera.lastPhase()).assertEqual(GesturePhase.begin);
+        // No fling steps follow the new input.
+        const count = camera.deltas.length;
+        let frames = 0;
+        await until('a few frames pass', () => ++frames > 5);
+        expect(camera.deltas.length).assertEqual(count);
+      }
+    });
+
+    it('starts a touchpad pinch afresh after one is cancelled', 0, () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      gestures.touchpadPinch(1.5);
+      gestures.pinchCancelled();
+      expect(camera.ends).assertEqual(1);
+      const zoom = camera.zoom();
+      gestures.touchpadPinch(1.1);
+      expect(camera.zoom() - zoom).assertClose(Math.log2(1.1), 0.0001);
+    });
+
     it('ends without momentum when the system cancels the touches', 0, () => {
       const camera = new Recorder();
       const gestures = new MapGestures(camera);

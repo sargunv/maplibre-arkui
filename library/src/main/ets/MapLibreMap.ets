@@ -178,7 +178,8 @@ export struct MapLibreMap {
           PinchGesture()
             .onActionStart(() => this.view.gestures.claim())
             .onActionUpdate((event: GestureEvent) => this.view.gestures.onPinch(event))
-            .onActionEnd((event: GestureEvent) => this.view.gestures.onPinchEnd(event)),
+            .onActionEnd((event: GestureEvent) => this.view.gestures.onPinchEnd(event))
+            .onActionCancel(() => this.view.gestures.pinchCancelled()),
           RotationGesture()
             .onActionStart(() => this.view.gestures.claim()),
           TapGesture({ count: 2, distanceThreshold: TAP_SLOP })
