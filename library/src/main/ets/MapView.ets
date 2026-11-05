@@ -65,6 +65,8 @@ export class MapView extends XComponentController implements GestureTarget {
   private style: string = '';
   private content: MapContent | undefined = undefined;
   private reconciler: ContentReconciler | undefined = undefined;
+  // The style that the map loads, until another replaces it.
+  private loading: Promise<CommandCompletion> | undefined = undefined;
   private bounds: BoundOptions | undefined = undefined;
   // The limits a new map has, which apply again when the app removes its own.
   private defaultBounds: BoundOptions | undefined = undefined;
@@ -234,8 +236,7 @@ export class MapView extends XComponentController implements GestureTarget {
         scaleFactor: this.context.vp2px(1),
       },
       mapMode: MapMode.continuous,
-      eventMask: RuntimeEventFlag.mapStyleLoaded |
-        RuntimeEventFlag.mapLoadingFailed |
+      eventMask: RuntimeEventFlag.mapLoadingFailed |
         RuntimeEventFlag.mapRenderError |
         RuntimeEventFlag.mapCameraDidChange |
         RuntimeEventFlag.mapSourceChanged,
@@ -269,14 +270,7 @@ export class MapView extends XComponentController implements GestureTarget {
     }
     // The controller's state is this map's only while the controller shows it.
     const controller = this.controller?.map === map ? this.controller : undefined;
-    if (event.type === RuntimeEventType.mapStyleLoaded) {
-      if (controller !== undefined) {
-        controller.styleLoaded = true;
-        this.readAttributions(map, controller);
-      }
-      this.reconciler?.styleLoaded();
-      this.events.onStyleLoaded();
-    } else if (event.type === RuntimeEventType.mapCameraDidChange) {
+    if (event.type === RuntimeEventType.mapCameraDidChange) {
       // The camera changes at the end of each jump and animation. Report it
       // once nothing moves it any more.
       const snapshot = map.getSnapshot();
@@ -330,13 +324,31 @@ export class MapView extends XComponentController implements GestureTarget {
       controller.attributions = [];
     }
     this.reconciler?.styleUnloaded();
+    let loading: Promise<CommandCompletion>;
     try {
-      // A style that fails to load reports mapLoadingFailed.
-      loadStyle(map, this.style).catch(() => {
-      });
+      loading = loadStyle(map, this.style);
     } catch (error) {
       this.fail(error as Error);
+      return;
     }
+    this.loading = loading;
+    // The style is loaded once its document parses, unless another has
+    // replaced it by then. The content goes on before the app hears of it.
+    const current = (): boolean => this.loading === loading && this.map === map;
+    loading.then(async () => {
+      if (current()) {
+        await this.reconciler?.styleLoaded();
+      }
+      if (current()) {
+        if (controller !== undefined && controller.map === map) {
+          controller.styleLoaded = true;
+          this.readAttributions(map, controller);
+        }
+        this.events.onStyleLoaded();
+      }
+    }, () => {
+      // A style that fails to load reports mapLoadingFailed.
+    }).catch((error: Error) => console.error(`MapLibre: ${error.message}`));
   }
 
   // The limits that the app leaves out keep the map's defaults, not the app's

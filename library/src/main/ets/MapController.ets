@@ -49,7 +49,7 @@ export class MapController {
    * animation. Only the map sets it; assigning it doesn't move the camera.
    */
   @Trace camera: CameraPosition | undefined = undefined;
-  /** Whether the map's style has loaded, so its layers and sources exist. */
+  /** Whether the map's style has loaded, so its layers and sources exist, with the map's content. */
   @Trace styleLoaded: boolean = false;
   /**
    * The attribution of the style's sources, as HTML, without repeats, in the

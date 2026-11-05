@@ -108,9 +108,9 @@ export struct MapLibreMap {
   /** ArkUI content over the map, in a `Stack` of its size. */
   @BuilderParam overlay: () => void = noContent;
   /**
-   * The style has loaded, so its layers and sources exist. Each style starts
-   * from its own document, without what the app added through
-   * `controller.map`; the map adds `content` again by itself.
+   * The style has loaded, so its layers and sources exist, and the map has
+   * added `content` to it. Each style starts from its own document, without
+   * what the app added through `controller.map`.
    */
   @Event onStyleLoaded: () => void = () => {
   };

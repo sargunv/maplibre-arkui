@@ -193,7 +193,8 @@ export default function contentTest(): void {
       const loads = testMap.styleLoads;
       testMap.style = BASE.replace('#4a90d9', '#4ad94a');
       await until('the new style loads', () => testMap.styleLoads > loads);
-      await untilLayers('background,dots,labels');
+      // The content is on the style by the time the app hears that it loaded.
+      expect(await layerIds()).assertEqual('background,dots,labels');
       expect((await requireMap().getStyleSource('places'))?.id).assertEqual('places');
       expect(testMap.errors.length).assertEqual(0);
     });

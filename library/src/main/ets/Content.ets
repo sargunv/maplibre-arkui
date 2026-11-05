@@ -44,8 +44,9 @@ export interface MapContent {
  *
  * A GeoJSON source's `data` is a URL or a GeoJSON object, such as a
  * `GeoJsonFeatureCollection`. When only its `data` changes, the source keeps
- * its tiles and loads the new data. Any other change replaces the source and
- * the layers that draw it.
+ * its tiles and loads the new data. Give changed data as a new object: the map
+ * takes the object it applied last as unchanged. Any other change replaces the
+ * source and the layers that draw it.
  */
 export interface MapSource {
   id: string;
@@ -101,27 +102,19 @@ export interface MapImage {
   options?: StyleImageOptions;
 }
 
-// A source the reconciler added: its JSON without data, and its data, as text.
-class AppliedSource {
-  readonly shape: string;
-  readonly data: string;
-
-  constructor(shape: string, data: string) {
-    this.shape = shape;
-    this.data = data;
-  }
+// A source the reconciler added: its JSON without data, its data, and its
+// data as text.
+interface AppliedSource {
+  shape: string;
+  value: Object | undefined;
+  data: string;
 }
 
 // A layer the reconciler added: what replaces it when it changes, and the text
 // of each property it set.
-class AppliedLayer {
-  readonly shape: string;
-  readonly properties: Map<string, string>;
-
-  constructor(shape: string, properties: Map<string, string>) {
-    this.shape = shape;
-    this.properties = properties;
-  }
+interface AppliedLayer {
+  shape: string;
+  properties: Map<string, string>;
 }
 
 // Thrown out of a pass when the style it applies to is gone.
@@ -145,7 +138,7 @@ export class ContentReconciler {
   private generation: number = 0;
   private loaded: boolean = false;
   // The current style's own layers, bottom to top, and every layer it has.
-  private base: StyleLayerInfo[] | undefined = undefined;
+  private base: readonly StyleLayerInfo[] | undefined = undefined;
   private stack: string[] = [];
   private sources: Map<string, AppliedSource> = new Map<string, AppliedSource>();
   private layers: Map<string, AppliedLayer> = new Map<string, AppliedLayer>();
@@ -162,9 +155,9 @@ export class ContentReconciler {
   }
 
   /** Applies `content` to the loaded style, and to each style from now on. */
-  setContent(content: MapContent | undefined): Promise<void> {
+  setContent(content: MapContent | undefined): void {
     this.content = content;
-    return this.schedule();
+    this.schedule();
   }
 
   /** A style has loaded, without any content. */
@@ -212,14 +205,23 @@ export class ContentReconciler {
       if (this.base === undefined) {
         const base = await this.map.listStyleLayers();
         this.check(generation);
-        this.base = base.slice();
+        this.base = base;
         this.stack = base.map((layer: StyleLayerInfo) => layer.id);
       }
       await this.apply(this.content, generation);
     } catch (error) {
       if (!(error instanceof Stale)) {
-        this.onError(error as Error);
+        this.report(error as Error);
       }
+    }
+  }
+
+  // An error handler that throws doesn't stop the passes.
+  private report(error: Error): void {
+    try {
+      this.onError(error);
+    } catch (thrown) {
+      console.error(`MapLibre: onMapError threw: ${(thrown as Error).message}`);
     }
   }
 
@@ -237,7 +239,7 @@ export class ContentReconciler {
     } catch (error) {
       succeeded = false;
       this.check(generation);
-      this.onError(new Error(`Content: ${what} failed: ${(error as Error).message}`));
+      this.report(new Error(`Content: ${what} failed: ${(error as Error).message}`));
     }
     this.check(generation);
     return succeeded;
@@ -252,6 +254,10 @@ export class ContentReconciler {
     const layers = new Map<string, MapLayer>();
     for (const layer of content?.layers ?? []) {
       layers.set(layer.id, layer);
+    }
+    const images = new Map<string, MapImage>();
+    for (const image of content?.images ?? []) {
+      images.set(image.id, image);
     }
 
     // Sources that go or that change more than their data take their layers
@@ -282,12 +288,12 @@ export class ContentReconciler {
     }
 
     for (const id of Array.from(this.images.keys())) {
-      if (!(content?.images ?? []).some((image: MapImage) => image.id === id)) {
+      if (!images.has(id)) {
         this.images.delete(id);
         await this.run(generation, `removing image ${id}`, map.removeStyleImage(id));
       }
     }
-    for (const image of content?.images ?? []) {
+    for (const image of Array.from(images.values())) {
       const applied = this.images.get(image.id);
       if (applied === undefined || applied.image !== image.image ||
         JSON.stringify(applied.options) !== JSON.stringify(image.options)) {
@@ -319,16 +325,20 @@ export class ContentReconciler {
 
   private async applySource(source: MapSource, generation: number): Promise<void> {
     const map = this.map;
-    const shape = shapeOf(source);
-    const data = textOf(source.json['data']);
+    const value = source.json['data'];
     const applied = this.sources.get(source.id);
+    if (applied !== undefined && applied.value === value) {
+      return;
+    }
+    const shape = shapeOf(source);
+    const data = textOf(value);
     if (applied === undefined) {
       const key = `${shape}${data}`;
       if (this.rejectedSources.get(source.id) === key) {
         return;
       }
       if (await this.run(generation, `adding source ${source.id}`, map.addStyleSourceJson(source.id, source.json))) {
-        this.sources.set(source.id, new AppliedSource(shape, data));
+        this.sources.set(source.id, { shape: shape, value: value, data: data });
         this.rejectedSources.delete(source.id);
       } else {
         this.rejectedSources.set(source.id, key);
@@ -336,14 +346,15 @@ export class ContentReconciler {
     } else if (applied.data !== data) {
       // Only a GeoJSON source's data changed. New data takes the options the
       // source has.
-      this.sources.set(source.id, new AppliedSource(shape, data));
-      const value = source.json['data'];
+      this.sources.set(source.id, { shape: shape, value: value, data: data });
       if (typeof value === 'string') {
         await this.run(generation, `setting the URL of source ${source.id}`,
           map.setGeoJsonSourceUrl(source.id, value));
         return;
       }
       await this.run(generation, `setting the data of source ${source.id}`, setGeoJsonData(map, source.id, value));
+    } else {
+      applied.value = value;
     }
   }
 
@@ -374,7 +385,7 @@ export class ContentReconciler {
       this.rejectedLayers.delete(layer.id);
       const texts = new Map<string, string>();
       properties.forEach((value: Object | null, name: string) => texts.set(name, textOf(value)));
-      this.layers.set(layer.id, new AppliedLayer(layerShape(layer), texts));
+      this.layers.set(layer.id, { shape: layerShape(layer), properties: texts });
       this.insert(layer.id, above);
       return true;
     }
@@ -422,7 +433,7 @@ export class ContentReconciler {
 
   // The base layer that a layer goes under, or '' for the top.
   private resolve(below: string | LayerPredicate | undefined): string {
-    const base = this.base ?? [];
+    const base: readonly StyleLayerInfo[] = this.base ?? [];
     let found: StyleLayerInfo | undefined = undefined;
     if (typeof below === 'string') {
       found = base.find((layer: StyleLayerInfo) => layer.id === below);

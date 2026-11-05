@@ -567,14 +567,17 @@ Decided (`library/src/main/ets/Content.ets`):
   other" without anchoring to content layers.
 - A reconciler, after MapLibre Compose's but much smaller, diffs the content by
   ID against what it added to the current style, and on each style load applies
-  all of it again. Properties and GeoJSON data compare by their JSON (an
-  `Expression`'s cached text), images by reference. A change to `paint`,
-  `layout`, `filter`, or the zoom range sets just those properties (null resets
-  one the content dropped); a change to a layer's type, source, or source layer
-  replaces the layer; a change to only a GeoJSON source's `data` loads the new
-  data into the source; any other source change replaces the source and its
-  layers. Ordering walks each group from its top down and moves a layer only
-  when the one above it is wrong.
+  all of it again, before `onStyleLoaded` fires. It starts from the completion
+  of the style load, which FFI cancels when another style replaces it, not from
+  the `mapStyleLoaded` event, which doesn't say which load it belongs to.
+  Properties compare by their JSON (an `Expression`'s cached text), GeoJSON data
+  by reference and then by its JSON, and images by reference. A change to
+  `paint`, `layout`, `filter`, or the zoom range sets just those properties
+  (null resets one the content dropped); a change to a layer's type, source, or
+  source layer replaces the layer; a change to only a GeoJSON source's `data`
+  loads the new data into the source; any other source change replaces the
+  source and its layers. Ordering walks each group from its top down and moves a
+  layer only when the one above it is wrong.
 - One pass at a time, awaiting each FFI command, so the reconciler always knows
   what the style holds and a rejection can't cascade. A pass reads the latest
   content when it starts, a style change aborts it, and changes during a pass

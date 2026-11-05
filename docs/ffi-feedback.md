@@ -239,13 +239,11 @@ release. Each entry names the FFI commit it was seen at.
   `getStyleSource()`, which helped).
 - **Layer properties read back in a normalized form that the docs don't
   describe.** On the emulator, `getStyleLayerProperty()` returned
-  `["rgba",0,255,0,1]` for a `circle-color` set as `'#00ff00'`,
-  `["to-color",["get","color"]]` for one set as `["get","color"]`, and
-  `undefined` for a property reset with null, not its default. A reconciler
+  `["rgba",0,255,0,1]` for a `circle-color` set as `'#00ff00'` and
+  `["to-color",["get","color"]]` for one set as `["get","color"]`. A reconciler
   can't compare what it set with what it reads, so this library compares with
   what it set last. Suggested fix: document the forms on
-  `mln_map_get_style_layer_property` (as for expression results in stage 6), and
-  say that an unset property reads as absent.
+  `mln_map_get_style_layer_property` (as for expression results in stage 6).
 - **Rejections don't name what was missing.** Adding a layer over a missing
   source failed with `notFound: layer source does not exist`, and a duplicate
   with `alreadyExists: layer already exists`, without the layer or source ID, so
