@@ -200,8 +200,7 @@ export class MapView extends XComponentController {
     }
   }
 
-  // A style that starts with `{` is a style document, and anything else is its
-  // URL. A style that fails to load reports mapLoadingFailed.
+  // A style that fails to load reports mapLoadingFailed.
   private applyStyle(): void {
     const map = this.map;
     if (map === undefined) {
@@ -211,13 +210,8 @@ export class MapView extends XComponentController {
     if (controller !== undefined && controller.map === map) {
       controller.styleLoaded = false;
     }
-    const style = this.style.trim();
-    if (!style.startsWith('{')) {
-      map.discarding.setStyleUrl(style);
-      return;
-    }
     try {
-      map.discarding.setStyleJson(JSON.parse(style));
+      loadStyle(map, this.style);
     } catch (error) {
       this.fail(error as Error);
     }
@@ -289,6 +283,17 @@ export class MapView extends XComponentController {
     if (!this.disposed) {
       this.events.onMapError(error);
     }
+  }
+}
+
+// A style that starts with `{` is a style document, and anything else is its
+// URL. It throws when the document isn't JSON.
+export function loadStyle(map: MapHandle, style: string): void {
+  const trimmed = style.trim();
+  if (trimmed.startsWith('{')) {
+    map.discarding.setStyleJson(JSON.parse(trimmed));
+  } else {
+    map.discarding.setStyleUrl(trimmed);
   }
 }
 
