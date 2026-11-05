@@ -106,7 +106,7 @@ export struct MapLibreMap {
    */
   @Param ornamentPadding: Padding = {};
   /** ArkUI content over the map, in a `Stack` of its size. */
-  @BuilderParam overlay: () => void = noContent;
+  @BuilderParam overlays: () => void = noContent;
   /**
    * The style has loaded, so its layers and sources exist, and the map has
    * added `content` to it. Each style starts from its own document, without
@@ -207,7 +207,7 @@ export struct MapLibreMap {
               const y = fingers.reduce((sum: number, finger: FingerInfo) => sum + finger.localY, 0);
               this.view.gestures.twoFingerTap(x / fingers.length, y / fingers.length);
             })))
-      this.overlay()
+      this.overlays()
       RelativeContainer() {
         if (this.scaleBarEnabled) {
           MapScaleBar({ controller: this.controller })
