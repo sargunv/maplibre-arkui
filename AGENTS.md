@@ -18,8 +18,8 @@ library/                 @maplibre/arkui, a source HAR
 demo/entry/src/main/     the demo app's only module (module.json holds the app's
                          fields too, as FFI's ArkUI example does)
 scripts/                 the build, pack, FFI, and device scripts the tasks run
-.mise/plugins/ohos-sdk/  mise plugin for the OpenHarmony SDK, copied from FFI;
-                         it puts only hdc on PATH, through bin/
+.mise/plugins/ohos-sdk/  mise plugin for the OpenHarmony SDK, identical to FFI's;
+                         linked by scripts/link-ohos-sdk-plugin.sh
 docs/ffi-feedback.md     FFI gaps and bugs found here, for upstream
 build/                   outputs (gitignored): ffi/, har/, demo/, test/
 .proof/                  screenshots and logs of runs (gitignored)
