@@ -20,6 +20,9 @@ export class TestMap {
   @Trace marker: LatLng | undefined = undefined;
   @Trace gestures: MapGestureOptions = {};
   @Trace userLocation: geoLocationManager.Location | undefined = undefined;
+  // The compass shows while the map is turned, and turning with it crashes
+  // llvmpipe often, so the location case that turns the map hides it.
+  @Trace compass: boolean = true;
   // The map is 300 vp tall at the top of a Scroll while this is true, and fills
   // the page otherwise.
   @Trace inScroll: boolean = false;

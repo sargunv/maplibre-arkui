@@ -206,15 +206,20 @@ export default function locationTest(): void {
       expect(Math.abs(camera().bearing)).assertLessOrEqual(0.001);
 
       // With the course, the map turns while the location moves.
-      map.followUserLocation({ course: true });
-      testMap.userLocation = fix(5.7, 6.7, 10, 3, 90);
-      await until('the camera turns to the course', () =>
-        restsAt(5.7, 6.7) && near(camera().bearing, 90, 0.001));
-      // At rest, the direction isn't a course, so the bearing stays.
-      testMap.userLocation = fix(5.8, 6.8, 10, 0, 180);
-      await until('the camera reaches the resting location', () => restsAt(5.8, 6.8));
-      expect(camera().bearing).assertClose(90, 0.001);
-      map.stopFollowingUserLocation();
+      testMap.compass = false;
+      try {
+        map.followUserLocation({ course: true });
+        testMap.userLocation = fix(5.7, 6.7, 10, 3, 90);
+        await until('the camera turns to the course', () =>
+          restsAt(5.7, 6.7) && near(camera().bearing, 90, 0.001));
+        // At rest, the direction isn't a course, so the bearing stays.
+        testMap.userLocation = fix(5.8, 6.8, 10, 0, 180);
+        await until('the camera reaches the resting location', () => restsAt(5.8, 6.8));
+        expect(camera().bearing).assertClose(90, 0.001);
+        map.stopFollowingUserLocation();
+      } finally {
+        testMap.compass = true;
+      }
     });
 
     it('stops following as a gesture starts, until the app resumes', 0, async () => {
