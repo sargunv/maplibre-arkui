@@ -239,6 +239,40 @@ export default function contentTest(): void {
       await untilLayers('background,labels,dots');
     });
 
+    it('leaves an image that the style already had to it', 0, async () => {
+      const map = requireMap();
+      await map.setStyleImage('dot', { width: 2, height: 1, stride: 8, pixels: new Uint8Array(8) });
+      const red: Uint8Array = new Uint8Array([255, 0, 0, 255]);
+      testMap.content = { images: [{ id: 'dot', image: { width: 1, height: 1, stride: 4, pixels: red } }] };
+      await until('the map reports the image', () =>
+        testMap.errors.some((error: string) => error.includes('adding image dot')));
+      expect((await map.getStyleImage('dot'))?.width).assertEqual(2);
+      const empty: MapContent = {};
+      testMap.content = empty;
+      let frames = 0;
+      await until('a moment passes', () => ++frames > 10);
+      expect((await map.getStyleImage('dot'))?.width).assertEqual(2);
+      await map.removeStyleImage('dot');
+    });
+
+    it('removes a source on a later pass once nothing else uses it', 0, async () => {
+      const map = requireMap();
+      testMap.content = content(TWO, []);
+      await eventually('the source goes in', async () => map.getStyleSource('places'));
+      // A layer that the app adds over the content's source keeps the map
+      // from removing the source.
+      const extra: Record<string, Object> = { 'id': 'extra', 'type': 'circle', 'source': 'places' };
+      await map.addStyleLayerJson(extra);
+      testMap.content = undefined;
+      await until('the map refuses to remove the source', () =>
+        testMap.errors.some((error: string) => error.includes('removing source places')));
+      await map.removeStyleLayer('extra');
+      const empty: MapContent = {};
+      testMap.content = empty;
+      await eventually('the source goes', async () => (await map.getStyleSource('places')) === undefined ? true :
+        undefined);
+    });
+
     it('draws the content in a snapshot', 0, async () => {
       const west: MapContent = {
         sources: [{ id: 'west', json: { 'type': 'geojson', 'data': WEST } }],

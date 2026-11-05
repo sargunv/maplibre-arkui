@@ -145,6 +145,9 @@ export class ContentReconciler {
   private images: Map<string, MapImage> = new Map<string, MapImage>();
   // What the map rejected, by ID, as text, so a pass skips it until it changes.
   private rejectedSources: Map<string, string> = new Map<string, string>();
+  // Images of the content whose ID the style already had, which it leaves to
+  // the style.
+  private rejectedImages: Set<string> = new Set<string>();
   private rejectedLayers: Map<string, string> = new Map<string, string>();
   private passes: Promise<void> = Promise.resolve();
   private queued: boolean = false;
@@ -181,6 +184,7 @@ export class ContentReconciler {
     this.layers.clear();
     this.images.clear();
     this.rejectedSources.clear();
+    this.rejectedImages.clear();
     this.rejectedLayers.clear();
   }
 
@@ -286,15 +290,25 @@ export class ContentReconciler {
         await this.run(generation, `removing layer ${id}`, map.removeStyleLayer(id));
       }
     }
+    // A source that the map won't remove, such as one that a layer the app
+    // added still uses, stays the content's, to remove on a later pass.
     for (const id of Array.from(replaced)) {
-      this.sources.delete(id);
-      await this.run(generation, `removing source ${id}`, map.removeStyleSource(id));
+      if (await this.run(generation, `removing source ${id}`, map.removeStyleSource(id))) {
+        this.sources.delete(id);
+      }
     }
 
     for (const source of Array.from(sources.values())) {
-      await this.applySource(source, generation);
+      if (!(replaced.has(source.id) && this.sources.has(source.id))) {
+        await this.applySource(source, generation);
+      }
     }
 
+    for (const id of Array.from(this.rejectedImages)) {
+      if (!images.has(id)) {
+        this.rejectedImages.delete(id);
+      }
+    }
     for (const id of Array.from(this.images.keys())) {
       if (!images.has(id)) {
         this.images.delete(id);
@@ -303,6 +317,18 @@ export class ContentReconciler {
     }
     for (const image of Array.from(images.values())) {
       const applied = this.images.get(image.id);
+      if (applied === undefined && !this.rejectedImages.has(image.id)) {
+        // An image that the base style or the app has stays theirs.
+        const existing = await map.getStyleImage(image.id).catch(() => undefined);
+        this.check(generation);
+        if (existing !== undefined) {
+          this.rejectedImages.add(image.id);
+          this.report(new Error(`Content: adding image ${image.id} failed: the style already has it`));
+        }
+      }
+      if (this.rejectedImages.has(image.id)) {
+        continue;
+      }
       if (applied === undefined || applied.image !== image.image ||
         JSON.stringify(applied.options) !== JSON.stringify(image.options)) {
         this.images.set(image.id, image);
