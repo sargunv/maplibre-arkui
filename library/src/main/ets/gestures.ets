@@ -410,6 +410,8 @@ export class MapGestures {
    * keep moving the camera.
    */
   stop(): void {
+    // Momentum that waits for the last finger goes too.
+    this.staged = undefined;
     if (this.momentum !== undefined) {
       this.stopMomentum();
       this.finish();
@@ -484,7 +486,9 @@ export class MapGestures {
       }
       return;
     }
-    if (this.options.pan !== false) {
+    // In cooperative mode, one finger never pans, even the one left after a
+    // pair.
+    if (this.options.pan !== false && this.options.cooperative !== true) {
       this.panX.add(time, after.x);
       this.panY.add(time, after.y);
       this.move({ offset: { x: after.x - before.x, y: after.y - before.y } });

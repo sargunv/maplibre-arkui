@@ -248,6 +248,31 @@ export default function gesturesTest(): void {
       expect(pinch.ends).assertEqual(1);
     });
 
+    it('drops the waiting momentum of a pinch when the app takes over', 0, () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      const last = drag(gestures, 0, [touch(1, 150, 300), touch(2, 250, 300)],
+        [touch(1, 50, 300), touch(2, 350, 300)], 20, 16);
+      gestures.touch(last + 5, [touch(2, 350, 300)]);
+      gestures.stop();
+      gestures.touch(last + 10, []);
+      expect(camera.ends).assertEqual(1);
+    });
+
+    it('pans with no finger left from a pair in cooperative mode', 0, () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      gestures.options = { cooperative: true };
+      const end = drag(gestures, 0, [touch(1, 150, 300), touch(2, 250, 300)],
+        [touch(1, 250, 300), touch(2, 350, 300)], 10, 40);
+      gestures.touch(end + 40, [touch(2, 350, 300)]);
+      const panned = camera.offsetX();
+      for (let i = 1; i <= 10; i++) {
+        gestures.touch(end + 40 + i * 40, [touch(2, 350 + i * 10, 300)]);
+      }
+      expect(camera.offsetX()).assertEqual(panned);
+    });
+
     it('pinches about the fingers without panning or rotating', 0, () => {
       const camera = new Recorder();
       const gestures = new MapGestures(camera);
