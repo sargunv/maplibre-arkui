@@ -1,6 +1,7 @@
 import { BoundOptions, Camera as CameraPosition, RuntimeHandle } from '@maplibre/native-ffi';
 
 import { MapGestureOptions, TAP_SLOP } from './gestures';
+import { MapContent } from './Content';
 import { MapController } from './MapController';
 import { MapView } from './MapView';
 import { MapAttribution, MapCompass, MapScaleBar, MapZoomButtons } from './Ornaments';
@@ -66,6 +67,13 @@ export struct MapLibreMap {
   /** The style's URL, or a style document as JSON. */
   @Require @Param style: string;
   /**
+   * Sources, layers, and images to draw over the style, in each style the map
+   * loads. Give the map a new value to change them, such as from a `@Computed`
+   * getter; it changes only what differs. A source or layer that the map
+   * rejects is reported to `onMapError` and left out until it changes.
+   */
+  @Param content: MapContent | undefined = undefined;
+  /**
    * Limits on the camera: an area that its center stays within, and zoom and
    * pitch ranges. Limits it leaves out keep the map's defaults.
    */
@@ -98,18 +106,18 @@ export struct MapLibreMap {
    */
   @Param ornamentPadding: Padding = {};
   /** ArkUI content over the map, in a `Stack` of its size. */
-  @BuilderParam content: () => void = noContent;
+  @BuilderParam overlays: () => void = noContent;
   /**
-   * The style has loaded, so its layers and sources exist. Each style starts
-   * from its own document, so add the app's sources, layers, and images
-   * here, through `controller.map`, each time it loads.
+   * The style has loaded, so its layers and sources exist, and the map has
+   * added `content` to it. Each style starts from its own document, without
+   * what the app added through `controller.map`.
    */
   @Event onStyleLoaded: () => void = () => {
   };
   /** The camera has come to rest, after a jump or once an animation ends. */
   @Event onCameraIdle: (camera: CameraPosition) => void = (camera: CameraPosition) => {
   };
-  /** The style failed to load, or the map failed to render. */
+  /** The style failed to load, the map failed to render, or it rejected part of `content`. */
   @Event onMapError: (error: Error) => void = (error: Error) => {
   };
   /**
@@ -135,7 +143,7 @@ export struct MapLibreMap {
 
   aboutToAppear(): void {
     this.view.gestures.options = this.gestures;
-    this.view.start(this.controller, this.runtime, this.style, this.cameraBounds);
+    this.view.start(this.controller, this.runtime, this.style, this.content, this.cameraBounds);
   }
 
   aboutToDisappear(): void {
@@ -145,6 +153,11 @@ export struct MapLibreMap {
   @Monitor('style')
   styleChanged(): void {
     this.view.setStyle(this.style);
+  }
+
+  @Monitor('content')
+  contentChanged(): void {
+    this.view.setContent(this.content);
   }
 
   @Monitor('cameraBounds')
@@ -194,7 +207,7 @@ export struct MapLibreMap {
               const y = fingers.reduce((sum: number, finger: FingerInfo) => sum + finger.localY, 0);
               this.view.gestures.twoFingerTap(x / fingers.length, y / fingers.length);
             })))
-      this.content()
+      this.overlays()
       RelativeContainer() {
         if (this.scaleBarEnabled) {
           MapScaleBar({ controller: this.controller })

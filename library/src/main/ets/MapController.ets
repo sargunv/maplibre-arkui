@@ -49,7 +49,7 @@ export class MapController {
    * animation. Only the map sets it; assigning it doesn't move the camera.
    */
   @Trace camera: CameraPosition | undefined = undefined;
-  /** Whether the map's style has loaded, so its layers and sources exist. */
+  /** Whether the map's style has loaded, so its layers and sources exist, with the map's content. */
   @Trace styleLoaded: boolean = false;
   /**
    * The attribution of the style's sources, as HTML, without repeats, in the
@@ -85,7 +85,9 @@ export class MapController {
    * starts without the sources, layers, and images the app added, so add them
    * in `onStyleLoaded`. A feature state change draws only from the next frame,
    * so request one on an idle map (see the README). Don't release it; the
-   * `MapLibreMap` that created it does.
+   * `MapLibreMap` that created it does. Change the style through the map's
+   * `style` param, not this handle's style setters, so that the map adds its
+   * `content` and fires `onStyleLoaded`.
    */
   get map(): MapHandle | undefined {
     return this.view?.map;

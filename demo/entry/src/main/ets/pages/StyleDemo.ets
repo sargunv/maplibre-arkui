@@ -3,6 +3,7 @@ import image from '@ohos.multimedia.image';
 
 import {
   all,
+  cameraToOptions,
   cases,
   CommandCompletion,
   eq,
@@ -12,12 +13,16 @@ import {
   GeoJsonFeatureCollection,
   geometryType,
   get,
+  MapContent,
   MapController,
+  MapLayer,
   MapLibreMap,
   match,
   PremultipliedRgba8Image,
   readPixelMap,
   RenderedFeature,
+  snapshot,
+  StyleLayerInfo,
   toBoolean,
 } from '@maplibre/arkui';
 
@@ -64,51 +69,62 @@ const PARIS: GeoJsonFeatureCollection = {
 };
 
 const QUERIED = ['paris-pins', 'paris-places', 'paris-walk', 'paris-park'];
+const PARK_COLORS = ['#66bb6a', '#ffa726', '#ab47bc'];
 
 // Paint that reads the feature's `selected` state, which a tap sets.
 const SELECTED = toBoolean(featureState('selected'));
 const SELECTED_STATE: Record<string, Object> = { 'selected': true };
 
-function parkLayer(): Record<string, Object> {
-  const paint: Record<string, Object> = {
-    'fill-color': cases([[SELECTED, '#2e7d32']], '#66bb6a'),
-    'fill-opacity': 0.6,
+// Under the base style's labels, so they draw over it.
+function parkLayer(color: string): MapLayer {
+  return {
+    id: 'paris-park', type: 'fill', source: 'paris', filter: eq(geometryType(), 'Polygon'),
+    paint: { 'fill-color': cases([[SELECTED, '#2e7d32']], color), 'fill-opacity': 0.6 },
+    below: (layer: StyleLayerInfo) => layer.type === 'symbol',
   };
-  return { 'id': 'paris-park', 'type': 'fill', 'source': 'paris', 'filter': eq(geometryType(), 'Polygon'),
-    'paint': paint };
 }
 
-function walkLayer(): Record<string, Object> {
-  const layout: Record<string, Object> = { 'line-cap': 'round', 'line-join': 'round' };
-  const paint: Record<string, Object> = {
-    'line-color': '#5e35b1',
-    'line-width': cases([[SELECTED, 9]], 5),
+function walkLayer(): MapLayer {
+  return {
+    id: 'paris-walk', type: 'line', source: 'paris', filter: eq(geometryType(), 'LineString'),
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': '#5e35b1', 'line-width': cases([[SELECTED, 9]], 5) },
   };
-  return { 'id': 'paris-walk', 'type': 'line', 'source': 'paris', 'filter': eq(geometryType(), 'LineString'),
-    'layout': layout, 'paint': paint };
 }
 
-function placesLayer(visible: boolean): Record<string, Object> {
-  const layout: Record<string, Object> = { 'visibility': visible ? 'visible' : 'none' };
-  const paint: Record<string, Object> = {
-    'circle-radius': cases([[SELECTED, 12]], 8),
-    'circle-color': match(get('kind'), [['museum', '#fb8c00'], ['monument', '#1e88e5']], '#757575'),
-    'circle-stroke-width': cases([[SELECTED, 4]], 2),
-    'circle-stroke-color': cases([[SELECTED, '#e53935']], '#ffffff'),
+function placesLayer(): MapLayer {
+  return {
+    id: 'paris-places', type: 'circle', source: 'paris', filter: eq(geometryType(), 'Point'),
+    paint: {
+      'circle-radius': cases([[SELECTED, 12]], 8),
+      'circle-color': match(get('kind'), [['museum', '#fb8c00'], ['monument', '#1e88e5'], ['added', '#e53935']],
+        '#757575'),
+      'circle-stroke-width': cases([[SELECTED, 4]], 2),
+      'circle-stroke-color': cases([[SELECTED, '#e53935']], '#ffffff'),
+    },
   };
-  return { 'id': 'paris-places', 'type': 'circle', 'source': 'paris', 'filter': eq(geometryType(), 'Point'),
-    'layout': layout, 'paint': paint };
 }
 
 // A pin from the app's resources over each monument.
-function pinsLayer(): Record<string, Object> {
-  const layout: Record<string, Object> = {
-    'icon-image': 'pin',
-    'icon-anchor': 'bottom',
-    'icon-allow-overlap': true,
+function pinsLayer(): MapLayer {
+  return {
+    id: 'paris-pins', type: 'symbol', source: 'paris',
+    filter: all(eq(geometryType(), 'Point'), eq(get('kind'), 'monument')),
+    layout: { 'icon-image': 'pin', 'icon-anchor': 'bottom', 'icon-allow-overlap': true },
   };
-  return { 'id': 'paris-pins', 'type': 'symbol', 'source': 'paris',
-    'filter': all(eq(geometryType(), 'Point'), eq(get('kind'), 'monument')), 'layout': layout };
+}
+
+// The n-th point that the Add button adds, on a spiral around the park.
+function addedPoint(n: number): GeoJsonFeature {
+  const angle = n * 2.4;
+  const distance = 0.003 + 0.0006 * n;
+  return {
+    type: 'Feature', id: 100 + n, properties: { 'name': `Point ${n + 1}`, 'kind': 'added' },
+    geometry: {
+      type: 'Point',
+      coordinates: [2.2995 + distance * 1.5 * Math.cos(angle), 48.8551 + distance * Math.sin(angle)],
+    },
+  };
 }
 
 // Decodes an image from the app's rawfile resources into the pixels the style
@@ -128,22 +144,43 @@ function loadPin(context: UIContext): PremultipliedRgba8Image {
   }
 }
 
-// A map whose style the app adds to: a GeoJSON source, layers styled with
-// expressions, an icon from the app's resources, a layer that hides, and
-// feature state that a tap sets on the feature it finds.
+// A map whose content comes from the page's state: a GeoJSON source, layers
+// styled with expressions, and an icon from the app's resources. The buttons
+// change the state, and the map applies the change, in each base style. A tap
+// sets feature state on the feature it finds, through FFI.
 @ComponentV2
 export struct StyleDemo {
   @Local style: string = LIBERTY;
   @Local placesShown: boolean = true;
+  @Local parkColor: number = 0;
+  @Local added: GeoJsonFeature[] = [];
+  @Local preview: image.PixelMap | undefined = undefined;
   @Local message: string = 'Tap a place, the walk, or the park';
   private controller: MapController = new MapController({
     camera: { center: { latitude: 48.8570, longitude: 2.2965 }, zoom: 13.6 },
   });
-  private pin: PremultipliedRgba8Image | undefined = undefined;
+  private pin: PremultipliedRgba8Image = loadPin(this.getUIContext());
   private selected: FeatureStateSelector | undefined = undefined;
 
-  aboutToAppear(): void {
-    this.pin = loadPin(this.getUIContext());
+  // What the map draws over its style. It changes when the state it reads
+  // does, and the map changes only what differs.
+  @Computed
+  get content(): MapContent {
+    const places: GeoJsonFeatureCollection = { type: 'FeatureCollection', features: PARIS.features.concat(this.added) };
+    const layers: MapLayer[] = [parkLayer(PARK_COLORS[this.parkColor]), walkLayer()];
+    if (this.placesShown) {
+      layers.push(placesLayer());
+    }
+    layers.push(pinsLayer());
+    return {
+      sources: [{ id: 'paris', json: { 'type': 'geojson', 'data': places } }],
+      layers: layers,
+      images: [{ id: 'pin', image: this.pin, options: { pixelRatio: 3 } }],
+    };
+  }
+
+  aboutToDisappear(): void {
+    this.preview?.release();
   }
 
   build() {
@@ -152,7 +189,7 @@ export struct StyleDemo {
         MapLibreMap({
           controller: this.controller,
           style: this.style,
-          onStyleLoaded: () => this.addToStyle(),
+          content: this.content,
           onMapError: (error: Error) => {
             this.message = error.message;
           },
@@ -160,14 +197,39 @@ export struct StyleDemo {
           .onClick((event: ClickEvent) => {
             this.select(event.x, event.y);
           })
+        if (this.preview !== undefined) {
+          Image(this.preview)
+            .width(160)
+            .height(120)
+            .borderRadius(8)
+            .borderWidth(2)
+            .borderColor('#ffffff')
+            .position({ top: 12, right: 12 })
+            .onClick(() => {
+              this.preview?.release();
+              this.preview = undefined;
+            })
+        }
         Column({ space: 8 }) {
           Text(this.message)
             .fontSize(14)
           Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Center }) {
-            Button(this.placesShown ? 'Hide circles' : 'Show circles').margin(4).onClick(() => this.togglePlaces())
+            Button(this.placesShown ? 'Hide circles' : 'Show circles').margin(4).onClick(() => {
+              this.placesShown = !this.placesShown;
+            })
+            Button('Park color').margin(4).onClick(() => {
+              this.parkColor = (this.parkColor + 1) % PARK_COLORS.length;
+            })
+            Button('Add point').margin(4).onClick(() => {
+              this.added = this.added.concat([addedPoint(this.added.length)]);
+            })
+            Button('Remove point').margin(4).enabled(this.added.length > 0).onClick(() => {
+              this.added = this.added.slice(0, this.added.length - 1);
+            })
             Button(this.style === LIBERTY ? 'Demo tiles' : 'Liberty').margin(4).onClick(() => {
               this.style = this.style === LIBERTY ? DEMOTILES : LIBERTY;
             })
+            Button('Snapshot').margin(4).onClick(() => this.takeSnapshot())
           }
         }
         .padding(12)
@@ -181,35 +243,22 @@ export struct StyleDemo {
     .title('Style')
   }
 
-  // Each style starts from its own document, so the app adds its image,
-  // source, and layers each time one loads. The map runs the commands in
-  // order.
-  private addToStyle(): void {
-    const map = this.controller.map;
-    if (map === undefined) {
-      return;
-    }
-    const added: Promise<CommandCompletion>[] = [];
-    if (this.pin !== undefined) {
-      added.push(map.setStyleImage('pin', this.pin, { pixelRatio: 3 }));
-    }
-    const source: Record<string, Object> = { 'type': 'geojson', 'data': PARIS };
-    added.push(map.addStyleSourceJson('paris', source));
-    added.push(map.addStyleLayerJson(parkLayer()));
-    added.push(map.addStyleLayerJson(walkLayer()));
-    added.push(map.addStyleLayerJson(placesLayer(this.placesShown)));
-    added.push(map.addStyleLayerJson(pinsLayer()));
-    Promise.all(added).catch((error: Error) => {
-      this.message = error.message;
-    });
-  }
-
-  private togglePlaces(): void {
-    this.placesShown = !this.placesShown;
-    this.controller.map?.setStyleLayerProperty('paris-places', 'visibility', this.placesShown ? 'visible' : 'none')
-      .catch((error: Error) => {
-        this.message = error.message;
+  // A still image of the same style, content, and camera.
+  private async takeSnapshot(): Promise<void> {
+    const camera = this.controller.getCamera();
+    try {
+      const preview = await snapshot({
+        style: this.style,
+        content: this.content,
+        camera: camera === undefined ? undefined : cameraToOptions(camera),
+        width: 160,
+        height: 120,
       });
+      this.preview?.release();
+      this.preview = preview;
+    } catch (error) {
+      this.message = (error as Error).message;
+    }
   }
 
   // A click's point is in vp from the map's top-left corner, as the render

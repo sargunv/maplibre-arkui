@@ -1,9 +1,9 @@
 # @maplibre/arkui
 
 ArkUI components for MapLibre Native on HarmonyOS and OpenHarmony: a
-`MapLibreMap` component, a `MapController` that reads and moves its camera, and
-`snapshot()` for still images. Early, and not on ohpm yet; see the
-[repository](https://github.com/sargunv/maplibre-arkui).
+`MapLibreMap` component, a `MapController` that reads and moves its camera,
+content declared as data, and `snapshot()` for still images. Early, and not on
+ohpm yet; see the [repository](https://github.com/sargunv/maplibre-arkui).
 
 ## Gestures
 
@@ -33,16 +33,42 @@ map.setStyleLayerProperty('places', 'circle-color', color);
 `new Expression(json)` and `call(operator, ...args)` cover the operators that
 have no function.
 
-## The style
+## Map content
+
+Declare the sources, layers, and images to draw over the style as a `MapContent`
+value, and pass it to `MapLibreMap`'s `content`, such as from a `@Computed`
+getter over the app's state. The map changes only what differs from the content
+it applied, adds it again to each style it loads, and places each layer on top
+or under the base-style layer that its `below` names or picks:
+
+```ets
+@Computed
+get content(): MapContent {
+  return {
+    sources: [{ id: 'places', json: { 'type': 'geojson', 'data': this.places } }],
+    layers: [{
+      id: 'places', type: 'circle', source: 'places', paint: { 'circle-color': this.color },
+      below: (layer: StyleLayerInfo) => layer.type === 'symbol',
+    }],
+  };
+}
+```
+
+Give it a new value to change it: the map doesn't see changes made inside a
+value it has. It compares properties and GeoJSON data by their JSON, and images
+by reference. A source or layer that the map rejects goes to `onMapError` and
+stays out until it changes. `snapshot()` takes the same content.
+
+## The style API
 
 `controller.map` is MapLibre Native FFI's `MapHandle`, whose style API adds and
 changes sources, layers, images, and feature state, and
-`controller.renderSession` queries features at a point in vp. Add sources,
-layers, and images in `onStyleLoaded`, since each style starts without them
-(feature state of a source re-added under the same ID can carry over). The
-package re-exports the FFI types these take, declares GeoJSON's types for ArkTS
+`controller.renderSession` queries features at a point in vp. What an app adds
+through it is gone in the next style, so add it in `onStyleLoaded` (feature
+state of a source re-added under the same ID can carry over). The package
+re-exports the FFI types these take, declares GeoJSON's types for ArkTS
 literals, and adds `readPixelMap()`, which turns a `PixelMap` into the image
-that `setStyleImage()` takes.
+that `setStyleImage()` and `MapImage` take.
 
 On an idle map, a feature state change draws only from the frame after the one
 that applies it. Until FFI fixes that, request one after the change, for example
@@ -67,10 +93,10 @@ async aboutToAppear(): Promise<void> {
 }
 ```
 
-For an image of a `MapLibreMap`, pass its style and its controller's camera,
-through `cameraToOptions()`, when `getCamera()` returns one. Without `camera`,
-the image uses the style's default camera; with it, the fields it leaves out
-take MapLibre's defaults, not the style's.
+For an image of a `MapLibreMap`, pass its style, its `content`, and its
+controller's camera, through `cameraToOptions()`, when `getCamera()` returns
+one. Without `camera`, the image uses the style's default camera; with it, the
+fields it leaves out take MapLibre's defaults, not the style's.
 
 ## Requests, offline regions, and logs
 

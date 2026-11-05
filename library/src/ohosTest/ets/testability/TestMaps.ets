@@ -1,6 +1,6 @@
 // The map that the test page shows, which the cases read and change.
 
-import { BoundOptions, LatLng, MapController, MapGestureOptions, ScaleBarUnits } from '@maplibre/arkui';
+import { BoundOptions, LatLng, MapContent, MapController, MapGestureOptions, ScaleBarUnits } from '@maplibre/arkui';
 
 // A style without network requests.
 export const STYLE =
@@ -21,6 +21,7 @@ export class TestMap {
   // The map is 300 vp tall at the top of a Scroll while this is true, and fills
   // the page otherwise.
   @Trace inScroll: boolean = false;
+  @Trace content: MapContent | undefined = undefined;
   // What the map's events reported.
   styleLoads: number = 0;
   errors: string[] = [];

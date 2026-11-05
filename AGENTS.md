@@ -14,6 +14,8 @@ library/                 @maplibre/arkui, a source HAR
     Expressions.ets      style expressions: functions that build style-spec JSON
     GeoJson.ets          GeoJSON types, so ArkTS can write GeoJSON literals
     StyleImage.ets       readPixelMap(): a PixelMap as FFI's style image
+    Content.ets          MapContent (sources, layers, images as data) and the
+                         reconciler that applies it to each style a map loads
     MapLibreMap.ets      the map component: params, events, lifecycle
     MapController.ets    the app's handle: observable camera, camera methods,
                          FFI handles
@@ -37,7 +39,8 @@ demo/entry/src/main/     the demo app's only module (module.json holds the app's
                          camera buttons, a page with two maps, a map in a
                          Scroll, a page with a snapshot, a resource transform,
                          and an offline region, and a style page
-                         (StyleDemo.ets) that adds to the style and queries on
+                         (StyleDemo.ets) whose content comes from its state,
+                         with a snapshot of it and queries on
                          tap
 scripts/                 the build, pack, FFI, and device scripts the tasks run
 .mise/plugins/ohos-sdk/  mise plugin for the OpenHarmony SDK, identical to FFI's;
@@ -174,3 +177,12 @@ model for adding it.
   `GestureInput.test.ets` injects real input with `@ohos.UiTest`'s `Driver`.
 - hypium's `assertClose` divides the difference by the actual value, so check
   values near zero with `Math.abs(...)` and `assertLessOrEqual`.
+- Map content is data: `MapContent` goes to `MapLibreMap` and `snapshot()` as a
+  value, and a new value is a change. `ContentReconciler` (internal) runs one
+  pass at a time and awaits each FFI command, so its record of the style stays
+  true; keep it that way rather than pipelining commands. It owns only what it
+  added, by ID, and starts over on each style load.
+- The map reads layer properties back normalized: colors as
+  `["rgba", r, g, b, a]`, expressions wrapped in their type's coercion
+  (`["to-color", ...]`), and unset properties as `undefined`. Tests compare
+  against those forms.
