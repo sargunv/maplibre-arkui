@@ -1,9 +1,11 @@
 import {
   CameraTransitionOutcome,
   CameraUpdateMode,
+  LatLng,
   LatLngBounds,
   MapController,
   MapLibreMap,
+  MapMarker,
 } from '@maplibre/arkui';
 
 import { Engine } from './Engine';
@@ -15,12 +17,27 @@ const SWITZERLAND: LatLngBounds = {
   northeast: { latitude: 47.81, longitude: 10.49 },
 };
 
+interface City {
+  name: string;
+  coordinate: LatLng;
+}
+
+// The cities that the map pins labels to.
+const CITIES: City[] = [
+  { name: 'Paris', coordinate: { latitude: 48.8566, longitude: 2.3522 } },
+  { name: 'London', coordinate: { latitude: 51.5072, longitude: -0.1276 } },
+  { name: 'New York', coordinate: { latitude: 40.7128, longitude: -74.006 } },
+  { name: 'Tokyo', coordinate: { latitude: 35.6764, longitude: 139.65 } },
+];
+
 @Entry
 @ComponentV2
 struct Index {
   @Local stack: NavPathStack = new NavPathStack();
   @Local showMap: boolean = true;
   @Local message: string = '';
+  // The panel's height, which the map keeps its ornaments above.
+  @Local panelHeight: number = 0;
   private map: MapController = new MapController({
     camera: { center: { latitude: 48.8584, longitude: 2.2945 }, zoom: 14 },
   });
@@ -32,10 +49,19 @@ struct Index {
           MapLibreMap({
             controller: this.map,
             style: LIBERTY,
+            scaleBarEnabled: true,
+            zoomButtonsEnabled: true,
+            ornamentPadding: { bottom: this.panelHeight },
             onMapError: (error: Error) => {
               this.message = error.message;
             },
-          })
+          }) {
+            // The webpack build rejects components written in a ForEach item,
+            // so the item calls a builder.
+            ForEach(CITIES, (city: City) => {
+              this.cityMarker(city)
+            }, (city: City) => city.name)
+          }
         } else {
           Text('The map is hidden')
             .width('100%')
@@ -53,6 +79,8 @@ struct Index {
             Button('Jump').margin(4).onClick(() => this.jump())
             Button('Fly').margin(4).onClick(() => this.fly())
             Button('Fit').margin(4).onClick(() => this.fit())
+            Button('Europe').margin(4).onClick(() => this.flyOverEurope())
+            Button('Rotate').margin(4).onClick(() => this.turn())
             Button('Cancel').margin(4).onClick(() => {
               this.map.cancelCameraTransitions().catch((error: Error) => this.message = error.message);
             })
@@ -74,6 +102,9 @@ struct Index {
         .margin({ left: 12, right: 12, bottom: 32 })
         .borderRadius(16)
         .backgroundColor('#e6ffffff')
+        .onAreaChange((oldArea: Area, newArea: Area) => {
+          this.panelHeight = (newArea.height as number) + 32;
+        })
       }
       .width('100%')
       .height('100%')
@@ -81,6 +112,30 @@ struct Index {
     .hideTitleBar(true)
     .mode(NavigationMode.Stack)
     .navDestination(this.pages)
+  }
+
+  // A label with the city's name, whose bottom tip is on the city.
+  @Builder
+  cityMarker(city: City) {
+    MapMarker({ controller: this.map, coordinate: city.coordinate }) {
+      this.cityLabel(city.name)
+    }
+  }
+
+  @Builder
+  cityLabel(name: string) {
+    Column() {
+      Text(name)
+        .fontSize(13)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(Color.White)
+        .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+        .borderRadius(12)
+        .backgroundColor('#d81b60')
+      Polygon({ width: 12, height: 8 })
+        .points([[0, 0], [12, 0], [6, 8]])
+        .fill('#d81b60')
+    }
   }
 
   @Builder
@@ -125,6 +180,32 @@ struct Index {
       mode: CameraUpdateMode.ease,
       fit: { padding: { top: 48, left: 24, bottom: 240, right: 24 }, bearing: 0, pitch: 0 },
       animation: { durationMs: 1500 },
+    }));
+  }
+
+  // Flies out from Paris until London shows too, with both pinned.
+  private flyOverEurope(): void {
+    this.report(this.map.updateCamera({
+      mode: CameraUpdateMode.fly,
+      camera: {
+        center: { latitude: 50.2, longitude: 1.2 },
+        zoom: 5,
+        bearing: 0,
+        pitch: 0,
+        // Centers the camera above the panel.
+        padding: { top: 0, left: 0, bottom: this.panelHeight, right: 0 },
+      },
+      animation: { durationMs: 5000 },
+    }));
+  }
+
+  // Turns the map, which shows the compass. Tapping it turns the map north.
+  private turn(): void {
+    const camera = this.map.getCamera();
+    this.report(this.map.updateCamera({
+      mode: CameraUpdateMode.ease,
+      camera: { bearing: (camera?.bearing ?? 0) + 45 },
+      animation: { durationMs: 1000 },
     }));
   }
 

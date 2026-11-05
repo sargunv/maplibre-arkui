@@ -7,10 +7,14 @@ import {
   CameraTransitionEnd,
   CameraTransitionOutcome,
   CameraUpdate,
+  LatLng,
   LatLngBounds,
   MapHandle,
+  MapProjectionHandle,
+  MapView as FrameView,
   RenderSessionHandle,
   RuntimeHandle,
+  ScreenPoint,
 } from '@maplibre/native-ffi';
 
 import { MapView } from './MapView';
@@ -29,10 +33,12 @@ export interface MapControllerOptions {
  * time. When the map leaves the screen and comes back, such as after a
  * navigation, the new map starts where the old one left the camera.
  *
- * Its `camera` and `styleLoaded` are observable, so a component that reads them
- * updates when they change. The map sets them; apps only read them. The
- * camera methods need a map on screen whose FFI map is ready, and reject
- * without one.
+ * Its `camera`, `styleLoaded`, and `attributions` are observable, so a
+ * component that reads them updates when they change. The map sets them; apps
+ * only read them. `frameCamera` and the projection methods, such as
+ * `pixelForLatLng()`, are observable too, and change with every frame the
+ * camera moves. The camera methods need a map on screen whose FFI map is ready,
+ * and reject without one.
  */
 @ObservedV2
 export class MapController {
@@ -45,7 +51,19 @@ export class MapController {
   @Trace camera: CameraPosition | undefined = undefined;
   /** Whether the map's style has loaded, so its layers and sources exist. */
   @Trace styleLoaded: boolean = false;
+  /**
+   * The attribution of the style's sources, as HTML, without repeats, in the
+   * order the style lists them. Empty until the style loads. Show it, or a
+   * `MapLibreMap` with `attributionEnabled`, as the sources' terms require.
+   */
+  @Trace attributions: string[] = [];
 
+  // The camera and size of the frame on screen. The map sets it each time it
+  // shows a frame whose view changed, so reads of the frame's projection
+  // update with each frame.
+  @Trace private frame: FrameView | undefined = undefined;
+  // The projection of `frame`, made when first read.
+  private projection: MapProjectionHandle | undefined = undefined;
   private view: MapView | undefined = undefined;
   private readonly startCamera: CameraOptions | undefined;
 
@@ -90,6 +108,44 @@ export class MapController {
   getCamera(): CameraPosition | undefined {
     const map = this.view?.map;
     return map === undefined ? this.camera : map.getSnapshot().view.camera;
+  }
+
+  /**
+   * The camera of the frame on screen, which changes with each frame of an
+   * animation or a gesture. Undefined until the map shows a frame. It's
+   * observable, so a component that reads it updates every frame the camera
+   * moves; read `camera` to update only when the camera comes to rest.
+   */
+  get frameCamera(): CameraPosition | undefined {
+    return this.frame?.camera;
+  }
+
+  /**
+   * Where `coordinate` is in the frame on screen, in vp from the map's top-left
+   * corner, as FFI's `MapProjectionHandle.pixelForLatLng()` finds it. The point
+   * can be outside the map. Undefined until the map shows a frame. Observable,
+   * as `frameCamera` is, so content placed with it follows the map.
+   */
+  pixelForLatLng(coordinate: LatLng): ScreenPoint | undefined {
+    return this.frameProjection()?.pixelForLatLng(coordinate);
+  }
+
+  /**
+   * The coordinate at `point`, in vp from the map's top-left corner, in the
+   * frame on screen. Undefined until the map shows a frame. Observable, as
+   * `frameCamera` is.
+   */
+  latLngForPixel(point: ScreenPoint): LatLng | undefined {
+    return this.frameProjection()?.latLngForPixel(point);
+  }
+
+  /**
+   * How many meters one vp covers at `latitude`, at the zoom of the frame on
+   * screen, ignoring pitch. Undefined until the map shows a frame. Observable,
+   * as `frameCamera` is.
+   */
+  metersPerPixelAtLatitude(latitude: number): number | undefined {
+    return this.frameProjection()?.metersPerPixelAtLatitude(latitude);
   }
 
   /**
@@ -154,6 +210,26 @@ export class MapController {
     }
     this.view = undefined;
     this.styleLoaded = false;
+    this.attributions = [];
+    this.showFrame(undefined);
+  }
+
+  /**
+   * Internal: the MapLibreMap that shows this controller calls it with the
+   * view of each frame it shows, or undefined once it shows none.
+   */
+  showFrame(frame: FrameView | undefined): void {
+    this.projection?.release();
+    this.projection = undefined;
+    this.frame = frame;
+  }
+
+  private frameProjection(): MapProjectionHandle | undefined {
+    const frame = this.frame;
+    if (frame !== undefined && this.projection === undefined) {
+      this.projection = MapProjectionHandle.create(frame);
+    }
+    return this.projection;
   }
 
   // Starts a camera change whose animation ends with FFI's end handler, and

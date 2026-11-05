@@ -531,6 +531,52 @@ Questions:
 - Map SDKs on HarmonyOS configure ornaments with enable flags and position
   setters, not modifiers.
 
+Decided:
+
+- Each ornament is a `@ComponentV2` that takes the map's `MapController`:
+  `MapCompass`, `MapScaleBar`, `MapAttribution`, and `MapZoomButtons`. A
+  `MapLibreMap` shows them by flags, as Map Kit does: `compassEnabled` and
+  `attributionEnabled` default on, `scaleBarEnabled` and `zoomButtonsEnabled`
+  off. `ornamentPadding` keeps them clear of app UI over the map. Apps that want
+  another layout turn a flag off and place the component themselves. No
+  `AttributeModifier`s: apps style the component they place with ordinary
+  attributes, and a separate styled package waits for a need.
+- The compass shows while the map is rotated or tilted, as Map Kit's and Google
+  Maps' do, and a tap eases bearing and pitch to 0. The scale bar picks 1, 2, or
+  5 times a power of ten in metric or imperial units, by the system region by
+  default. The attribution is the style's sources' HTML, without repeats, in
+  `MapController.attributions`, which it reads again when a source changes (a
+  TileJSON's attribution arrives after the style). It shows as text with
+  `UrlStyle` links and folds to an info button. No MapLibre logo: no source's
+  terms require it, MapLibre GL JS hides it by default, and it needs a 14 KB
+  vector or HAR resources.
+- Ornaments use the system's color resources (`sys.color.*`) and icons
+  (`sys.media.*`), so they follow dark mode and need no HAR resources. The scale
+  bar uses fixed colors that read on any map. Their accessibility labels are
+  English until the HAR has resources.
+- `MapMarker({ controller, coordinate, anchor }) { content }` pins ArkUI content
+  to a coordinate. `MapLibreMap`'s trailing closure is a `@BuilderParam` laid
+  out in a `Stack` of the map's size over the XComponent and under the
+  ornaments; a marker fills it, passes touches through, and positions its
+  content with `position` and `markAnchor`.
+- Per-frame projection: the render session's frame results carry the view each
+  frame drew. The map hands the latest one to the controller, which traces it,
+  so `frameCamera`, `pixelForLatLng()`, `latLngForPixel()`, and
+  `metersPerPixelAtLatitude()` are observable and update every frame the camera
+  moves. The controller makes FFI's `MapProjectionHandle` for a frame on first
+  use and releases it with the next frame. Overlays move in the ArkUI frame
+  after the map draws, so they can trail a `SURFACE` map by a frame, as in
+  MapLibre Compose on Android ([#1368][compose-1368]). On the emulator,
+  screenshots mid-fly showed markers on their cities. Same-frame sync would need
+  `TEXTURE` or native nodes.
+- Not yet: camera padding apart from FFI's, a logo, localized labels, markers
+  that point toward off-screen coordinates, and collapsing the attribution on a
+  gesture (stage 4).
+- On the Oniro emulator, content that updates every frame over a map makes the
+  llvmpipe crash (stage 2) far more likely, now in the app's `RSRenderThread`:
+  flies crashed the demo in 4 of 9 runs with markers and ornaments, 2 of 6 with
+  ornaments alone, and 0 of 6 without either. See `docs/ffi-feedback.md`.
+
 References:
 
 - MapLibre Compose: [controls guide][compose-controls], [overlay

@@ -257,5 +257,52 @@ release. Each entry names the FFI commit it was seen at.
   Suggested fix: readback for window sessions, or a note in the images guide
   that a still image of an on-screen map means a second, static map.
 
+## Stage 8: ornaments and overlays (FFI `5c4c9084`)
+
+- **A source's attribution is empty until its TileJSON loads, and the event that
+  says it loaded is undocumented.** Right after `mapStyleLoaded`,
+  `MapHandle.listStyleSources()` reported `attribution: ''` for the OpenFreeMap
+  Liberty style's `openmaptiles` source, whose attribution comes from its
+  TileJSON; listing again on `RuntimeEventType.mapSourceChanged` found it. The
+  binding and `MLN_RUNTIME_EVENT_MAP_SOURCE_CHANGED` in `runtime.h` say nothing
+  about when that event fires. Suggested fix: document it ("a source's TileJSON
+  loaded, or its attribution or other metadata changed"), and say in
+  `mln_style_source_info` that `attribution` fills in when the TileJSON loads.
+- **GeoJSON sources report no attribution.** A style whose `geojson` source
+  declares `attribution` lists that source with `attribution: ''`; a `vector`
+  source with inline `tiles` and the same `attribution` reports it. This is
+  MapLibre Native's style parser, but MapLibre GL JS honors it on GeoJSON
+  sources, and MapLibre Compose works around it by reading the declared
+  attribution from the style JSON (`MlnFfiStyleBinding.declaredAttribution`).
+  This library doesn't. Suggested fix: keep a source's declared `attribution`
+  for every source type in Native, or in FFI's `mln_style_source_info`.
+- **The llvmpipe crash is far likelier with ArkUI content that moves over the
+  map.** With markers and ornaments that update every frame of a fly, the demo
+  crashed in 4 of 9 runs of two flies each (2 of 6 with ornaments alone, 0 of 6
+  with neither), each time in the app's own `RSRenderThread`:
+  `lp_scene_is_resource_referenced` <- `llvmpipe_flush_resource`, reached from
+  Skia's texture uploads and draws. The stage 2 crash above was on MapLibre's
+  render thread. Two GL contexts rendering on two threads at once in one process
+  is the common factor, which fits a llvmpipe race more than an FFI bug.
+  Suggested fix: as above, check on a device with a GPU; if only the emulator
+  crashes, report it to Oniro with both stacks.
+- **The webpack build that FFI's example uses rejects more ArkUI.** In SDK 6.1,
+  besides the limits in stage 1 and 2: (a) any component written directly in a
+  `ForEach` item, even `ForEach(items, (n: number) => { Column() {} })`, fails
+  with "does not meet UI component syntax", and inside another component's
+  trailing closure a custom component in a `ForEach` item silently loses its own
+  trailing closure; an item that calls a `@Builder` works. (b) `layoutGravity`
+  (API 20) is missing from ets-loader's `components/common_attrs.json`, so it
+  fails the same way; this library aligns with `RelativeContainer` instead. (c)
+  `SymbolGlyph` is missing from `tsconfig.esm.json`, as `NodeContainer` is.
+  Suggested fix: note these next to the example's other build limits.
+- **FFI's projection API fits per-frame overlays well.** `RenderFrameResult`
+  carries the drawn `view`, and `MapProjectionHandle.create(view)` turns it into
+  a projection, so overlays follow exactly the frame on screen with no extra
+  native calls. One rough edge: the binding's `MapView` type name clashes with
+  any app class of that name (and reads like a view widget); this library
+  imports it as `FrameView`. Suggested fix, minor: consider `MapViewState` in
+  the binding.
+
 [42012958276]:
   https://github.com/maplibre/maplibre-native-ffi/actions/runs/42012958276
