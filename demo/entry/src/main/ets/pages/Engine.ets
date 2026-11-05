@@ -43,7 +43,9 @@ export struct Engine {
   @Local region: OfflineRegionInfo | undefined = undefined;
   @Local status: OfflineRegionStatus | undefined = undefined;
   @Local message: string = '';
+  // The runtime once start() has set the page's transform and listener on it.
   private runtime: RuntimeHandle | undefined = undefined;
+  private gone: boolean = false;
   private readonly listener: (event: RuntimeEvent) => void = (event: RuntimeEvent) => this.onEvent(event);
 
   aboutToAppear(): void {
@@ -51,6 +53,7 @@ export struct Engine {
   }
 
   aboutToDisappear(): void {
+    this.gone = true;
     const runtime = this.runtime;
     if (runtime !== undefined) {
       runtime.discarding.clearResourceTransform();
@@ -98,6 +101,9 @@ export struct Engine {
 
   private async start(): Promise<void> {
     const runtime = await getDefaultRuntime();
+    if (this.gone) {
+      return;
+    }
     this.runtime = runtime;
     runtime.discarding.setResourceTransform({
       callback: (kind: ResourceKind, url: string, request: ResourceTransformRequestHandle) => {
@@ -117,12 +123,17 @@ export struct Engine {
     if (regions.length > 0) {
       await this.show(regions[0]);
     }
-    this.preview = await snapshot({
+    const preview = await snapshot({
       style: REWRITTEN,
       width: 320,
       height: 200,
       camera: { center: { latitude: 48.8584, longitude: 2.2945 }, zoom: 14, pitch: 45 },
     });
+    if (this.gone) {
+      preview.release();
+    } else {
+      this.preview = preview;
+    }
   }
 
   private async download(): Promise<void> {

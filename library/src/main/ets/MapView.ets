@@ -21,7 +21,7 @@ import {
 } from '@maplibre/native-ffi';
 
 import { MapController } from './MapController';
-import { getDefaultRuntime, getFramePacer, listenToMap, stopListeningToMap } from './runtime';
+import { addRuntimeEventListener, getDefaultRuntime, getFramePacer, removeRuntimeEventListener } from './runtime';
 
 // What the view reports to its component.
 export interface MapViewEvents {
@@ -38,6 +38,12 @@ export class MapView extends XComponentController {
 
   private readonly context: UIContext;
   private readonly events: MapViewEvents;
+  // Takes the events that this view's map raises.
+  private readonly listener = (event: RuntimeEvent): void => {
+    if (event.source === this.map?.id) {
+      this.onEvent(event);
+    }
+  };
   private controller: MapController | undefined = undefined;
   private disposed: boolean = false;
   // The map from when it's created, which the view disposes.
@@ -118,8 +124,8 @@ export class MapView extends XComponentController {
     const runtime = this.runtime;
     const map = this.created;
     const session = this.session;
-    if (runtime !== undefined && map !== undefined) {
-      stopListeningToMap(runtime, map);
+    if (runtime !== undefined) {
+      removeRuntimeEventListener(runtime, this.listener);
     }
     this.controller?.detach(this);
     this.runtime = undefined;
@@ -160,7 +166,7 @@ export class MapView extends XComponentController {
     }
     this.map = map;
     this.defaultBounds = boundOptions(map.getSnapshot().bounds);
-    listenToMap(runtime, map, (event: RuntimeEvent) => this.onEvent(event));
+    addRuntimeEventListener(runtime, this.listener);
     // The controller takes camera changes from here on, and the map runs
     // commands in order, so they follow the starting camera.
     const startCamera = controller.attach(this);

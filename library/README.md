@@ -40,8 +40,10 @@ async aboutToAppear(): Promise<void> {
 }
 ```
 
-For an image of a `MapLibreMap`, pass its style and
-`cameraToOptions(controller.getCamera())`.
+For an image of a `MapLibreMap`, pass its style and its controller's camera,
+through `cameraToOptions()`, when `getCamera()` returns one. Without `camera`,
+the image uses the style's default camera; with it, the fields it leaves out
+take MapLibre's defaults, not the style's.
 
 ## Requests, offline regions, and logs
 
@@ -52,15 +54,18 @@ handlers on it, before or after maps appear:
 ```ets
 const runtime = await getDefaultRuntime();
 runtime.discarding.setResourceTransform({
-  callback: (kind: ResourceKind, url: string, request: ResourceTransformRequestHandle) => {
-    request.complete(url.startsWith('https://tiles.example.com/') ? `${url}?key=${API_KEY}` : url);
-  },
+  rules: [{
+    flags: UrlMatchFlag.glob,
+    url: 'https://tiles.example.com/**',
+    parameters: [{ name: 'key', value: API_KEY }],
+  }],
 });
 ```
 
-A transform must answer every request. On OpenHarmony, FFI has no header
-transform: serve the requests that need headers with
-`runtime.setResourceProvider()` instead. See FFI's [network guide].
+For other rewrites, pass a `callback` instead of `rules`; it must answer every
+request. On OpenHarmony, FFI has no header transform: serve the requests that
+need headers with `runtime.setResourceProvider()` instead. See FFI's [network
+guide].
 
 The default runtime's cache database is `maplibre-cache.db` in the app's files
 directory, so [offline regions] last between launches. The library owns the

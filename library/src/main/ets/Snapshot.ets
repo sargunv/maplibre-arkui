@@ -24,7 +24,11 @@ export interface SnapshotOptions {
   width: number;
   /** The image's height in vp. */
   height: number;
-  /** Where the camera looks. Fields it leaves out keep the style's defaults. */
+  /**
+   * Where the camera looks. Without one, the image uses the style's default
+   * camera. With one, the fields it leaves out take MapLibre's defaults, not
+   * the style's.
+   */
   camera?: CameraOptions;
   /**
    * The image's pixels in each vp. Defaults to the default display's density,
@@ -45,15 +49,16 @@ export interface SnapshotOptions {
  * pixels in each vp.
  *
  * ```ets
- * this.preview = await snapshot({ style: STYLE_URL, width: 320, height: 180, camera: { zoom: 3 } });
+ * this.preview = await snapshot({ style: STYLE_URL, width: 320, height: 180,
+ *   camera: { center: { latitude: 48.8584, longitude: 2.2945 }, zoom: 14 } });
  * // In build(): Image(this.preview)
  * ```
  *
  * It resolves once every resource the image needs has loaded, and rejects when
  * the style or one of those resources fails to load. To capture what a
  * `MapLibreMap` shows, pass its style and its controller's camera, through
- * `cameraToOptions()`. The image holds only the map: show the style's
- * attribution with it.
+ * `cameraToOptions()`, when `getCamera()` returns one. The image holds only
+ * the map: show the style's attribution with it.
  */
 export async function snapshot(options: SnapshotOptions): Promise<image.PixelMap> {
   const runtime = options.runtime ?? await getDefaultRuntime();

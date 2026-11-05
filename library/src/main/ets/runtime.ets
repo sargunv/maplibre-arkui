@@ -1,9 +1,8 @@
 // What the maps of an app share: the default runtime, the frame pacer, and the
-// event handler of each runtime.
+// event listeners of each runtime.
 
 import {
   FramePacerHandle,
-  MapHandle,
   ohosFramePacerCreate,
   RuntimeEvent,
   RuntimeHandle,
@@ -13,16 +12,9 @@ import application from '@ohos.app.ability.application';
 /** Takes one event of a runtime or of one of its maps. */
 export type RuntimeEventListener = (event: RuntimeEvent) => void;
 
-// The listeners of one runtime: the app's, which take every event, and each
-// map's, which take that map's events.
-class RuntimeListeners {
-  readonly all: RuntimeEventListener[] = [];
-  readonly byMap: Map<bigint, RuntimeEventListener> = new Map();
-}
-
 let defaultRuntime: Promise<RuntimeHandle> | undefined = undefined;
 let framePacer: FramePacerHandle | undefined = undefined;
-const listeners: Map<bigint, RuntimeListeners> = new Map();
+const listeners: Map<bigint, RuntimeEventListener[]> = new Map();
 
 /**
  * The runtime that every `MapLibreMap` and `snapshot()` uses unless the app
@@ -66,12 +58,12 @@ async function createDefaultRuntime(): Promise<RuntimeHandle> {
  * component needs.
  */
 export function addRuntimeEventListener(runtime: RuntimeHandle, listener: RuntimeEventListener): void {
-  listenersOf(runtime).all.push(listener);
+  listenersOf(runtime).push(listener);
 }
 
 /** Stops calling a listener that `addRuntimeEventListener()` added. */
 export function removeRuntimeEventListener(runtime: RuntimeHandle, listener: RuntimeEventListener): void {
-  const all = listeners.get(runtime.id)?.all;
+  const all = listeners.get(runtime.id);
   const index = all?.indexOf(listener) ?? -1;
   if (all !== undefined && index >= 0) {
     all.splice(index, 1);
@@ -87,29 +79,20 @@ export function getFramePacer(): FramePacerHandle {
   return framePacer;
 }
 
-export function listenToMap(runtime: RuntimeHandle, map: MapHandle, listener: RuntimeEventListener): void {
-  listenersOf(runtime).byMap.set(map.id, listener);
-}
-
-export function stopListeningToMap(runtime: RuntimeHandle, map: MapHandle): void {
-  listeners.get(runtime.id)?.byMap.delete(map.id);
-}
-
-// The first use of a runtime sets a handler that passes each event to the map
-// that raised it and to the app's listeners.
-function listenersOf(runtime: RuntimeHandle): RuntimeListeners {
+// The first use of a runtime sets a handler that passes each event to the
+// runtime's listeners, the maps' and the app's.
+function listenersOf(runtime: RuntimeHandle): RuntimeEventListener[] {
   let found = listeners.get(runtime.id);
   if (found === undefined) {
-    const created = new RuntimeListeners();
+    const created: RuntimeEventListener[] = [];
     found = created;
     listeners.set(runtime.id, created);
     runtime.discarding.setEventHandler({
       callback: (events: readonly RuntimeEvent[]) => {
         for (const event of events) {
-          created.byMap.get(event.source)?.(event);
           // A listener can remove itself as it runs, and one that throws
           // doesn't keep the event from the others.
-          for (const listener of created.all.slice()) {
+          for (const listener of created.slice()) {
             try {
               listener(event);
             } catch (error) {
