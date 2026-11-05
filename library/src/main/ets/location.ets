@@ -3,18 +3,15 @@
 // Location Kit, or anywhere else, and passes it to the map; this library
 // requests no permission and starts no location request.
 
-import { CameraOptions, MapHandle } from '@maplibre/native-ffi';
+import { MapHandle } from '@maplibre/native-ffi';
 import { LengthMetricsUnit } from '@ohos.arkui.node';
 import geoLocationManager from '@ohos.geoLocationManager';
 import image from '@ohos.multimedia.image';
 
 import { readPixelMap } from './StyleImage';
 
-/**
- * The ID of the `location-indicator` layer that draws `userLocation`, for
- * apps that restyle it with `setStyleLayerProperty()`, or place their own
- * layers below it.
- */
+// The `location-indicator` layer that draws `userLocation`. It exists only
+// while the map has a location, so it's internal.
 export const USER_LOCATION_LAYER = 'maplibre-arkui-user-location';
 
 /** How `MapController.followUserLocation()` moves the camera. */
@@ -38,18 +35,8 @@ const BLUE = '#1e88e5';
 
 // Location Kit reports a direction even at rest, so only a moving location has
 // a course.
-function course(location: geoLocationManager.Location): number | undefined {
+export function course(location: geoLocationManager.Location): number | undefined {
   return location.speed > 0 ? location.direction : undefined;
-}
-
-// Where a following camera moves for `location`.
-export function followCamera(location: geoLocationManager.Location, options: FollowLocationOptions,
-  zoom: number | undefined): CameraOptions {
-  return {
-    center: { latitude: location.latitude, longitude: location.longitude },
-    zoom: zoom,
-    bearing: options.course === true ? course(location) : undefined,
-  };
 }
 
 // The indicator layer of one map. A new style starts without it, so the view
@@ -97,7 +84,10 @@ export class UserLocationLayer {
     }
     map.discarding.setStyleLayerProperty(USER_LOCATION_LAYER, 'location', position(location));
     map.discarding.setStyleLayerProperty(USER_LOCATION_LAYER, 'accuracy-radius', location.accuracy);
-    map.discarding.setStyleLayerProperty(USER_LOCATION_LAYER, 'bearing', bearing ?? 0);
+    // A hidden arrow keeps its last course, so the next one eases from there.
+    if (bearing !== undefined) {
+      map.discarding.setStyleLayerProperty(USER_LOCATION_LAYER, 'bearing', bearing);
+    }
     if (this.hasCourse !== (bearing !== undefined)) {
       this.hasCourse = bearing !== undefined;
       map.discarding.setStyleLayerProperty(USER_LOCATION_LAYER, 'bearing-image',

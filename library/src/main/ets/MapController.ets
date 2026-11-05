@@ -18,7 +18,7 @@ import {
 } from '@maplibre/native-ffi';
 import geoLocationManager from '@ohos.geoLocationManager';
 
-import { FollowLocationOptions, followCamera } from './location';
+import { FollowLocationOptions, course } from './location';
 import { MapView } from './MapView';
 
 /** Options for a new `MapController`. */
@@ -215,7 +215,7 @@ export class MapController {
     this.followOptions = options ?? {};
     this.followZoom = options?.zoom;
     this.followingUserLocation = true;
-    this.view?.gestures.stop();
+    this.view?.takeOverCamera();
     this.view?.followUserLocation();
   }
 
@@ -234,7 +234,11 @@ export class MapController {
     }
     const zoom = this.followZoom;
     this.followZoom = undefined;
-    return followCamera(location, this.followOptions, zoom);
+    return {
+      center: { latitude: location.latitude, longitude: location.longitude },
+      zoom: zoom,
+      bearing: this.followOptions.course === true ? course(location) : undefined,
+    };
   }
 
   /**

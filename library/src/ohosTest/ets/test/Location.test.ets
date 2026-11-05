@@ -9,8 +9,8 @@ import {
   MapHandle,
   MapController,
   readPixelMap,
-  USER_LOCATION_LAYER,
 } from '@maplibre/arkui';
+import { USER_LOCATION_LAYER } from '@maplibre/arkui/src/main/ets/location';
 
 import application from '@ohos.app.ability.application';
 import geoLocationManager from '@ohos.geoLocationManager';

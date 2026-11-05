@@ -711,11 +711,11 @@ Decided:
   eases the center (and the bearing, and the zoom once) to each location in the
   same 1 s, so the dot stays centered, and an observable
   `followingUserLocation`, which any gesture sets to false.
-- Not yet: the compass heading (`@ohos.sensor`), styling the indicator beyond
-  `USER_LOCATION_LAYER`'s properties, and a zoom gesture that keeps following.
-  The Oniro emulator has no fixes: its location switch is off and the GNSS
-  service doesn't load, so the demo has a simulated walk and the tests pass
-  made-up locations.
+- Not yet: the compass heading (`@ohos.sensor`), styling the indicator (its
+  layer is internal, since it exists only while there's a location), and a zoom
+  gesture that keeps following. The Oniro emulator has no fixes: its location
+  switch is off and the GNSS service doesn't load, so the demo has a simulated
+  walk and the tests pass made-up locations.
 
 References:
 

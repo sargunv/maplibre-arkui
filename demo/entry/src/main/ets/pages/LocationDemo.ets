@@ -132,6 +132,7 @@ export struct LocationDemo {
     this.map.followUserLocation({ zoom: 16, course: this.course });
     if (!this.simulating) {
       this.listen().catch((error: BusinessError) => {
+        this.map.stopFollowingUserLocation();
         this.message = `Location Kit: ${error.message} (${error.code})`;
       });
     }
@@ -145,11 +146,9 @@ export struct LocationDemo {
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
     const result = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(context, PERMISSIONS);
     if (!result.authResults.some((status: number) => status === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED)) {
+      this.map.stopFollowingUserLocation();
       this.message = 'Location permission denied';
       return;
-    }
-    if (!geoLocationManager.isLocationEnabled()) {
-      this.message = 'Location is off in the system settings';
     }
     const request: geoLocationManager.ContinuousLocationRequest = {
       interval: 1,

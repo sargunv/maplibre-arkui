@@ -124,8 +124,7 @@ don't show a location don't ask for one. An app that does declares
 `ohos.permission.APPROXIMATELY_LOCATION` and `ohos.permission.LOCATION` in its
 `module.json5`, with a `reason`, and asks with
 `abilityAccessCtrl.createAtManager().requestPermissionsFromUser()` when the user
-chooses to see their location, as the demo's location page does. The indicator
-is the style layer `USER_LOCATION_LAYER`, which apps can restyle.
+chooses to see their location, as the demo's location page does.
 
 ### Map content
 
