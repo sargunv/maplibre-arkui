@@ -4,6 +4,7 @@ export { MapLibreMap } from './src/main/ets/MapLibreMap';
 export { MapController } from './src/main/ets/MapController';
 export type { MapControllerOptions } from './src/main/ets/MapController';
 export type { MapGestureOptions } from './src/main/ets/gestures';
+export type { FollowLocationOptions } from './src/main/ets/location';
 export { addRuntimeEventListener, getDefaultRuntime, removeRuntimeEventListener } from './src/main/ets/runtime';
 export type { RuntimeEventListener } from './src/main/ets/runtime';
 export { snapshot } from './src/main/ets/Snapshot';

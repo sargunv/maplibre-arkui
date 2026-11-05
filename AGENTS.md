@@ -25,6 +25,8 @@ library/                 @maplibre/arkui, a source HAR
                          wheel, and keys into camera deltas and momentum
     MapMarker.ets        ArkUI content pinned to a coordinate
     Ornaments.ets        the compass, scale bar, attribution, and zoom buttons
+    location.ets         the user location's indicator layer and its images,
+                         and where a following camera moves
     runtime.ets          the default runtime and its cache file, the frame
                          pacer, and per-runtime event dispatch to maps and app
                          listeners
@@ -38,10 +40,11 @@ demo/entry/src/main/     the demo app's only module (module.json holds the app's
                          fields too, as FFI's ArkUI example does): a map with
                          camera buttons, a page with two maps, a map in a
                          Scroll, a page with a snapshot, a resource transform,
-                         and an offline region, and a style page
-                         (StyleDemo.ets) whose content comes from its state,
-                         with a snapshot of it and queries on
-                         tap
+                         and an offline region, a style page (StyleDemo.ets)
+                         whose content comes from its state, with a snapshot
+                         of it and queries on tap, and a location page
+                         (LocationDemo.ets) with Location Kit and a simulated
+                         walk
 scripts/                 the build, pack, FFI, and device scripts the tasks run
 .mise/plugins/ohos-sdk/  mise plugin for the OpenHarmony SDK, identical to FFI's;
                          linked by scripts/link-ohos-sdk-plugin.sh
@@ -175,6 +178,10 @@ model for adding it.
   `@maplibre/arkui/src/main/ets/gestures`; `build-hap.sh` rewrites those
   imports. `Gestures.test.ets` feeds the recognizer made-up touches, and
   `GestureInput.test.ets` injects real input with `@ohos.UiTest`'s `Driver`.
+- The library declares no permission; a HAR's `requestPermissions` merge into
+  every app that uses it. Location comes from the app as Location Kit's
+  `geoLocationManager.Location`. The emulator's Location Kit has no fixes (the
+  location switch is off), so tests and the demo make up locations.
 - hypium's `assertClose` divides the difference by the actual value, so check
   values near zero with `Math.abs(...)` and `assertLessOrEqual`.
 - Map content is data: `MapContent` goes to `MapLibreMap` and `snapshot()` as a

@@ -25,9 +25,11 @@ import {
   RuntimeHandle,
   StyleSourceInfo,
 } from '@maplibre/native-ffi';
+import geoLocationManager from '@ohos.geoLocationManager';
 
 import { ContentReconciler, MapContent } from './Content';
 import { GESTURE_ANIMATION_MS, GestureTarget, MapGestures, snapBearing } from './gestures';
+import { FOLLOW_MS, UserLocationLayer } from './location';
 import { MapController } from './MapController';
 import { addRuntimeEventListener, getDefaultRuntime, getFramePacer, removeRuntimeEventListener } from './runtime';
 
@@ -70,6 +72,8 @@ export class MapView extends XComponentController implements GestureTarget {
   private bounds: BoundOptions | undefined = undefined;
   // The limits a new map has, which apply again when the app removes its own.
   private defaultBounds: BoundOptions | undefined = undefined;
+  private userLocation: geoLocationManager.Location | undefined = undefined;
+  private readonly locationLayer: UserLocationLayer;
 
   // The component's latest size, its latest surface, and the surface that the
   // session renders to. A surface ID is the one the component reports.
@@ -86,6 +90,7 @@ export class MapView extends XComponentController implements GestureTarget {
     super();
     this.context = context;
     this.events = events;
+    this.locationLayer = new UserLocationLayer(context.vp2px(1));
   }
 
   // The surface's size is in physical pixels, and the map's in virtual pixels.
@@ -146,6 +151,33 @@ export class MapView extends XComponentController implements GestureTarget {
     this.applyBounds();
   }
 
+  setUserLocation(location: geoLocationManager.Location | undefined): void {
+    this.userLocation = location;
+    const map = this.map;
+    if (map !== undefined) {
+      this.locationLayer.draw(map, location);
+      this.followUserLocation();
+    }
+  }
+
+  // Moves the camera to the user's location while the controller follows it.
+  followUserLocation(): void {
+    const map = this.map;
+    const location = this.userLocation;
+    const controller = this.controller;
+    if (map === undefined || location === undefined || controller === undefined || controller.map !== map) {
+      return;
+    }
+    const camera = controller.followCamera(location);
+    if (camera !== undefined) {
+      map.discarding.updateCamera({
+        mode: CameraUpdateMode.ease,
+        camera: camera,
+        animation: { durationMs: FOLLOW_MS },
+      });
+    }
+  }
+
   // Gestures move the map once it's ready; input before then is dropped, and
   // an animated step ends at once, so the gestures don't wait for it.
   applyCameraDelta(delta: CameraDelta): void {
@@ -164,7 +196,12 @@ export class MapView extends XComponentController implements GestureTarget {
     this.cameraTakeovers++;
   }
 
+  // The user takes the camera from the location it follows.
   gestureStarted(): void {
+    const controller = this.controller;
+    if (controller !== undefined && controller.map === this.map) {
+      controller.stopFollowingUserLocation();
+    }
     this.events.onGestureStart();
   }
 
@@ -261,6 +298,7 @@ export class MapView extends XComponentController implements GestureTarget {
     this.applyBounds();
     this.applyStyle();
     this.retarget();
+    this.followUserLocation();
   }
 
   private onEvent(event: RuntimeEvent): void {
@@ -323,6 +361,7 @@ export class MapView extends XComponentController implements GestureTarget {
       controller.styleLoaded = false;
       controller.attributions = [];
     }
+    this.locationLayer.styleChanging();
     this.reconciler?.styleUnloaded();
     // Before the new load, which can throw, so no earlier load still counts.
     this.loading = undefined;
@@ -347,6 +386,8 @@ export class MapView extends XComponentController implements GestureTarget {
           this.readAttributions(map, controller);
         }
         this.events.onStyleLoaded();
+        // Above what the content and the app added as the style loaded.
+        this.locationLayer.styleLoaded(map, this.userLocation);
       }
     }, () => {
       // A style that fails to load reports mapLoadingFailed.

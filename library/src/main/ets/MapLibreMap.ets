@@ -1,4 +1,5 @@
 import { BoundOptions, Camera as CameraPosition, RuntimeHandle } from '@maplibre/native-ffi';
+import geoLocationManager from '@ohos.geoLocationManager';
 
 import { MapGestureOptions, TAP_SLOP } from './gestures';
 import { MapContent } from './Content';
@@ -108,6 +109,14 @@ export struct MapLibreMap {
   /** ArkUI content over the map, in a `Stack` of its size. */
   @BuilderParam overlays: () => void = noContent;
   /**
+   * The user's location, which the map shows as a dot in a circle of its
+   * `accuracy`, with an arrow while it moves. Pass each location that Location
+   * Kit reports; the app requests the permission and the updates. The dot
+   * eases to each new location. `controller.followUserLocation()` moves the
+   * camera with it.
+   */
+  @Param userLocation: geoLocationManager.Location | undefined = undefined;
+  /**
    * The style has loaded, so its layers and sources exist, and the map has
    * added `content` to it. Each style starts from its own document, without
    * what the app added through `controller.map`.
@@ -143,6 +152,7 @@ export struct MapLibreMap {
 
   aboutToAppear(): void {
     this.view.gestures.options = this.gestures;
+    this.view.setUserLocation(this.userLocation);
     this.view.start(this.controller, this.runtime, this.style, this.content, this.cameraBounds);
   }
 
@@ -168,6 +178,11 @@ export struct MapLibreMap {
   @Monitor('gestures')
   gesturesChanged(): void {
     this.view.gestures.options = this.gestures;
+  }
+
+  @Monitor('userLocation')
+  userLocationChanged(): void {
+    this.view.setUserLocation(this.userLocation);
   }
 
   // ArkUI's gestures decide whether the map owns a touch, against a scrolling

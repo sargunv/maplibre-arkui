@@ -694,6 +694,29 @@ References:
 
 Goal: show the user's location and let the camera follow it.
 
+Decided:
+
+- The app gets the location and passes it: `MapLibreMap`'s `userLocation` param
+  takes Location Kit's `geoLocationManager.Location` as it comes, as Map Kit's
+  `setMyLocation()` does. No provider interface: Location Kit already is one,
+  and a test or a simulation makes a `Location` literal. The library declares no
+  permission (a HAR's `requestPermissions` merge into the app) and starts no
+  request; the demo asks for both location permissions and listens.
+- MapLibre Native's `location-indicator` layer draws it, with a dot and an arrow
+  that `OffscreenCanvas` draws, an accuracy circle in meters, and 1 s
+  transitions. The map adds it again as each style loads. A location has a
+  course only while its `speed` is above 0, since Location Kit reports a
+  `direction` at rest too.
+- Following is on the controller: `followUserLocation({ zoom, course })`, which
+  eases the center (and the bearing, and the zoom once) to each location in the
+  same 1 s, so the dot stays centered, and an observable
+  `followingUserLocation`, which any gesture sets to false.
+- Not yet: the compass heading (`@ohos.sensor`), styling the indicator (its
+  layer is internal, since it exists only while there's a location), and a zoom
+  gesture that keeps following. The Oniro emulator has no fixes: its location
+  switch is off and the GNSS service doesn't load, so the demo has a simulated
+  walk and the tests pass made-up locations.
+
 References:
 
 - [MapLibre Compose location guide][compose-location] and its [HMS location

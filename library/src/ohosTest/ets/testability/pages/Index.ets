@@ -63,6 +63,8 @@ struct Index {
       content: testMap.content,
       cameraBounds: testMap.cameraBounds,
       gestures: testMap.gestures,
+      userLocation: testMap.userLocation,
+      compassEnabled: testMap.compass,
       onStyleLoaded: () => {
         testMap.styleLoads++;
       },

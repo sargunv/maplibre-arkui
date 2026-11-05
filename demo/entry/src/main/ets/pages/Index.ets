@@ -9,6 +9,7 @@ import {
 } from '@maplibre/arkui';
 
 import { Engine } from './Engine';
+import { LocationDemo } from './LocationDemo';
 import { StyleDemo } from './StyleDemo';
 import { ScrollingMap } from './ScrollingMap';
 import { LIBERTY, TwoMaps } from './TwoMaps';
@@ -107,6 +108,9 @@ struct Index {
             Button('In a scroll').margin(4).onClick(() => {
               this.stack.pushPathByName('scrolling-map', null);
             })
+            Button('Location').margin(4).onClick(() => {
+              this.stack.pushPathByName('location', null);
+            })
           }
         }
         .padding(12)
@@ -159,6 +163,8 @@ struct Index {
       StyleDemo()
     } else if (name === 'scrolling-map') {
       ScrollingMap()
+    } else if (name === 'location') {
+      LocationDemo()
     }
   }
 

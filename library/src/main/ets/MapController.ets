@@ -16,7 +16,9 @@ import {
   RuntimeHandle,
   ScreenPoint,
 } from '@maplibre/native-ffi';
+import geoLocationManager from '@ohos.geoLocationManager';
 
+import { FollowLocationOptions, course } from './location';
 import { MapView } from './MapView';
 
 /** Options for a new `MapController`. */
@@ -57,6 +59,12 @@ export class MapController {
    * `MapLibreMap` with `attributionEnabled`, as the sources' terms require.
    */
   @Trace attributions: string[] = [];
+  /**
+   * Whether the camera follows the map's `userLocation`. Only
+   * `followUserLocation()`, `stopFollowingUserLocation()`, and the map set it:
+   * the map stops following as the user starts a gesture.
+   */
+  @Trace followingUserLocation: boolean = false;
 
   // The camera and size of the frame on screen. The map sets it each time it
   // shows a frame whose view changed, so reads of the frame's projection
@@ -66,6 +74,9 @@ export class MapController {
   private projection: MapProjectionHandle | undefined = undefined;
   private view: MapView | undefined = undefined;
   private readonly startCamera: CameraOptions | undefined;
+  private followOptions: FollowLocationOptions = {};
+  // The zoom that the next move to follow the location takes.
+  private followZoom: number | undefined = undefined;
 
   constructor(options?: MapControllerOptions) {
     this.startCamera = options?.camera;
@@ -189,6 +200,45 @@ export class MapController {
     const map = this.requireMap();
     this.view?.takeOverCamera();
     await map.cancelCameraTransitions();
+  }
+
+  /**
+   * Moves the camera to the map's `userLocation`, and then to each new one,
+   * until the user starts a gesture or the app calls
+   * `stopFollowingUserLocation()`. Without a location yet, the camera moves
+   * once the map gets one. Each move eases the center, the first also the
+   * zoom that `options` names, and each the bearing if `options` asks; the
+   * rest of the camera stays as the app leaves it. A camera change that the
+   * app makes while following lasts until the next location.
+   */
+  followUserLocation(options?: FollowLocationOptions): void {
+    this.followOptions = options ?? {};
+    this.followZoom = options?.zoom;
+    this.followingUserLocation = true;
+    this.view?.takeOverCamera();
+    this.view?.followUserLocation();
+  }
+
+  /** Leaves the camera where it is when the map's `userLocation` changes. */
+  stopFollowingUserLocation(): void {
+    this.followingUserLocation = false;
+  }
+
+  /**
+   * Internal: where the map moves the camera for `location`, or undefined
+   * while the camera doesn't follow it.
+   */
+  followCamera(location: geoLocationManager.Location): CameraOptions | undefined {
+    if (!this.followingUserLocation) {
+      return undefined;
+    }
+    const zoom = this.followZoom;
+    this.followZoom = undefined;
+    return {
+      center: { latitude: location.latitude, longitude: location.longitude },
+      zoom: zoom,
+      bearing: this.followOptions.course === true ? course(location) : undefined,
+    };
   }
 
   /**
