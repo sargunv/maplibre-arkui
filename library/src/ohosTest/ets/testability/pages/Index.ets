@@ -242,6 +242,7 @@ struct Index {
         interactions: testMap.interactions,
         userLocation: testMap.userLocation,
         userHeading: testMap.userHeading,
+        userLocationIndicator: testMap.userLocationIndicator,
         viewportInsets: testMap.viewportInsets,
         onStyleLoaded: () => {
           testMap.styleLoads++;

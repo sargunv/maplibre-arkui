@@ -12,6 +12,7 @@ import {
   MapController,
   MapInteractionOptions,
   RuntimeHandle,
+  UserLocationIndicatorOptions,
   ScaleBarUnits,
 } from '@maplibre/arkui';
 import { FrameCallback } from '@ohos.arkui.UIContext';
@@ -77,6 +78,7 @@ export class TestMap {
   @Trace placementPadding: number = 0;
   @Trace userLocation: geoLocationManager.Location | undefined = undefined;
   @Trace userHeading: number | undefined = undefined;
+  @Trace userLocationIndicator: UserLocationIndicatorOptions = {};
   // The map is 300 vp tall at the top of a Scroll while this is true, and fills
   // the page otherwise.
   @Trace inScroll: boolean = false;
@@ -157,6 +159,7 @@ export class TestMap {
     this.placementPadding = 0;
     this.userLocation = undefined;
     this.userHeading = undefined;
+    this.userLocationIndicator = {};
     this.content = undefined;
     const loads = this.styleLoads;
     this.shown = true;

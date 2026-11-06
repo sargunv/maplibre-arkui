@@ -15,10 +15,20 @@ arrow for its course while it moves.
 
 <Api of="MapController.followUserLocation" display="followUserLocation()" />
 
-moves the camera with each new location until the user starts a gesture, which
-sets the controller's observable `followingUserLocation` to false:
+moves the camera with each new location until the app calls
+`stopFollowingUserLocation()`, which sets the controller's observable
+`followingUserLocation` to false. The user's input doesn't stop it on its own:
+an app stops as the user starts to pan, in the `onStart` of
+[`interactions.pan`](/maplibre-arkui/gestures/#choose-the-cameras-movements):
 
 <Code code={region(examples, "location")} lang="ts" />
+
+While the camera follows, the user can zoom and rotate: both keep the location
+at the center, and two fingers zoom and rotate without panning. The camera
+waits for the user's input to end, then catches up with the location. A pan
+that doesn't stop following eases back, and so does a rotation while the camera
+turns with the course or heading, unless the app follows without the bearing
+from the rotation's `onStart`.
 
 The library declares no permission and starts no location request, so apps that
 don't show a location don't ask for one. An app that does declares
@@ -37,3 +47,18 @@ it's `undefined`. The compass needs no permission. An app reads it from
 it by following with `FollowBearing.heading`:
 
 <Code code={region(examples, "heading")} lang="ts" />
+
+## Style the indicator
+
+`userLocationIndicator` changes the colors of the default dot and arrow and of
+the accuracy circle, puts images of the style's own, or of the map's
+[content](/maplibre-arkui/content/), in place of the default dot, arrow, and
+shadow, and puts the indicator under one of the style's layers with `below`. An
+image name of `''` draws none:
+
+<Code code={region(examples, "location-indicator")} lang="ts" />
+
+See <Api of="UserLocationIndicatorOptions" /> for every option. For more, such
+as other sizes or transitions, leave `userLocation` out and draw a
+`location-indicator` layer in the map's content, with the location in its
+`paint`.

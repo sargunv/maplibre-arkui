@@ -541,7 +541,14 @@ struct LocationExample {
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      MapLibreMap({ controller: this.controller, style: STYLE, userLocation: this.location })
+      MapLibreMap({
+        controller: this.controller,
+        style: STYLE,
+        userLocation: this.location,
+        // The user takes the camera as they start to pan. Zooms and rotations
+        // keep following.
+        interactions: { pan: { onStart: () => this.controller.stopFollowingUserLocation() } },
+      })
       Button(this.controller.followingUserLocation ? 'Following' : 'Locate me')
         .margin(64)
         .onClick(() => {
@@ -636,6 +643,28 @@ struct HeadingExample {
     }
   }
   // #endregion heading
+}
+
+@ComponentV2
+struct IndicatorExample {
+  @Param location: geoLocationManager.Location | undefined = undefined;
+  private controller: MapController = new MapController();
+
+  build() {
+    // #region location-indicator
+    MapLibreMap({
+      controller: this.controller,
+      style: STYLE,
+      userLocation: this.location,
+      userLocationIndicator: {
+        color: '#e53935',
+        accuracyColor: 'rgba(229, 57, 53, 0.15)',
+        accuracyBorderColor: 'rgba(229, 57, 53, 0.5)',
+        shadowImage: '',
+      },
+    })
+    // #endregion location-indicator
+  }
 }
 
 // Snapshots

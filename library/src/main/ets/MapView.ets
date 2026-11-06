@@ -44,7 +44,7 @@ import { ContentReconciler, loadStyle, MapClickEvent, MapContent, MapLayer } fro
 import { fontScaleOf } from './fontScale';
 import { GESTURE_ANIMATION_MS, GestureTarget, MapGestures, snapBearing } from './gestures';
 import { playTick } from './haptics';
-import { FOLLOW_MS, UserLocationLayer } from './location';
+import { FOLLOW_MS, UserLocationIndicatorOptions, UserLocationLayer } from './location';
 import { logError } from './log';
 import { FitCameraOptions, MapController } from './MapController';
 import { addInsets, NO_INSETS, sameInsets, subtractInsets, withoutInsets, withPadding } from './padding';
@@ -128,6 +128,7 @@ export class MapView extends XComponentController implements GestureTarget {
   private defaultBounds: BoundOptions | undefined = undefined;
   private userLocation: geoLocationManager.Location | undefined = undefined;
   private userHeading: number | undefined = undefined;
+  private indicatorOptions: UserLocationIndicatorOptions = {};
   // The location indicator, drawn at the map's scale factor.
   private locationLayer: UserLocationLayer;
   // The component's viewportInsets, which the map's camera padding includes on
@@ -152,7 +153,7 @@ export class MapView extends XComponentController implements GestureTarget {
     super();
     this.context = context;
     this.events = events;
-    this.locationLayer = new UserLocationLayer(context.vp2px(1));
+    this.locationLayer = this.newLocationLayer(context.vp2px(1));
   }
 
   onSurfaceCreated(surfaceId: string): void {
@@ -299,6 +300,25 @@ export class MapView extends XComponentController implements GestureTarget {
     return withPadding(fitted, padding, center);
   }
 
+  // Options that an app writes in `build()` are a new value each time, so
+  // only a change of their JSON draws the indicator again.
+  setUserLocationIndicator(options: UserLocationIndicatorOptions): void {
+    if (JSON.stringify(options) === JSON.stringify(this.indicatorOptions)) {
+      return;
+    }
+    this.indicatorOptions = options;
+    this.locationLayer.setOptions(this.map, options);
+    const map = this.map;
+    if (map !== undefined) {
+      this.locationLayer.draw(map, this.userLocation, this.userHeading);
+    }
+  }
+
+  private newLocationLayer(scaleFactor: number): UserLocationLayer {
+    return new UserLocationLayer(scaleFactor, this.indicatorOptions,
+      () => this.reconciler?.applied ?? Promise.resolve(), (error: Error) => this.fail(error));
+  }
+
   setUserLocation(location: geoLocationManager.Location | undefined): void {
     this.userLocation = location;
     this.drawUserLocation(false);
@@ -319,22 +339,31 @@ export class MapView extends XComponentController implements GestureTarget {
     }
   }
 
-  // Moves the camera to the user's location while the controller follows it.
-  followUserLocation(headingChanged: boolean = false): void {
+  // Moves the camera to the user's location while the controller follows it,
+  // and returns whether it did. A move would stop the user's input, so it
+  // waits for the input to end; the camera turns to `snapBearing` when it
+  // doesn't follow a bearing of its own.
+  followUserLocation(headingChanged: boolean = false, snapBearing?: number): boolean {
     const map = this.map;
     const location = this.userLocation;
     const controller = this.controller;
-    if (map === undefined || location === undefined || controller === undefined || controller.map !== map) {
-      return;
+    if (map === undefined || location === undefined || controller === undefined || controller.map !== map ||
+      !this.gestures.idle) {
+      return false;
     }
     const camera = controller.followCamera(location, this.userHeading, headingChanged);
-    if (camera !== undefined) {
-      map.discarding.updateCamera({
-        mode: CameraUpdateMode.ease,
-        camera: camera,
-        animation: { durationMs: FOLLOW_MS },
-      });
+    if (camera === undefined) {
+      return false;
     }
+    if (camera.bearing === undefined) {
+      camera.bearing = snapBearing;
+    }
+    map.discarding.updateCamera({
+      mode: CameraUpdateMode.ease,
+      camera: camera,
+      animation: { durationMs: FOLLOW_MS },
+    });
+    return true;
   }
 
   // Gestures move the map once it's ready; input before then is dropped, and
@@ -363,20 +392,22 @@ export class MapView extends XComponentController implements GestureTarget {
     playTick();
   }
 
-  // The user takes the camera from the location it follows.
   gestureStarted(): void {
     this.gestureStarts++;
-    const controller = this.controller;
-    if (controller !== undefined && controller.map === this.map) {
-      controller.stopFollowingUserLocation();
-    }
     this.events.onGestureStart();
+  }
+
+  // While the camera follows the location, which is at its center.
+  keepsCenter(): boolean {
+    const controller = this.controller;
+    return controller !== undefined && controller.map === this.map && controller.followingUserLocation;
   }
 
   // FFI raises no event as a gesture ends, so the view reads where the camera
   // came to rest, after the gesture's changes. A rotation that ends near a
   // snap bearing eases to it first, unless input or the app moves the camera
-  // again: then the camera rests when that ends.
+  // again: then the camera rests when that ends. A camera that follows the
+  // location catches up with it, as it waited for the gesture.
   gestureEnded(snapBearings: number[]): void {
     // The app may move the camera as the gesture ends; then that move reports
     // where the camera rests, and nothing snaps it.
@@ -392,6 +423,9 @@ export class MapView extends XComponentController implements GestureTarget {
         return;
       }
       const bearing = snapBearing(result.camera.bearing, snapBearings);
+      if (this.followUserLocation(false, bearing)) {
+        return;
+      }
       if (bearing !== undefined) {
         map.discarding.updateCamera({
           mode: CameraUpdateMode.ease,
@@ -536,6 +570,7 @@ export class MapView extends XComponentController implements GestureTarget {
     }
     this.controller?.detach(this);
     this.reconciler?.styleUnloaded();
+    this.locationLayer.styleChanging();
     this.reconciler = undefined;
     this.created = undefined;
     this.map = undefined;
@@ -573,7 +608,7 @@ export class MapView extends XComponentController implements GestureTarget {
     });
     this.created = map;
     this.scaleFactor = scaleFactor;
-    this.locationLayer = new UserLocationLayer(scaleFactor);
+    this.locationLayer = this.newLocationLayer(scaleFactor);
     await map.ready;
     if (this.disposed || this.created !== map) {
       return;

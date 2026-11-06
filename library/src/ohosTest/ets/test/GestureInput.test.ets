@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
 import { CameraUpdateMode, LatLng, ScreenPoint, WheelAction } from '@maplibre/arkui';
 
-import { Driver, Point, PointerMatrix, UiDirection } from '@ohos.UiTest';
+import { Driver, Point, UiDirection } from '@ohos.UiTest';
 import { KeyCode } from '@ohos.multimodalInput.keyCode';
 
 import { STYLE, testMap } from '../testability/TestMaps';
@@ -13,12 +13,16 @@ import {
   camera,
   expectNear,
   frames,
+  gesture,
   inMap,
   latLngAt,
   mapBounds,
   mapCenter,
   offset,
   pixelFor,
+  speed,
+  twist,
+  twoFingers,
   until,
   vp2px,
 } from './helpers';
@@ -37,55 +41,6 @@ function moved(): ScreenPoint {
   const center = pixelFor(camera().center);
   const origin = pixelFor(ORIGIN);
   return { x: origin.x - center.x, y: origin.y - center.y };
-}
-
-// A speed of `vp` vp a second, in the px a second that Driver takes.
-function speed(vp: number): number {
-  return Math.round(vp2px(vp));
-}
-
-// Waits until the input that `act` makes has moved the camera and stopped,
-// with its momentum and any animation.
-async function gesture(act: () => Promise<void>): Promise<void> {
-  const starts = testMap.gestureStarts;
-  await act();
-  await until('a gesture starts', () => testMap.gestureStarts > starts);
-  await until('the camera rests', () => {
-    const snapshot = testMap.controller.map?.getSnapshot();
-    return testMap.gestureEnds === testMap.gestureStarts && snapshot !== undefined &&
-      !snapshot.transitionInProgress && !snapshot.gestureInProgress;
-  });
-}
-
-// Two fingers that move from `from` to `to` together, in px.
-function twoFingers(from: Point[], to: Point[], steps: number): PointerMatrix {
-  const pointers = PointerMatrix.create(2, steps);
-  for (let step = 0; step < steps; step++) {
-    const t = steps === 1 ? 0 : step / (steps - 1);
-    for (let finger = 0; finger < 2; finger++) {
-      pointers.setPoint(finger, step, {
-        x: Math.round(from[finger].x + (to[finger].x - from[finger].x) * t),
-        y: Math.round(from[finger].y + (to[finger].y - from[finger].y) * t),
-      });
-    }
-  }
-  return pointers;
-}
-
-// Two fingers on a circle of `radius` vp about `c`, `degrees` around it. Then
-// they stay at that angle for `hold` steps, which take time only if the
-// fingers move, so they move 1 vp in and out.
-function twist(c: Point, radius: number, degrees: number, steps: number, hold: number = 0): PointerMatrix {
-  const pointers = PointerMatrix.create(2, steps + hold);
-  for (let step = 0; step < steps + hold; step++) {
-    const r = degrees * Math.min(1, step / (steps - 1)) * Math.PI / 180;
-    const length = vp2px(radius + (step >= steps ? (step - steps) % 2 : 0));
-    const dx = Math.round(length * Math.cos(r));
-    const dy = Math.round(length * Math.sin(r));
-    pointers.setPoint(0, step, { x: c.x - dx, y: c.y - dy });
-    pointers.setPoint(1, step, { x: c.x + dx, y: c.y + dy });
-  }
-  return pointers;
 }
 
 // Fingers that twist 10 degrees and hold still for 200 ms at 200 vp/s, longer

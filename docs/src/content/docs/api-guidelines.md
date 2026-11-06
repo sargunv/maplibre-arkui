@@ -26,11 +26,11 @@ as ArkTS.
 - Settings are interfaces named `<Thing>Options`, after what they configure,
   with optional fields only, and taken as object literals:
   `MapControllerOptions`, `MapInteractionOptions`, `FollowUserLocationOptions`,
-  `FitCameraOptions`, `SnapshotOptions`. Settings of one part nest as their own
-  options (`MapInteractionOptions.rotate` is a `RotationOptions`), and a name
-  that ArkUI reserves (`RotateOptions`) takes another word. Data that describes
-  something is a plain noun with the fields it needs: `MapContent`, `MapSource`,
-  `MapLayer`, `MapImage`.
+  `UserLocationIndicatorOptions`, `FitCameraOptions`, `SnapshotOptions`.
+  Settings of one part nest as their own options (`MapInteractionOptions.rotate`
+  is a `RotationOptions`), and a name that ArkUI reserves (`RotateOptions`)
+  takes another word. Data that describes something is a plain noun with the
+  fields it needs: `MapContent`, `MapSource`, `MapLayer`, `MapImage`.
 - Events are `@Event` params named `on` and what happened: `onStyleLoaded`,
   `onCameraIdle`, `onMapError`, and `onGestureStart` / `onGestureEnd`, as
   ArkUI's `onScrollStart` / `onScrollStop` pair. A handler that can keep an
@@ -55,7 +55,9 @@ as ArkTS.
   public constants.
 - Acronyms are words in code (`GeoJsonFeature`, `LatLng`), and spelled as usual
   in prose (GeoJSON). Where the style spec has a term, use it: `bearing`,
-  `pitch`, `sourceLayer`, `minZoom`.
+  `pitch`, `sourceLayer`, `minZoom`. Options that the library turns into a layer
+  take the spec's values: colors as CSS strings, images by the name of a style
+  image, with `''` for none (`UserLocationIndicatorOptions.topImage`).
 - Screen distances are vp, the map's logical pixels, unless a name says
   otherwise; durations end in `Ms` (`durationMs`); angles are degrees.
 - Re-exported FFI declarations keep FFI's names, except FFI's `Camera`, which is
@@ -94,10 +96,10 @@ as ArkTS.
   which describe the layout, add to it on the FFI map and never show in a camera
   that the app reads or saves. A fit's `fitPadding` lasts for that fit only.
 - Data passed to a component is a value, not observed inside: `MapContent`,
-  `MapInteractionOptions`, `userLocation`. A new value is a change; the
-  component compares it with the last one (content by ID, then by JSON or
-  reference), so a literal that `build()` writes anew changes nothing that
-  stayed the same.
+  `MapInteractionOptions`, `UserLocationIndicatorOptions`, `userLocation`. A new
+  value is a change; the component compares it with the last one (content by ID,
+  then by JSON or reference), so a literal that `build()` writes anew changes
+  nothing that stayed the same.
 
 ## FFI: wrap or re-export
 
