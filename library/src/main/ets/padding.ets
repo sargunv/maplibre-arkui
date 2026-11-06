@@ -11,27 +11,16 @@ export function addInsets(a: EdgeInsets, b: EdgeInsets): EdgeInsets {
   return { top: a.top + b.top, left: a.left + b.left, bottom: a.bottom + b.bottom, right: a.right + b.right };
 }
 
-// FFI rejects negative padding, and padding less insets can come out a little
-// below 0.
-export function subtractInsets(padding: EdgeInsets, insets: EdgeInsets): EdgeInsets {
-  return {
-    top: Math.max(0, padding.top - insets.top),
-    left: Math.max(0, padding.left - insets.left),
-    bottom: Math.max(0, padding.bottom - insets.bottom),
-    right: Math.max(0, padding.right - insets.right),
-  };
-}
-
 export function sameInsets(a: EdgeInsets, b: EdgeInsets): boolean {
   return a.top === b.top && a.left === b.left && a.bottom === b.bottom && a.right === b.right;
 }
 
-// The map's camera as the app sees it, without `insets` in its padding.
-export function withoutInsets(camera: CameraPosition, insets: EdgeInsets): CameraPosition {
+// `camera` with a copy of the app's `padding` in place of the map's.
+export function withAppPadding(camera: CameraPosition, padding: EdgeInsets): CameraPosition {
   return {
     center: camera.center,
     centerAltitude: camera.centerAltitude,
-    padding: subtractInsets(camera.padding, insets),
+    padding: addInsets(NO_INSETS, padding),
     zoom: camera.zoom,
     bearing: camera.bearing,
     pitch: camera.pitch,
