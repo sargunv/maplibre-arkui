@@ -1,6 +1,6 @@
 // A map's life on the page: before its FFI map is ready, beside another map,
-// after it leaves, as it resizes, on a runtime of its own, and the events and
-// errors it reports.
+// after it leaves, as it resizes, at a new density, on a runtime of its own,
+// and the events and errors it reports.
 
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
 import {
@@ -18,7 +18,7 @@ import {
 } from '@maplibre/arkui';
 
 import { backgroundStyle, STYLE, testMap } from '../testability/TestMaps';
-import { camera, eventually, expectNear, frames, near, requireMap, setStyle, until } from './helpers';
+import { camera, eventually, expectNear, frames, near, requireMap, setStyle, until, vp2px } from './helpers';
 
 const map = testMap.controller;
 
@@ -152,6 +152,40 @@ export default function lifecycleTest(): void {
         requireMap().getSnapshot().view.extent.height === full.height);
       await until('a frame of the full size shows', () =>
         near(map.pixelForLatLng(camera().center)?.y ?? 0, full.height / 2, 0.5));
+    });
+
+    it('makes a new map at a new density, which keeps the camera and the content', 0, async () => {
+      const stage = testMap.windowStage;
+      if (stage === undefined) {
+        throw new Error('The test ability has no window stage');
+      }
+      const dots: MapLayer = { id: 'dots', type: 'background' };
+      testMap.content = { layers: [dots] };
+      await eventually('the content applies', () => requireMap().getStyleLayer('dots'));
+      await map.updateCamera({
+        mode: CameraUpdateMode.jump,
+        camera: { center: { latitude: 10, longitude: 20 }, zoom: 4 },
+      });
+      const density = vp2px(1);
+      // A custom density is at most 4.
+      const changed = density > 2 ? density - 1 : density + 1;
+      const old = requireMap();
+      stage.setCustomDensity(changed);
+      try {
+        await until('a new map shows the style', () => map.map !== undefined && map.map !== old && map.styleLoaded);
+        expectNear(vp2px(1), changed, 0.001);
+        const view = requireMap().getSnapshot().view;
+        expectNear(view.extent.scaleFactor, changed, 0.001);
+        expectNear(view.camera.center.latitude, 10, 0.001);
+        expectNear(view.camera.center.longitude, 20, 0.001);
+        expectNear(view.camera.zoom, 4, 0.001);
+        await eventually('the content applies again', () => requireMap().getStyleLayer('dots'));
+        await until('the new map shows a frame', () => map.frameCamera !== undefined);
+      } finally {
+        stage.setCustomDensity(density);
+        await until('the map takes the density back', () => map.map !== undefined && map.styleLoaded &&
+          near(requireMap().getSnapshot().view.extent.scaleFactor, density, 0.001));
+      }
     });
 
     it('creates the map on the runtime it is given', 0, async () => {

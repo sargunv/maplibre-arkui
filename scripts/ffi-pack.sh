@@ -5,9 +5,10 @@
 #
 # FFI builds the C library and its Node-API addon for the preset, which takes
 # a while the first time, and packs the facade and the backend whose libraries
-# the preset names. The x64 emulator needs ohos-x64-egl. The out dir gets
-# native-ffi.har and native-ffi-opengl.har, and COMMIT names the checkout's
-# commit.
+# the preset names: OpenGL for an -egl preset, Vulkan for a -vulkan one. The
+# x64 emulator needs ohos-x64-egl or ohos-x64-vulkan. The out dir gets
+# native-ffi.har and the backend's native-ffi-opengl.har or
+# native-ffi-vulkan.har, and COMMIT names the checkout's commit.
 set -euo pipefail
 
 usage="usage: ffi-pack.sh <FFI checkout> <preset> <out dir>"
@@ -16,7 +17,8 @@ preset=${2:?$usage}
 out=${3:?$usage}
 case "$preset" in
   *-egl) backend=opengl ;;
-  *) echo "error: only the OpenGL backend is supported, not $preset" >&2; exit 2 ;;
+  *-vulkan) backend=vulkan ;;
+  *) echo "error: $preset is neither an -egl nor a -vulkan preset" >&2; exit 2 ;;
 esac
 
 (cd "$ffi" && mise -E ohos run //bindings/typescript:pack-ohpm "$preset")

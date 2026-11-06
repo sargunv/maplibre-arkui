@@ -5,9 +5,9 @@
 #
 # FFI's CI uploads them as the `ohpm-packages-*` artifact of its CI run for
 # each commit on main that changes them, and keeps the artifact for 30 days. The
-# out dir gets native-ffi.har, the backend-free facade, and
-# native-ffi-opengl.har, whose libraries cover every ABI. It needs `gh` signed
-# in, or GH_TOKEN.
+# out dir gets native-ffi.har, the backend-free facade, and a HAR for each
+# backend, native-ffi-opengl.har and native-ffi-vulkan.har, whose libraries
+# cover every ABI. It needs `gh` signed in, or GH_TOKEN.
 set -euo pipefail
 
 usage="usage: ffi-download.sh <commit> <out dir>"
@@ -36,6 +36,8 @@ rm -rf "$out"
 mkdir -p "$out"
 # The HARs carry FFI's version in their names, which this repository ignores.
 cp "$work"/packages/native-ffi-[0-9]*.har "$out/native-ffi.har"
-cp "$work"/packages/native-ffi-opengl-*.har "$out/native-ffi-opengl.har"
+for backend in opengl vulkan; do
+  cp "$work"/packages/native-ffi-$backend-*.har "$out/native-ffi-$backend.har"
+done
 echo "$commit" >"$out/COMMIT"
 echo "Downloaded the FFI packages from $commit into $out."

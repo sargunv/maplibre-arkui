@@ -16,6 +16,7 @@ import {
 } from '@maplibre/arkui';
 import { FrameCallback } from '@ohos.arkui.UIContext';
 import geoLocationManager from '@ohos.geoLocationManager';
+import window from '@ohos.window';
 
 // How long a wait polls before it fails.
 export const WAIT_MS = 15000;
@@ -90,8 +91,10 @@ export class TestMap {
   consumeClicks: boolean = false;
   controller: MapController = new MapController({ camera: { zoom: 1 } });
   scroller: Scroller = new Scroller();
-  // The page's UI context, once the page appears.
+  // The page's UI context, once the page appears, and the test ability's
+  // window stage, which sets the page's density.
   context: UIContext | undefined = undefined;
+  windowStage: window.WindowStage | undefined = undefined;
 
   /**
    * Shows the map with `style`, alone on the page or in the Scroll, with every
