@@ -26,9 +26,9 @@ watchdog=
 trap 'touch "$work/finished"; [[ -z $watchdog ]] || wait "$watchdog"; rm -rf "$work"' EXIT
 report="$work/report.txt"
 # If the app dies or a case never settles, `aa test` waits forever. A watchdog
-# ends the run when the app's process has been gone for 10 seconds, or at a
-# deadline, after dumping the app's thread stacks, as MapLibre Native FFI's
-# runner does.
+# ends the run when the app's process has been gone for 10 seconds, or never
+# appeared in the first 30, or at a deadline, after dumping the app's thread
+# stacks, as MapLibre Native FFI's runner does.
 deadline=${MAPLIBRE_ARKUI_TEST_TIMEOUT:-1800}
 # The app's process is the one whose whole command line is the bundle name.
 # pidof found no process on Oniro 7.0 in CI, so match the command line instead.
@@ -48,7 +48,7 @@ app_pid() {
     if [[ -n $pid ]]; then
       seen=true
       gone=0
-    elif [[ $seen == true ]]; then
+    elif [[ $seen == true ]] || ((SECONDS >= 30)); then
       gone=$((gone + 1))
     fi
   done
@@ -60,7 +60,7 @@ app_pid() {
     if [[ -n $pid ]]; then
       "${hdc[@]}" shell dumpcatcher -p "$pid" >&2 || true
     fi
-    "${hdc[@]}" shell aa force-stop "$bundle" >/dev/null 2>&1
+    "${hdc[@]}" shell aa force-stop "$bundle" >/dev/null 2>&1 || true
   fi
   "${hdc[@]}" shell "pkill -f 'aa test -b $bundle'" >/dev/null 2>&1 || true
 ) &
