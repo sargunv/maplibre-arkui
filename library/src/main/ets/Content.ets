@@ -6,6 +6,7 @@
 import {
   CommandCompletion,
   GeoJsonSourceDataHandle,
+  GeoJsonSourceOptions,
   LatLng,
   MapHandle,
   PremultipliedRgba8Image,
@@ -147,7 +148,12 @@ export interface MapLayer {
 
 /** An image for symbol layers' `icon-image` and patterns, such as from `readPixelMap()`. */
 export interface MapImage {
-  /** The name that layers give the image, unique in the content and the base style. */
+  /**
+   * The name that layers give the image, unique in the content. The image
+   * replaces any image that the style has with this ID, such as one from the
+   * base style's sprite, and once it leaves the content, the style has no
+   * image with this ID. An image that the map rejects changes neither.
+   */
   id: string;
   /** The pixels. A new object replaces the image; the map doesn't compare pixels. */
   image: PremultipliedRgba8Image;
@@ -155,12 +161,13 @@ export interface MapImage {
   options?: StyleImageOptions;
 }
 
-// A source the reconciler added: its JSON without data, its data, and its
-// data as text.
+// A source the reconciler added: its JSON without data, its data, its data as
+// text, and the options that new GeoJSON data takes.
 interface AppliedSource {
   shape: string;
   value: Object | undefined;
   data: string;
+  options: GeoJsonSourceOptions;
 }
 
 // A layer the reconciler added: what replaces it when it changes, and the text
@@ -198,8 +205,8 @@ export class ContentReconciler {
   private images: Map<string, MapImage> = new Map<string, MapImage>();
   // What the map rejected, by ID, as text, so a pass skips it until it changes.
   private rejectedSources: Map<string, string> = new Map<string, string>();
-  // Images of the content that the map rejected, or whose ID the style
-  // already had, which the content leaves alone until the ID leaves it.
+  // Images of the content that the map rejected, which the content leaves
+  // alone until the ID leaves it.
   private rejectedImages: Set<string> = new Set<string>();
   private rejectedLayers: Map<string, string> = new Map<string, string>();
   private passes: Promise<void> = Promise.resolve();
@@ -228,6 +235,15 @@ export class ContentReconciler {
   /** Settles once the passes that are running or waiting end. */
   get applied(): Promise<void> {
     return this.passes;
+  }
+
+  /**
+   * Whether the style has a layer with this ID of the base style or the
+   * content, as the last pass left it. Layers that the app added itself don't
+   * count.
+   */
+  hasLayer(id: string): boolean {
+    return this.stack.includes(id);
   }
 
   /** A style has loaded, without any content. */
@@ -417,19 +433,10 @@ export class ContentReconciler {
       }
     }
     for (const image of Array.from(images.values())) {
-      const applied = this.images.get(image.id);
-      if (applied === undefined && !this.rejectedImages.has(image.id)) {
-        // An image that the base style or the app has stays theirs.
-        const existing = await map.getStyleImage(image.id).catch(() => undefined);
-        this.check(generation);
-        if (existing !== undefined) {
-          this.rejectedImages.add(image.id);
-          this.report(new Error(`Content: adding image ${image.id} failed: the style already has it`));
-        }
-      }
       if (this.rejectedImages.has(image.id)) {
         continue;
       }
+      const applied = this.images.get(image.id);
       if (applied === undefined || applied.image !== image.image ||
         JSON.stringify(applied.options) !== JSON.stringify(image.options)) {
         const set = await this.run(generation, `setting image ${image.id}`,
@@ -487,24 +494,26 @@ export class ContentReconciler {
         return;
       }
       if (await this.run(generation, `adding source ${source.id}`, map.addStyleSourceJson(source.id, source.json))) {
-        this.sources.set(source.id, { shape: shape, value: value, data: data });
+        this.sources.set(source.id, { shape: shape, value: value, data: data, options: geoJsonOptions(source.json) });
         this.rejectedSources.delete(source.id);
       } else {
         this.rejectedSources.set(source.id, key);
       }
-    } else if (applied.data !== data) {
-      // Only a GeoJSON source's data changed. New data takes the options the
-      // source has.
-      this.sources.set(source.id, { shape: shape, value: value, data: data });
-      if (typeof value === 'string') {
-        await this.run(generation, `setting the URL of source ${source.id}`,
-          map.setGeoJsonSourceUrl(source.id, value));
-        return;
-      }
-      await this.run(generation, `setting the data of source ${source.id}`,
-        setGeoJsonData(map, source.id, value, () => this.check(generation)));
+      return;
+    }
+    applied.value = value;
+    if (applied.data === data) {
+      return;
+    }
+    // Only a GeoJSON source's data changed, and its options are those it was
+    // added with.
+    applied.data = data;
+    if (typeof value === 'string') {
+      await this.run(generation, `setting the URL of source ${source.id}`,
+        map.setGeoJsonSourceUrl(source.id, value));
     } else {
-      applied.value = value;
+      await this.run(generation, `setting the data of source ${source.id}`,
+        setGeoJsonData(map, source.id, value, applied.options));
     }
   }
 
@@ -616,18 +625,38 @@ function stackUp(layers: MapLayer[], under: Map<string, MapLayer[]>, stack: MapL
 }
 
 // Replaces a GeoJSON source's data with data prepared with the source's own
-// options, which FFI requires. `check` throws if the pass ended while it read
-// them.
+// options, which FFI requires.
 async function setGeoJsonData(map: MapHandle, id: string, data: Object,
-  check: () => void): Promise<CommandCompletion> {
-  const info = await map.getStyleSource(id);
-  check();
-  const prepared = GeoJsonSourceDataHandle.create(data, info?.geoJson);
+  options: GeoJsonSourceOptions): Promise<CommandCompletion> {
+  const prepared = GeoJsonSourceDataHandle.create(data, options);
   try {
     return await map.setGeoJsonSourceData(id, prepared);
   } finally {
     prepared.release();
   }
+}
+
+// The options of a GeoJSON source with this JSON, as MapLibre Native reads
+// them: it truncates the counts and zooms to integers, and the options that
+// the JSON leaves out keep FFI's defaults, which are Native's.
+function geoJsonOptions(json: Record<string, Object>): GeoJsonSourceOptions {
+  const count = (key: string): number | undefined =>
+    typeof json[key] === 'number' ? Math.trunc(json[key] as number) : undefined;
+  const flag = (key: string): boolean | undefined =>
+    typeof json[key] === 'boolean' ? json[key] as boolean : undefined;
+  const minPoints = count('clusterMinPoints');
+  return {
+    minZoom: count('minzoom'),
+    maxZoom: count('maxzoom'),
+    buffer: count('buffer'),
+    tolerance: typeof json['tolerance'] === 'number' ? json['tolerance'] as number : undefined,
+    cluster: flag('cluster'),
+    clusterRadius: count('clusterRadius'),
+    clusterMaxZoom: count('clusterMaxZoom'),
+    clusterMinPoints: minPoints === undefined ? undefined : BigInt(minPoints),
+    clusterProperties: json['clusterProperties'],
+    lineMetrics: flag('lineMetrics'),
+  };
 }
 
 function textOf(value: Object | null | undefined): string {

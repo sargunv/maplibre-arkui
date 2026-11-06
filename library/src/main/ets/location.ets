@@ -77,9 +77,10 @@ export interface UserLocationIndicatorOptions {
    */
   shadowImage?: string;
   /**
-   * The ID of the layer, of the style or of the map's `content`, that the
-   * indicator goes under. Without it, or when the style has no such layer as
-   * the indicator appears, the indicator goes above every layer.
+   * The ID of the layer, of the base style or of the map's `content`, that
+   * the indicator goes under. Without it, or when neither has such a layer as
+   * the indicator appears, the indicator goes above every layer. A layer that
+   * the app adds through `MapController.map` doesn't count.
    */
   below?: string;
 }
@@ -123,6 +124,7 @@ export class UserLocationLayer {
   private readonly density: number;
   private readonly fail: (error: Error) => void;
   private readonly contentApplied: () => Promise<void>;
+  private readonly hasLayer: (id: string) => boolean;
   private options: UserLocationIndicatorOptions;
   private location: geoLocationManager.Location | undefined = undefined;
   private heading: number | undefined = undefined;
@@ -133,10 +135,11 @@ export class UserLocationLayer {
   private hasArrow: boolean = false;
 
   constructor(density: number, options: UserLocationIndicatorOptions, contentApplied: () => Promise<void>,
-    fail: (error: Error) => void) {
+    hasLayer: (id: string) => boolean, fail: (error: Error) => void) {
     this.density = density;
     this.options = options;
     this.contentApplied = contentApplied;
+    this.hasLayer = hasLayer;
     this.fail = fail;
   }
 
@@ -203,23 +206,23 @@ export class UserLocationLayer {
   }
 
   // Adds the layer once the content in progress is in, under `below` if the
-  // style has it then, and above every layer otherwise.
+  // base style or the content has it then, and above every layer otherwise.
   private add(map: MapHandle): void {
     this.state = LayerState.adding;
     const change = ++this.changes;
     const current = (): boolean => this.changes === change && this.loaded;
-    this.contentApplied().then(async () => {
-      const below = this.options.below;
-      const found = current() && below !== undefined && await map.getStyleLayer(below) !== undefined;
+    this.contentApplied().then(() => {
       const location = this.location;
       if (!current() || location === undefined) {
         return;
       }
+      const below = this.options.below;
+      const before = below !== undefined && this.hasLayer(below) ? below : '';
       const direction = arrowBearing(location, this.heading);
       this.state = LayerState.added;
       this.hasArrow = direction !== undefined;
       this.addImages(map);
-      map.discarding.addStyleLayerJson(this.layerJson(location, direction), found ? below : '');
+      map.discarding.addStyleLayerJson(this.layerJson(location, direction), before);
     }).catch((error: Error) => {
       if (current()) {
         this.fail(error);
