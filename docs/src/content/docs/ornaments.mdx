@@ -11,8 +11,9 @@ import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw"
 
 The map shows a compass while it's rotated or tilted, and the style's
 attribution. `scaleBarEnabled` and `zoomButtonsEnabled` add a scale bar and zoom
-buttons, and `ornamentPadding` keeps them all clear of app UI over the map. The
-ornaments follow dark mode.
+buttons, and `viewportInsets` keeps them all clear of app UI over the map, as
+[the camera](/maplibre-arkui/camera/#keep-the-camera-clear-of-your-ui)
+describes. The ornaments follow dark mode.
 
 ArkUI content in the map's trailing closure, its `overlays`, lies over it, and
 <Api of="MapMarker" /> pins content to a coordinate:

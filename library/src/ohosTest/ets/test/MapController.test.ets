@@ -3,6 +3,7 @@ import {
   addRuntimeEventListener,
   CameraTransitionOutcome,
   CameraUpdateMode,
+  EdgeInsets,
   GeoJsonGeometry,
   LatLng,
   LatLngBounds,
@@ -15,8 +16,8 @@ import {
   RuntimeHandle,
 } from '@maplibre/arkui';
 
-import { backgroundStyle, testMap } from '../testability/TestMaps';
-import { camera, expectNear, requireMap, setStyle, until } from './helpers';
+import { backgroundStyle, NO_INSETS, testMap } from '../testability/TestMaps';
+import { camera, expectNear, near, pixelFor, requireMap, setStyle, until } from './helpers';
 
 const SWITZERLAND: LatLngBounds = {
   southwest: { latitude: 45.82, longitude: 5.96 },
@@ -36,6 +37,30 @@ function expectInSwitzerland(): void {
   expect(center.latitude).assertLess(SWITZERLAND.northeast.latitude);
   expect(center.longitude).assertLarger(SWITZERLAND.southwest.longitude);
   expect(center.longitude).assertLess(SWITZERLAND.northeast.longitude);
+}
+
+// Sets the test map's viewport insets, and waits until the map's padding is
+// them around `cameraPadding`.
+async function setInsets(insets: EdgeInsets, cameraPadding: EdgeInsets = NO_INSETS): Promise<void> {
+  testMap.viewportInsets = insets;
+  await until('the map takes the insets', () => {
+    const padding = requireMap().getSnapshot().view.camera.padding;
+    return near(padding.top, insets.top + cameraPadding.top, 0.01) &&
+      near(padding.left, insets.left + cameraPadding.left, 0.01) &&
+      near(padding.bottom, insets.bottom + cameraPadding.bottom, 0.01) &&
+      near(padding.right, insets.right + cameraPadding.right, 0.01);
+  });
+}
+
+function expectPadding(actual: EdgeInsets, expected: EdgeInsets): void {
+  expectNear(actual.top, expected.top, 0.01);
+  expectNear(actual.left, expected.left, 0.01);
+  expectNear(actual.bottom, expected.bottom, 0.01);
+  expectNear(actual.right, expected.right, 0.01);
+}
+
+function expectNoPadding(actual: EdgeInsets): void {
+  expectPadding(actual, NO_INSETS);
 }
 
 function reports(map: MapHandle, flag: RuntimeEventFlag): boolean {
@@ -137,7 +162,9 @@ export default function mapControllerTest(): void {
     it('fits bounds inside its padding', 0, async () => {
       const outcome = await map.fitCameraToLatLngBounds(SWITZERLAND, {
         mode: CameraUpdateMode.jump,
-        fit: { padding: { top: 20, left: 20, bottom: 20, right: 20 }, bearing: 0, pitch: 0 },
+        fitPadding: { top: 20, left: 20, bottom: 20, right: 20 },
+        bearing: 0,
+        pitch: 0,
       });
       expect(outcome).assertEqual(CameraTransitionOutcome.completed);
       expectInSwitzerland();
@@ -146,7 +173,9 @@ export default function mapControllerTest(): void {
     it('fits coordinates inside its padding', 0, async () => {
       const outcome = await map.fitCameraToLatLngs(SWISS_POINTS, {
         mode: CameraUpdateMode.jump,
-        fit: { padding: { top: 20, left: 20, bottom: 20, right: 20 }, bearing: 0, pitch: 0 },
+        fitPadding: { top: 20, left: 20, bottom: 20, right: 20 },
+        bearing: 0,
+        pitch: 0,
       });
       expect(outcome).assertEqual(CameraTransitionOutcome.completed);
       expectInSwitzerland();
@@ -156,7 +185,9 @@ export default function mapControllerTest(): void {
     it('fits a geometry with an animation, which a later move can replace', 0, async () => {
       const outcome = await map.fitCameraToGeometry(SWISS_POLYGON, {
         mode: CameraUpdateMode.ease,
-        fit: { padding: { top: 20, left: 20, bottom: 20, right: 20 }, bearing: 0, pitch: 0 },
+        fitPadding: { top: 20, left: 20, bottom: 20, right: 20 },
+        bearing: 0,
+        pitch: 0,
         animation: { durationMs: 300 },
       });
       expect(outcome).assertEqual(CameraTransitionOutcome.completed);
@@ -167,21 +198,97 @@ export default function mapControllerTest(): void {
         mode: CameraUpdateMode.ease,
         animation: { durationMs: 10000 },
       });
-      // It replaces the fit by setting every field that the fit animates,
-      // which includes the padding that the first fit left.
       const move = map.updateCamera({
         mode: CameraUpdateMode.ease,
-        camera: {
-          center: { latitude: 0, longitude: 0 },
-          padding: { top: 0, left: 0, bottom: 0, right: 0 },
-          zoom: 2,
-          bearing: 0,
-          pitch: 0,
-        },
+        camera: { center: { latitude: 0, longitude: 0 }, zoom: 2, bearing: 0, pitch: 0 },
         animation: { durationMs: 200 },
       });
       expect(await fit).assertEqual(CameraTransitionOutcome.replaced);
       expect(await move).assertEqual(CameraTransitionOutcome.completed);
+    });
+
+    it('centers a move inside the viewport insets, which the camera leaves out', 0, async () => {
+      await setInsets({ top: 0, left: 0, bottom: 200, right: 0 });
+      const target: LatLng = { latitude: 10, longitude: 20 };
+      await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { center: target, zoom: 5 } });
+
+      const extent = requireMap().getSnapshot().view.extent;
+      const at = pixelFor(target);
+      expectNear(at.x, extent.width / 2, 1);
+      expectNear(at.y, (extent.height - 200) / 2, 1);
+      expectNear(camera().center.latitude, target.latitude, 0.001);
+      expectNoPadding(camera().padding);
+      await until('the camera rests', () => near(map.camera?.zoom ?? 0, 5, 0.001));
+      expectNoPadding(map.camera!.padding);
+      expectNoPadding(testMap.cameraIdles[testMap.cameraIdles.length - 1].padding);
+      await until('the frame shows the camera', () => near(map.frameCamera?.zoom ?? 0, 5, 0.001));
+      expectNoPadding(map.frameCamera!.padding);
+    });
+
+    it('keeps the center when the viewport insets change', 0, async () => {
+      const target: LatLng = { latitude: 10, longitude: 20 };
+      await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { center: target, zoom: 5 } });
+      await setInsets({ top: 100, left: 0, bottom: 0, right: 0 });
+      const extent = requireMap().getSnapshot().view.extent;
+      expectNear(pixelFor(target).y, (extent.height + 100) / 2, 1);
+      expectNear(camera().center.latitude, target.latitude, 0.001);
+      expectNoPadding(camera().padding);
+    });
+
+    it('fits inside the viewport insets and its margin, and keeps neither in the camera', 0, async () => {
+      await setInsets({ top: 0, left: 0, bottom: 100, right: 0 });
+      const outcome = await map.fitCameraToLatLngBounds(SWITZERLAND, {
+        fitPadding: { top: 30, left: 30, bottom: 30, right: 30 },
+        bearing: 0,
+        pitch: 0,
+      });
+      expect(outcome).assertEqual(CameraTransitionOutcome.completed);
+      expectNoPadding(camera().padding);
+      expectPadding(requireMap().getSnapshot().view.camera.padding, { top: 0, left: 0, bottom: 100, right: 0 });
+
+      // The bounds fill the room inside the margin on one axis, and fit on
+      // the other.
+      const extent = requireMap().getSnapshot().view.extent;
+      const southwest = pixelFor(SWITZERLAND.southwest);
+      const northeast = pixelFor(SWITZERLAND.northeast);
+      expect(southwest.x).assertLarger(29);
+      expect(northeast.x).assertLess(extent.width - 29);
+      expect(northeast.y).assertLarger(29);
+      expect(southwest.y).assertLess(extent.height - 129);
+      const tight = near(southwest.x, 30, 1) && near(northeast.x, extent.width - 30, 1) ||
+        near(northeast.y, 30, 1) && near(southwest.y, extent.height - 130, 1);
+      expect(tight).assertTrue();
+    });
+
+    it('keeps the camera padding that a move or a fit sets', 0, async () => {
+      const padding: EdgeInsets = { top: 0, left: 50, bottom: 0, right: 0 };
+      await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { padding: padding } });
+      expectPadding(camera().padding, padding);
+
+      // A move or a fit without padding keeps it.
+      await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 3 } });
+      expectPadding(camera().padding, padding);
+      await map.fitCameraToLatLngs(SWISS_POINTS, { fitPadding: { top: 20, left: 20, bottom: 20, right: 20 } });
+      expectPadding(camera().padding, padding);
+
+      // The insets add to it on the map, and the camera keeps it apart.
+      await setInsets({ top: 0, left: 0, bottom: 100, right: 0 }, padding);
+      expectPadding(camera().padding, padding);
+
+      // A fit with camera padding sets it, and fits inside it.
+      const after: EdgeInsets = { top: 40, left: 0, bottom: 0, right: 0 };
+      await map.fitCameraToLatLngBounds(SWITZERLAND, { cameraPadding: after, bearing: 0, pitch: 0 });
+      expectPadding(camera().padding, after);
+      expect(pixelFor(SWITZERLAND.northeast).y).assertLarger(39);
+      await until('the camera rests', () => near(map.camera?.padding.top ?? 0, 40, 0.01));
+    });
+
+    it('resolves a fit that a move makes before it finds its camera', 0, async () => {
+      const fit = map.fitCameraToLatLngBounds(SWITZERLAND);
+      const move = map.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 2 } });
+      expect(await fit).assertEqual(CameraTransitionOutcome.replaced);
+      expect(await move).assertEqual(CameraTransitionOutcome.completed);
+      expectNear(camera().zoom, 2, 0.001);
     });
 
     it('rejects a fit without a map', 0, async () => {

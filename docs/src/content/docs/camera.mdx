@@ -27,6 +27,47 @@ each resolves with how the move ended:
 
 <Code code={region(examples, "camera-fit")} lang="ts" />
 
+## Padding
+
+The camera's `padding` is space, in vp, around the part of the map that it
+centers in. `updateCamera()` sets it with the rest of the camera, and it stays
+until a move or a fit changes it:
+
+<Code code={region(examples, "camera-padding")} lang="ts" />
+
+A fit's `fitPadding` is a margin around what it fits, for that fit alone. Its
+`cameraPadding` sets the padding that the camera keeps after the fit; without
+it, the camera keeps its own. See <Api of="FitCameraOptions" />.
+
+## Keep the camera clear of your UI
+
+When your UI covers part of the map, such as a bottom panel, pass the edges it
+covers to the map's `viewportInsets`. The ornaments stay clear of them, and
+each move and fit centers in the part of the map that the user sees:
+
+<Code code={region(examples, "viewport-insets")} lang="ts" />
+
+The insets add to the camera's padding on the map, but the controller leaves
+them out of every camera it reports. So the camera you read or save doesn't
+change with the panel, and a saved camera restores the same way under another
+panel.
+
+## Save the camera
+
+The controller keeps the camera while the app runs. The system can end the
+app's process in the background, and start it again when the user returns. To
+bring the camera back then, save it in the ability's `onSaveState()`, and start
+the controller from it with `cameraToOptions()`. Here the page keeps its
+controller in `AppStorageV2`, where the ability can reach it:
+
+<Code code={region(examples, "save-camera")} lang="ts" />
+
+The system keeps that state only while the app is in the background. To reopen
+where the user left the camera after they close the app, keep the saved camera
+in `PersistenceV2` instead.
+
+## The frame on screen
+
 `frameCamera`, `pixelForLatLng()`, `latLngForPixel()`, and
 `metersPerPixelAtLatitude()` follow the frame on screen, and are observable too,
 so content placed with them moves with the map. They change every frame, so read

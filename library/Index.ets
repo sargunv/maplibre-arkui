@@ -2,7 +2,7 @@
 
 export { MapLibreMap } from './src/main/ets/MapLibreMap';
 export { MapController } from './src/main/ets/MapController';
-export type { MapControllerOptions } from './src/main/ets/MapController';
+export type { FitCameraOptions, MapControllerOptions } from './src/main/ets/MapController';
 export type { MapGestureOptions } from './src/main/ets/gestures';
 export { FollowBearing } from './src/main/ets/location';
 export type { FollowUserLocationOptions } from './src/main/ets/location';
@@ -27,8 +27,6 @@ export type {
   AnimationOptions,
   BoundOptions,
   Camera as CameraPosition,
-  CameraFitOptions,
-  CameraFitUpdate,
   CameraOptions,
   CameraTransitionEnd,
   CameraUpdate,
@@ -130,6 +128,8 @@ export {
 export type {
   CameraBounds,
   CameraDelta,
+  CameraFitOptions,
+  CameraFitUpdate,
   CameraQueryResult,
   CanonicalTileId,
   CommandCompletion,

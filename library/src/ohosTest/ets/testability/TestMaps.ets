@@ -5,6 +5,7 @@ import {
   BoundOptions,
   CameraPosition,
   CameraUpdateMode,
+  EdgeInsets,
   LatLng,
   MapContent,
   MapController,
@@ -25,6 +26,8 @@ export function backgroundStyle(color: string): string {
 }
 
 export const STYLE = backgroundStyle('#4a90d9');
+
+export const NO_INSETS: EdgeInsets = { top: 0, left: 0, bottom: 0, right: 0 };
 
 function noop(): void {
 }
@@ -51,7 +54,7 @@ export class TestMap {
   @Trace scaleBarEnabled: boolean = false;
   @Trace zoomButtons: boolean = false;
   @Trace attribution: boolean = true;
-  @Trace ornamentPadding: Padding = {};
+  @Trace viewportInsets: EdgeInsets = NO_INSETS;
   @Trace gestures: MapGestureOptions = {};
   @Trace userLocation: geoLocationManager.Location | undefined = undefined;
   @Trace userHeading: number | undefined = undefined;
@@ -114,7 +117,7 @@ export class TestMap {
     this.scaleBarEnabled = false;
     this.zoomButtons = false;
     this.attribution = true;
-    this.ornamentPadding = {};
+    this.viewportInsets = NO_INSETS;
     this.gestures = {};
     this.userLocation = undefined;
     this.userHeading = undefined;
