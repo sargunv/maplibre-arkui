@@ -276,7 +276,7 @@ struct CameraExample {
       MapLibreMap({
         controller: this.controller,
         style: STYLE,
-        interactions: { rotate: { enabled: false } },
+        interactions: { rotate: { enabled: false }, pitch: { enabled: false } },
         onGestureStart: () => {
           this.moving = true;
         },
