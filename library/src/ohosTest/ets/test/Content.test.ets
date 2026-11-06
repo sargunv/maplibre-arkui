@@ -319,18 +319,17 @@ export default function contentTest(): void {
       await untilLayers('background,labels,dots');
     });
 
-    it('leaves an image that the style already had to it', 0, async () => {
+    it('replaces an image that the style already had, and removes it when it leaves', 0, async () => {
       const map = requireMap();
       await map.setStyleImage('dot', { width: 2, height: 1, stride: 8, pixels: new Uint8Array(8) });
-      const red: Uint8Array = new Uint8Array([255, 0, 0, 255]);
-      testMap.content = { images: [{ id: 'dot', image: { width: 1, height: 1, stride: 4, pixels: red } }] };
-      await until('the map reports the image', () =>
-        testMap.errors.some((error: string) => error.includes('adding image dot')));
-      expect((await map.getStyleImage('dot'))?.width).assertEqual(2);
+      testMap.content = { images: [{ id: 'dot', image: pixel(255, 0, 0) }] };
+      await eventually('the content image replaces it', async () =>
+        (await map.getStyleImage('dot'))?.width === 1 ? true : undefined);
       const empty: MapContent = {};
       testMap.content = empty;
-      await frames(10);
-      expect((await map.getStyleImage('dot'))?.width).assertEqual(2);
+      await eventually('the image goes', async () =>
+        (await map.getStyleImage('dot').catch(() => undefined)) === undefined ? true : undefined);
+      expect(testMap.errors.length).assertEqual(0);
     });
 
     it('leaves an image ID alone after the map rejects the content image', 0, async () => {
@@ -478,6 +477,27 @@ export default function contentTest(): void {
         (await requireMap().getStyleSource('places'))?.geoJson?.maxZoom === 10 ? true : undefined);
       await untilLayers('background,labels,dots');
       expect(await marked('dots')).assertFalse();
+      expect(testMap.errors.length).assertEqual(0);
+    });
+
+    it('replaces the data of a source with options in place', 0, async () => {
+      await testMap.controller.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 0 } });
+      // The options differ from their defaults, a zoom that the map takes as
+      // an integer among them, and too few points cluster to change the count.
+      const clustered = (data: GeoJsonFeatureCollection): MapContent => ({
+        sources: [{ id: 'places', json: {
+          'type': 'geojson', 'data': data, 'maxzoom': 12.5, 'buffer': 64, 'tolerance': 0.5, 'lineMetrics': true,
+          'cluster': true, 'clusterRadius': 40, 'clusterMaxZoom': 10, 'clusterMinPoints': 10,
+          'clusterProperties': JSON.parse('{"total":["+",["get","n"]]}') as Object,
+        } }],
+        layers: [circles('dots', '#ff0000')],
+      });
+      testMap.content = clustered(TWO);
+      await untilFeatures(2);
+      await markLayer('dots');
+      testMap.content = clustered(THREE);
+      await untilFeatures(3);
+      expect(await marked('dots')).assertTrue();
       expect(testMap.errors.length).assertEqual(0);
     });
 

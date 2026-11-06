@@ -442,8 +442,12 @@ export default function locationTest(): void {
       expect(after[after.length - 1]).assertEqual(USER_LOCATION_LAYER);
     });
 
-    it('goes above every layer when the style lacks the one to go under', 0, async () => {
-      testMap.userLocationIndicator = { below: 'missing' };
+    it('goes above every layer when the style and content lack the one to go under', 0, async () => {
+      // A layer that only the app added doesn't count.
+      const clear: Record<string, Object> = { 'background-opacity': 0 };
+      const added: Record<string, Object> = { 'id': 'added', 'type': 'background', 'paint': clear };
+      await requireMap().addStyleLayerJson(added);
+      testMap.userLocationIndicator = { below: 'added' };
       testMap.userLocation = fix(0, 0);
       await drawnAt(0, 0);
       const ids = (await requireMap().listStyleLayers()).map((layer: StyleLayerInfo) => layer.id);

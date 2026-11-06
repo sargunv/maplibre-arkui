@@ -7,7 +7,6 @@
 import {
   BoundOptions,
   Camera as CameraPosition,
-  CameraBounds,
   CameraDelta,
   CameraFitOptions,
   CameraOptions,
@@ -64,6 +63,10 @@ const HANDLED_EVENTS: RuntimeEventFlag = RuntimeEventFlag.mapLoadingFailed |
   RuntimeEventFlag.mapRenderError |
   RuntimeEventFlag.mapCameraDidChange |
   RuntimeEventFlag.mapSourceChanged;
+
+// The limits that FFI gives a new map, from MapLibre Native's defaults, which
+// apply again when the app removes its own.
+const DEFAULT_BOUNDS: BoundOptions = { unbounded: true, minZoom: 0, maxZoom: 22, minPitch: 0, maxPitch: 60 };
 
 // What the view reports to its component.
 export interface MapViewEvents {
@@ -125,8 +128,6 @@ export class MapView extends XComponentController implements GestureTarget {
   // The style that the map loads, until another replaces it.
   private loading: Promise<CommandCompletion> | undefined = undefined;
   private bounds: BoundOptions | undefined = undefined;
-  // The limits a new map has, which apply again when the app removes its own.
-  private defaultBounds: BoundOptions | undefined = undefined;
   private userLocation: geoLocationManager.Location | undefined = undefined;
   private userHeading: number | undefined = undefined;
   private indicatorOptions: UserLocationIndicatorOptions = {};
@@ -328,7 +329,8 @@ export class MapView extends XComponentController implements GestureTarget {
 
   private newLocationLayer(scaleFactor: number): UserLocationLayer {
     return new UserLocationLayer(scaleFactor, this.indicatorOptions,
-      () => this.reconciler?.applied ?? Promise.resolve(), (error: Error) => this.fail(error));
+      () => this.reconciler?.applied ?? Promise.resolve(), (id: string) => this.reconciler?.hasLayer(id) ?? false,
+      (error: Error) => this.fail(error));
   }
 
   setUserLocation(location: geoLocationManager.Location | undefined): void {
@@ -629,7 +631,6 @@ export class MapView extends XComponentController implements GestureTarget {
     this.reconciler = new ContentReconciler(map, (error: Error) => this.fail(error));
     this.reconciler.setContent(this.content);
     this.reconciler.setFontScale(fontScaleOf(this.context));
-    this.defaultBounds = boundOptions(map.getSnapshot().bounds);
     addRuntimeMap(runtime, map, (error: Error) => this.fail(error));
     // The controller takes camera changes from here on, and the map runs
     // commands in order, so they follow the starting camera.
@@ -746,10 +747,10 @@ export class MapView extends XComponentController implements GestureTarget {
   // earlier limits.
   private applyBounds(): void {
     const map = this.map;
-    if (map === undefined || this.defaultBounds === undefined) {
+    if (map === undefined) {
       return;
     }
-    map.discarding.setBounds(this.defaultBounds);
+    map.discarding.setBounds(DEFAULT_BOUNDS);
     if (this.bounds !== undefined) {
       map.discarding.setBounds(this.bounds);
     }
@@ -856,13 +857,3 @@ export class MapView extends XComponentController implements GestureTarget {
   }
 }
 
-function boundOptions(bounds: CameraBounds): BoundOptions {
-  return {
-    bounds: bounds.unbounded ? undefined : bounds.bounds,
-    unbounded: bounds.unbounded,
-    minZoom: bounds.minZoom,
-    maxZoom: bounds.maxZoom,
-    minPitch: bounds.minPitch,
-    maxPitch: bounds.maxPitch,
-  };
-}

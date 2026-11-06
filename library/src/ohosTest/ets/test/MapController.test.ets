@@ -16,6 +16,8 @@ import {
   RuntimeHandle,
 } from '@maplibre/arkui';
 
+import { MapMode } from '@maplibre/native-ffi';
+
 import { backgroundStyle, NO_INSETS, testMap } from '../testability/TestMaps';
 import { camera, expectNear, near, nextFrame, pixelFor, requireMap, settled, setStyle, until } from './helpers';
 
@@ -430,6 +432,28 @@ export default function mapControllerTest(): void {
       await until('the bounds reset', () => (map.map?.getSnapshot().bounds.maxZoom ?? 0) > 4);
       await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 10 } });
       expectNear(camera().zoom, 10, 0.001);
+    });
+
+    it('puts back the limits that FFI gives a new map when the app removes its own', 0, async () => {
+      // A map's lowest zoom keeps the world as tall as the map, so the new
+      // map takes the test map's size.
+      const fresh = requireRuntime().createMap({
+        initialExtent: requireMap().getSnapshot().view.extent,
+        mapMode: MapMode.static,
+      });
+      await fresh.ready;
+      const defaults = fresh.getSnapshot().bounds;
+      await fresh.release();
+      testMap.cameraBounds = { bounds: SWITZERLAND, minZoom: 2, maxZoom: 9, minPitch: 10, maxPitch: 30 };
+      await until('the bounds apply', () => map.map?.getSnapshot().bounds.maxZoom === 9);
+      testMap.cameraBounds = undefined;
+      await until('the bounds reset', () => (map.map?.getSnapshot().bounds.maxZoom ?? 0) > 9);
+      const bounds = requireMap().getSnapshot().bounds;
+      expect(bounds.unbounded).assertEqual(defaults.unbounded);
+      expectNear(bounds.minZoom, defaults.minZoom, 1e-9);
+      expect(bounds.maxZoom).assertEqual(defaults.maxZoom);
+      expectNear(bounds.minPitch, defaults.minPitch, 1e-9);
+      expectNear(bounds.maxPitch, defaults.maxPitch, 1e-9);
     });
 
     it('starts a map that comes back where the last one left the camera', 0, async () => {

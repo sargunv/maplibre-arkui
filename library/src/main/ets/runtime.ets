@@ -122,7 +122,8 @@ export function runtimeEventMask(runtime: RuntimeHandle): RuntimeEventFlag {
 }
 
 // A map that keeps the runtime's event mask from when it's ready until it's
-// released. A listener may have changed the mask while the map got ready.
+// released. A listener may have changed the mask while the map got ready, so
+// it takes the mask again.
 export function addRuntimeMap(runtime: RuntimeHandle, map: MapHandle, fail: (error: Error) => void): void {
   let all = liveMaps.get(runtime.id);
   if (all === undefined) {
@@ -131,10 +132,7 @@ export function addRuntimeMap(runtime: RuntimeHandle, map: MapHandle, fail: (err
   }
   const live: LiveMap = { map: map, fail: fail };
   all.push(live);
-  const mask = runtimeEventMask(runtime);
-  if (map.getSnapshot().eventMask !== mask) {
-    setEventMask(live, mask);
-  }
+  setEventMask(live, runtimeEventMask(runtime));
 }
 
 export function removeRuntimeMap(runtime: RuntimeHandle, map: MapHandle): void {
