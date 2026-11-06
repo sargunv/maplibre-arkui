@@ -1,0 +1,24 @@
+---
+title: Snapshots
+description: Render a still image of a map that isn't on screen.
+---
+
+import { Code } from "@astrojs/starlight/components";
+import Api from "../../components/Api.astro";
+import { region } from "../../snippets";
+
+import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
+
+<Api of="snapshot" display="snapshot()" /> renders a still image of a map that
+isn't on screen, as a `PixelMap` for an `Image`:
+
+<Code code={region(examples, "snapshot")} lang="ts" />
+
+For an image of a `MapLibreMap`, pass its style, its content, and its
+controller's camera:
+
+<Code code={region(examples, "snapshot-of")} lang="ts" />
+
+Without `camera`, the image uses the style's default camera; with it, the fields
+it leaves out take MapLibre's defaults, not the style's. The image holds only
+the map, so show the style's attribution with it.

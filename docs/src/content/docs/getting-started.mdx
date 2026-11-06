@@ -1,0 +1,38 @@
+---
+title: Getting started
+description: Install the library and show a map.
+---
+
+import { Code } from "@astrojs/starlight/components";
+import { region } from "../../snippets";
+
+import quickStart from "../../../../demo/entry/src/main/ets/docs/QuickStart.ets?raw";
+
+## Install
+
+The library is a source HAR for API 20 and later. It depends on FFI's facade,
+`@maplibre/native-ffi`, and the app installs one backend package next to it,
+since ohpm has no peer dependencies. Once they are on ohpm:
+
+```sh
+ohpm install @maplibre/arkui @maplibre/native-ffi-opengl@<FFI version>
+```
+
+The backend's version must be the facade's, which `@maplibre/arkui`'s
+`oh-package.json5` names; `ohpm list` shows it. OpenGL is the backend that FFI
+tests; `@maplibre/native-ffi-vulkan` is the other. Until then, build the library
+and the demo from the repository (see
+[Build from source](/maplibre-arkui/development/)).
+
+An app that loads styles or tiles from the network requests the internet
+permission in its `module.json5`:
+
+```json5
+"requestPermissions": [{ "name": "ohos.permission.INTERNET" }]
+```
+
+## Quick start
+
+<Code code={region(quickStart, "quick-start")} lang="ts" title="MapPage.ets" />
+
+The library uses state management V2 only: put it in `@ComponentV2` structs.

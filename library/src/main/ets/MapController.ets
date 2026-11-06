@@ -96,7 +96,7 @@ export class MapController {
    * feature state) and what else this library doesn't wrap. A new style
    * starts without the sources, layers, and images the app added, so add them
    * in `onStyleLoaded`. A feature state change draws only from the next frame,
-   * so request one on an idle map (see the README). Don't release it; the
+   * so request one on an idle map (see the style API guide). Don't release it; the
    * `MapLibreMap` that created it does. Change the style through the map's
    * `style` param, not this handle's style setters, so that the map adds its
    * `content` and fires `onStyleLoaded`.

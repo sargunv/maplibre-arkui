@@ -11,7 +11,8 @@ library/                 @maplibre/arkui, a source HAR
   Index.ets              the public API: only what this exports is public
   oh-package.json5       name, version, API floor (20), FFI dependency, and
                          the metadata ohpm shows
-  README.md              the ohpm page: install and quick start
+  README.md              the ohpm page: install, quick start, and links to the
+                         site
   CHANGELOG.md           a section per version, which pack-har.sh requires
   src/main/ets/
     Expressions.ets      style expressions: functions that build style-spec JSON
@@ -54,14 +55,24 @@ demo/entry/src/main/     the demo app's only module (module.json holds the app's
                          (LocationDemo.ets) with Location Kit and a simulated
                          walk
   ets/pages/common.ets   the style URLs and the panel look the pages share
-  ets/docs/              the READMEs' examples: QuickStart.ets (a page of its
-                         own) and Examples.ets (a page of tabs)
+  ets/docs/              the documentation's examples, as `// #region`s:
+                         QuickStart.ets (a page of its own) and Examples.ets
+                         (a page of tabs)
 scripts/                 the build, pack, FFI, and device scripts the tasks run
-docs/api-guidelines.md   the public API's conventions
+docs/                    the documentation site: Astro with Starlight, a pnpm
+                         package of its own, for GitHub Pages
+  astro.config.mts       the site's base path and sidebar
+  src/content/docs/      the pages; api-guidelines.md holds the public API's
+                         conventions
+  src/snippets.ts        region(): cuts a page's example out of ets/docs/
+  src/components/Api.astro  <Api of="Name" />: a link into the API reference
+  scripts/               the API reference's pipeline (see docs:api)
+  typedoc.config.mjs     TypeDoc's options for the reference
 docs/ffi-feedback.md     FFI gaps and bugs found here, for upstream
-README.md                the user guide
-build/                   outputs (gitignored): ffi/, har/, and demo/<abi>/ and
-                         test/<abi>/
+README.md                a stub: what the library is, install, quick start, and
+                         a link to the site
+build/                   outputs (gitignored): ffi/, har/, demo/<abi>/,
+                         test/<abi>/, and docs/ (the reference's declarations)
 .proof/                  screenshots and logs of runs (gitignored)
 ```
 
@@ -75,7 +86,15 @@ plugin that `[plugins]` in `mise.toml` pins, which unpacks it with the host's
 
 - `mise run check` / `mise run fix`: formatters and linters through hk, and
   `scripts/check-doc-examples.sh`, which checks that each `ets` block of the
-  READMEs is in the demo's `ets/docs/`.
+  READMEs is in the demo's `ets/docs/`. They install the site's packages first,
+  since dprint formats its `.mdx` pages with the site's mdxlint.
+- `mise run docs:build` / `mise run docs:dev`: build the documentation site into
+  `docs/dist`, or serve it with live reload. `mise run docs:preview` serves the
+  build. Each runs `docs:api` first, which needs the SDK and `build/ffi`: the
+  SDK's TypeScript fork emits the library's declarations
+  (`docs/scripts/emit-declarations.mjs`), a rewrite turns structs into classes
+  and decorators into TypeDoc badges, `docs/scripts/ffi-reference.mjs` links
+  FFI's re-exports to FFI's TypeDoc, and TypeDoc writes `docs/public/api`.
 - `mise run ffi:download`: fetch the FFI packages that FFI's CI packed at
   `vars.ffi_commit` into `build/ffi`. Needs `gh` signed in.
 - `FFI_DIR=<checkout> mise run ffi:pack [preset]`: pack them from an FFI
@@ -140,11 +159,13 @@ and bump the pin within 30 days or CI breaks. Building FFI in CI instead would
 mean building MapLibre Native, which is far slower.
 
 CI (`.github/workflows/ci.yml`) runs `mise run check` and builds the HAR, the
-demo HAP, and the test HAP. It doesn't run the hypium suite, which llvmpipe's
-crash makes fail most runs (ROADMAP.md, Next). CI hasn't run on GitHub yet; if
-`ffi:download` gets a 403 because the job's token can't read another
-repository's artifacts, give it a repository secret with a fine-grained token
-that reads public repositories.
+demo HAP, the test HAP, and the documentation site. On pushes to `main`, its
+`deploy-pages` job publishes the site to GitHub Pages, at
+`https://sargunv.github.io/maplibre-arkui/`. It doesn't run the hypium suite,
+which llvmpipe's crash makes fail most runs (ROADMAP.md, Next). CI hasn't run on
+GitHub yet; if `ffi:download` gets a 403 because the job's token can't read
+another repository's artifacts, give it a repository secret with a fine-grained
+token that reads public repositories.
 
 ## Releasing
 
@@ -207,10 +228,18 @@ ohpm. To publish:
   `Index.ets`; wrap them only where ArkUI needs it.
 - Test cases don't need the network, except the resource transform case, which
   rewrites a URL to a real style.
-- Code in the READMEs goes in `ets` blocks, which dprint leaves alone, and each
-  block is lines of `demo/entry/src/main/ets/docs/`: change both together.
-- `docs/api-guidelines.md` describes the public API as it is; a change that
-  departs from it changes it too.
+- Each ArkTS example of the documentation site is a `// #region <name>` of
+  `demo/entry/src/main/ets/docs/`, which a page shows with
+  `<Code code={region(examples, "<name>")} lang="ts" />`; the site build fails
+  on a missing region. The READMEs keep only the quick start, in an `ets` block,
+  which dprint leaves alone, that is lines of those files: change both together.
+- The API reference comes from the doc comments of what `Index.ets` exports. A
+  struct's members other than its params, and comments that start with
+  "Internal:", stay out of it. FFI's re-exports link to FFI's reference rather
+  than being documented here; link names in pages with `<Api of="Name" />`,
+  which fails the build on a name the reference doesn't have.
+- `docs/src/content/docs/api-guidelines.md` describes the public API as it is; a
+  change that departs from it changes it too.
 - The build has no resource table, so `.ets` files can't use `$r()`; load files
   from `resources/rawfile` with `getRawFileContentSync()`.
 - The style and query API is FFI's, through `MapController.map` and

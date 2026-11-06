@@ -1,0 +1,32 @@
+---
+title: Build from source
+description: Build the library, the demo, and this site, and run the tests.
+---
+
+[mise] installs everything, including the OpenHarmony SDK and an Oniro emulator
+image:
+
+```sh
+mise install
+mise run ffi:download   # FFI's packages at the pinned commit
+mise run demo           # build the demo and start it on an emulator
+mise run test           # run the hypium suite on the emulator
+mise run check
+```
+
+`mise run demo --device <key>` and `mise run test --device <key>` run on another
+device, such as DevEco Studio's emulator, with the HAP built for its ABI.
+`mise run docs:dev` serves this site, with the API reference, and
+`mise run docs:build` builds it into `docs/dist`.
+
+[AGENTS.md] describes the layout, the tasks, how the build works without hvigor,
+and how to release. [API guidelines](/maplibre-arkui/api-guidelines/) has the
+API's conventions. The demo's [`docs/`][examples] pages hold this site's
+examples, which the demo build compiles; each page cuts its examples out of
+them by region, and the site build fails on a region that's missing.
+
+[AGENTS.md]: https://github.com/sargunv/maplibre-arkui/blob/main/AGENTS.md
+
+[examples]: https://github.com/sargunv/maplibre-arkui/tree/main/demo/entry/src/main/ets/docs
+
+[mise]: https://mise.jdx.dev

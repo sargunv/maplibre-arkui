@@ -2,3 +2,8 @@ build/
 .proof/
 mise.local.toml
 mise.*.local.toml
+docs/node_modules/
+docs/dist/
+docs/.astro/
+docs/public/api/
+docs/src/generated/

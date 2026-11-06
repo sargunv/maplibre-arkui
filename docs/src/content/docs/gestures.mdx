@@ -1,0 +1,22 @@
+---
+title: Gestures
+description: Move the map with touch, the mouse, a touchpad, and keys.
+---
+
+import { Code } from "@astrojs/starlight/components";
+import Api from "../../components/Api.astro";
+import { region } from "../../snippets";
+
+import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
+
+Drag, pinch, twist, and drag two fingers up or down to pan, zoom, rotate, and
+pitch; double tap to zoom in, double tap and drag to zoom, and tap with two
+fingers to zoom out. The mouse wheel, a touchpad pinch, and the arrow, plus, and
+minus keys work too. A drag that starts on the map moves the map, even in a
+`Scroll`. `gestures` turns some off, and `cooperative` leaves one-finger drags
+and the plain wheel to a scrolling parent (see <Api of="MapGestureOptions" />):
+
+<Code code={region(examples, "gestures")} lang="ts" />
+
+Content over the map that handles its own gestures, such as a button, keeps
+them.

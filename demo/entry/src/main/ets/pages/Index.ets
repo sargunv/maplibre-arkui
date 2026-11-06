@@ -117,7 +117,7 @@ struct Index {
               this.getUIContext().getRouter().pushUrl({ url: 'docs/QuickStart' })
                 .catch((error: Error) => this.message = error.message);
             })
-            Button('README examples').margin(4).onClick(() => {
+            Button('Guide examples').margin(4).onClick(() => {
               this.stack.pushPathByName('docs', null);
             })
           }

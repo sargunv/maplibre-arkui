@@ -1,0 +1,30 @@
+---
+title: The style API
+description: Change the style and query features with MapLibre Native FFI's API.
+---
+
+import { Code } from "@astrojs/starlight/components";
+import Api from "../../components/Api.astro";
+import { region } from "../../snippets";
+
+import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
+
+For everything else, the style API is MapLibre Native FFI's: `controller.map`, a
+<Api of="MapHandle" />, adds and changes sources, layers, images, and feature
+state, and `controller.renderSession`, a <Api of="RenderSessionHandle" />,
+queries features. A click's point is in vp from the map's corner, as queries
+take it:
+
+<Code code={region(examples, "query-click")} lang="ts" />
+
+<Code code={region(examples, "query")} lang="ts" />
+
+What an app adds through `controller.map` is gone in the next style, so add it
+in `onStyleLoaded`, or declare it as [content](/maplibre-arkui/content/). Change
+the style through the map's `style`, not the FFI map's style setters, so the map
+adds its content again. On an idle map, a feature state change draws only from
+the frame after the one that applies it; until FFI fixes that, request one, as
+the demo's style page does with `map.discarding.requestRepaint()` from a delayed
+frame callback (see [docs/ffi-feedback.md]).
+
+[docs/ffi-feedback.md]: https://github.com/sargunv/maplibre-arkui/blob/main/docs/ffi-feedback.md

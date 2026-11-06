@@ -1,0 +1,35 @@
+---
+title: The camera
+description: Read and move the camera with a MapController.
+---
+
+import { Code } from "@astrojs/starlight/components";
+import Api from "../../components/Api.astro";
+import { region } from "../../snippets";
+
+import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
+
+<Api of="MapController" /> reads and moves the camera from anywhere, as a
+`Scroller` does for a list. Create one, pass it to one map, and keep it; when
+the map leaves the screen and comes back, the new map starts where the old one
+left the camera. `camera`, `styleLoaded`, `attributions`, and
+`followingUserLocation` are observable, so a component that reads them updates
+when they change:
+
+<Code code={region(examples, "camera-observable")} lang="ts" />
+
+`camera` changes when the camera comes to rest;
+<Api of="MapController.getCamera" display="getCamera()" /> reads where it is
+now. <Api of="MapController.updateCamera" display="updateCamera()" /> jumps,
+eases, or flies; `fitCameraToLatLngBounds()`, `fitCameraToLatLngs()`, and
+`fitCameraToGeometry()` fit an area, coordinates, or a GeoJSON geometry; and
+each resolves with how the move ended:
+
+<Code code={region(examples, "camera-fit")} lang="ts" />
+
+`frameCamera`, `pixelForLatLng()`, `latLngForPixel()`, and
+`metersPerPixelAtLatitude()` follow the frame on screen, and are observable too,
+so content placed with them moves with the map. They change every frame, so read
+them in `@Computed` getters of the components that need them. The controller
+also exposes the FFI `runtime`, `map`, and `renderSession`, for what this
+library doesn't wrap.

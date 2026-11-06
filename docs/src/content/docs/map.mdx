@@ -1,0 +1,18 @@
+---
+title: The map
+description: Show a map, load its style, and listen to its events.
+---
+
+import Api from "../../components/Api.astro";
+
+<Api of="MapLibreMap" /> fills the size its parent gives it. Its
+<Api of="MapLibreMap.style" display="style" /> is a URL or a style document as
+JSON, and a new value loads the new style. The map creates its FFI map when it
+appears and releases it when it disappears. Pages in the background need no
+code, since the map draws only while its window shows.
+
+Its events tell the app when the style has loaded (`onStyleLoaded`), the camera
+has come to rest (`onCameraIdle`), the user starts and stops moving the map
+(`onGestureStart`, `onGestureEnd`), and something failed (`onMapError`; see
+[Errors](/maplibre-arkui/errors/)). `cameraBounds` limits where the camera goes,
+and `runtime` takes an FFI runtime of the app's own, for another cache.
