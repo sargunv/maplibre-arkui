@@ -1,16 +1,23 @@
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
 import {
   CameraUpdateMode,
-  get,
+  eq,
   GeoJsonFeatureCollection,
   GeoJsonGeometry,
+  GeoJsonSourceDataHandle,
+  get,
   MapContent,
   MapLayer,
+  PremultipliedRgba8Image,
   snapshot,
   StyleLayerInfo,
+  StyleLayerVisibility,
 } from '@maplibre/arkui';
+import { ContentReconciler } from '@maplibre/arkui/src/main/ets/Content';
+import application from '@ohos.app.ability.application';
+import fs from '@ohos.file.fs';
 
-import { backgroundStyle, testMap } from '../testability/TestMaps';
+import { backgroundStyle, STYLE, testMap } from '../testability/TestMaps';
 import { eventually, frames, pixelAt, readPixels, requireMap, setStyle, until } from './helpers';
 
 // A base style with a layer to place content under, as an app places it under
@@ -50,8 +57,48 @@ function circles(id: string, color: string, below?: string | ((layer: StyleLayer
   return { id: id, type: 'circle', source: 'places', paint: { 'circle-color': color, 'circle-radius': 6 }, below: below };
 }
 
-function content(data: GeoJsonFeatureCollection, layers: MapLayer[]): MapContent {
+// The places source, with `data` as GeoJSON or a URL.
+function content(data: GeoJsonFeatureCollection | string, layers: MapLayer[]): MapContent {
   return { sources: [{ id: 'places', json: { 'type': 'geojson', 'data': data } }], layers: layers };
+}
+
+function pixel(r: number, g: number, b: number): PremultipliedRgba8Image {
+  return { width: 1, height: 1, stride: 4, pixels: new Uint8Array([r, g, b, 255]) };
+}
+
+// How many features the places source has, once it has `expected`.
+async function untilFeatures(expected: number): Promise<void> {
+  await eventually(`the source has ${expected} features`, async () => {
+    const features = await testMap.controller.renderSession?.querySourceFeatures('places');
+    return features?.length === expected ? true : undefined;
+  });
+}
+
+// Sets a property that the content doesn't, which a layer keeps only while
+// the map changes it in place.
+async function markLayer(id: string): Promise<void> {
+  await requireMap().setStyleLayerProperty(id, 'circle-blur', 0.5);
+}
+
+async function marked(id: string): Promise<boolean> {
+  return JSON.stringify(await requireMap().getStyleLayerProperty(id, 'circle-blur')) === '0.5';
+}
+
+async function layerInfo(id: string): Promise<StyleLayerInfo> {
+  const info = await requireMap().getStyleLayer(id);
+  if (info === undefined) {
+    throw new Error(`The style has no layer ${id}`);
+  }
+  return info;
+}
+
+// The circles layers, many of them, for a pass that takes a while.
+function manyCircles(count: number): MapLayer[] {
+  const layers: MapLayer[] = [];
+  for (let i = 0; i < count; i++) {
+    layers.push(circles(`c${i}`, '#ff0000'));
+  }
+  return layers;
 }
 
 async function layerIds(): Promise<string> {
@@ -271,6 +318,242 @@ export default function contentTest(): void {
       });
       const pixels = await readPixels(pixelMap);
       // The PixelMap's channels are in RGBA order.
+      expect(pixelAt(pixels, 128, 32, 32).join()).assertEqual('255,0,0,255');
+      expect(pixelAt(pixels, 128, 96, 32).join()).assertEqual('0,0,255,255');
+      await pixelMap.release();
+    });
+    it('changes the filter, zoom range, and layout in place, and unsets them', 0, async () => {
+      const plain: MapLayer = { id: 'dots', type: 'circle', source: 'places', paint: { 'circle-color': '#ff0000' } };
+      testMap.content = content(TWO, [plain]);
+      await untilLayers('background,labels,dots');
+      await markLayer('dots');
+
+      const set: MapLayer = {
+        id: 'dots', type: 'circle', source: 'places', paint: { 'circle-color': '#ff0000' },
+        filter: eq(get('n'), 1), minZoom: 2, maxZoom: 10, layout: { 'visibility': 'none' },
+      };
+      testMap.content = content(TWO, [set]);
+      await eventually('the layer changes', async () => (await layerInfo('dots')).maxZoom === 10 ? true : undefined);
+      const changed = await layerInfo('dots');
+      expect(changed.minZoom).assertEqual(2);
+      expect(changed.visibility).assertEqual(StyleLayerVisibility.none);
+      const json = await requireMap().getStyleLayerJson('dots') as Record<string, Object>;
+      expect(JSON.stringify(json['filter'])).assertEqual('["==",["get","n"],1]');
+      expect(await marked('dots')).assertTrue();
+
+      testMap.content = content(TWO, [plain]);
+      await eventually('the layer goes back', async () =>
+        (await layerInfo('dots')).maxZoom === Infinity ? true : undefined);
+      const unset = await layerInfo('dots');
+      expect(unset.minZoom).assertEqual(-Infinity);
+      expect(unset.visibility).assertEqual(StyleLayerVisibility.visible);
+      const plainJson = await requireMap().getStyleLayerJson('dots') as Record<string, Object>;
+      expect(plainJson['filter']).assertUndefined();
+      expect(await marked('dots')).assertTrue();
+      expect(testMap.errors.length).assertEqual(0);
+    });
+
+    it('replaces a layer whose type, source, or source layer changes, where it was', 0, async () => {
+      const both: MapContent = {
+        sources: [
+          { id: 'places', json: { 'type': 'geojson', 'data': TWO } },
+          { id: 'others', json: { 'type': 'geojson', 'data': THREE } },
+          { id: 'tiles', json: { 'type': 'vector', 'tiles': ['file:///nonexistent/{z}/{x}/{y}.pbf'] } },
+        ],
+        layers: [circles('a', '#ff0000'), circles('dots', '#ff0000'), circles('c', '#ff0000')],
+      };
+      testMap.content = both;
+      await untilLayers('background,labels,a,dots,c');
+      const replace = async (layer: MapLayer, done: (info: StyleLayerInfo) => boolean): Promise<void> => {
+        const layers = [circles('a', '#ff0000'), layer, circles('c', '#ff0000')];
+        testMap.content = { sources: both.sources, layers: layers };
+        await eventually(`the layer is replaced by ${JSON.stringify(layer)}`, async () =>
+          done(await layerInfo('dots')) ? true : undefined);
+        expect(await layerIds()).assertEqual('background,labels,a,dots,c');
+      };
+
+      await markLayer('dots');
+      await replace({ id: 'dots', type: 'circle', source: 'others' },
+        (info: StyleLayerInfo) => info.sourceId === 'others');
+      expect(await marked('dots')).assertFalse();
+      await replace({ id: 'dots', type: 'heatmap', source: 'others' },
+        (info: StyleLayerInfo) => info.type === 'heatmap');
+      await replace({ id: 'dots', type: 'circle', source: 'tiles', sourceLayer: 'one' },
+        (info: StyleLayerInfo) => info.sourceLayer === 'one');
+      await markLayer('dots');
+      await replace({ id: 'dots', type: 'circle', source: 'tiles', sourceLayer: 'two' },
+        (info: StyleLayerInfo) => info.sourceLayer === 'two');
+      expect(await marked('dots')).assertFalse();
+      expect(testMap.errors.filter((error: string) => error.startsWith('Content')).length).assertEqual(0);
+    });
+
+    it('replaces a source whose options change, with its layers', 0, async () => {
+      testMap.content = content(TWO, [circles('dots', '#ff0000')]);
+      await untilLayers('background,labels,dots');
+      await markLayer('dots');
+      const clipped: MapContent = {
+        sources: [{ id: 'places', json: { 'type': 'geojson', 'data': TWO, 'maxzoom': 10 } }],
+        layers: [circles('dots', '#ff0000')],
+      };
+      testMap.content = clipped;
+      await eventually('the source is replaced', async () =>
+        (await requireMap().getStyleSource('places'))?.geoJson?.maxZoom === 10 ? true : undefined);
+      await untilLayers('background,labels,dots');
+      expect(await marked('dots')).assertFalse();
+      expect(testMap.errors.length).assertEqual(0);
+    });
+
+    it('loads GeoJSON data from a URL in place', 0, async () => {
+      const path = `${application.getApplicationContext().cacheDir}/three-${Date.now()}.geojson`;
+      const file = fs.openSync(path, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+      fs.writeSync(file.fd, JSON.stringify(THREE));
+      fs.closeSync(file);
+      try {
+        await testMap.controller.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 0 } });
+        testMap.content = content(TWO, [circles('dots', '#ff0000')]);
+        await untilFeatures(2);
+        await markLayer('dots');
+        testMap.content = content(`file://${path}`, [circles('dots', '#ff0000')]);
+        await untilFeatures(3);
+        expect(await marked('dots')).assertTrue();
+        testMap.content = content(TWO, [circles('dots', '#ff0000')]);
+        await untilFeatures(2);
+        expect(await marked('dots')).assertTrue();
+        expect(testMap.errors.length).assertEqual(0);
+      } finally {
+        fs.unlinkSync(path);
+      }
+    });
+
+    it('takes the same data object, or an equal copy, as unchanged', 0, async () => {
+      await testMap.controller.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 0 } });
+      testMap.content = content(TWO, [circles('dots', '#ff0000')]);
+      await untilFeatures(2);
+      // The app replaces the data behind the content's back, which the map
+      // keeps until the content's data changes.
+      const map = requireMap();
+      const prepared = GeoJsonSourceDataHandle.create(THREE, (await map.getStyleSource('places'))?.geoJson);
+      try {
+        await map.setGeoJsonSourceData('places', prepared);
+      } finally {
+        prepared.release();
+      }
+      await untilFeatures(3);
+
+      testMap.content = content(TWO, [circles('dots', '#00ff00')]);
+      await untilProperty('dots', 'circle-color', GREEN);
+      const copy = JSON.parse(JSON.stringify(TWO)) as GeoJsonFeatureCollection;
+      testMap.content = content(copy, [circles('dots', '#0000ff')]);
+      await untilProperty('dots', 'circle-color', '["rgba",0,0,255,1]');
+      await frames(10);
+      await untilFeatures(3);
+
+      const one: GeoJsonFeatureCollection = { type: 'FeatureCollection', features: TWO.features.slice(0, 1) };
+      testMap.content = content(one, [circles('dots', '#0000ff')]);
+      await untilFeatures(1);
+    });
+
+    it('sets an image again when its options or pixels change', 0, async () => {
+      const map = requireMap();
+      const red = pixel(255, 0, 0);
+      testMap.content = { images: [{ id: 'dot', image: red, options: { pixelRatio: 1 } }] };
+      await eventually('the image goes in', async () => map.getStyleImage('dot'));
+
+      testMap.content = { images: [{ id: 'dot', image: red, options: { pixelRatio: 2 } }] };
+      await eventually('the options change', async () =>
+        (await map.getStyleImage('dot'))?.pixelRatio === 2 ? true : undefined);
+      testMap.content = { images: [{ id: 'dot', image: pixel(0, 255, 0), options: { pixelRatio: 2 } }] };
+      await eventually('the pixels change', async () =>
+        (await map.getStyleImage('dot'))?.pixels[1] === 255 ? true : undefined);
+
+      // The same pixels object, which the map doesn't compare, stays as the
+      // style has it.
+      const green = pixel(0, 255, 0);
+      testMap.content = { images: [{ id: 'dot', image: green }] };
+      await eventually('the image takes the default options', async () =>
+        (await map.getStyleImage('dot'))?.pixelRatio === 1 ? true : undefined);
+      await map.setStyleImage('dot', pixel(0, 0, 255));
+      // A layer that goes in with it shows that the map has applied it.
+      const shade: MapLayer = { id: 'shade', type: 'background' };
+      testMap.content = { images: [{ id: 'dot', image: green }], layers: [shade] };
+      await untilLayers('background,labels,shade');
+      expect((await map.getStyleImage('dot'))?.pixels[2]).assertEqual(255);
+      expect(testMap.errors.length).assertEqual(0);
+    });
+
+    // The map gives the reconciler each content as the app sets it, so these
+    // cases drive one of their own, for the timing. It shares the test map's
+    // style, whose own content is empty.
+    it('applies only the latest content that comes during a pass, once it ends', 0, async () => {
+      const errors: string[] = [];
+      const reconciler = new ContentReconciler(requireMap(), (error: Error) => errors.push(error.message));
+      reconciler.setContent(content(TWO, [circles('a', '#ff0000')]));
+      const loaded = reconciler.styleLoaded();
+      // The map runs commands in order, so once this one completes, the pass
+      // has its base layers and applies the first content.
+      await requireMap().getStyleLayer('labels');
+      const lost: MapLayer = { id: 'lost', type: 'circle', source: 'missing' };
+      reconciler.setContent(content(TWO, [lost, circles('b', '#ff0000')]));
+      reconciler.setContent(content(TWO, [circles('c', '#ff0000'), circles('a', '#ff0000')]));
+      await loaded;
+      await untilLayers('background,labels,c,a');
+      await frames(10);
+      expect(await layerIds()).assertEqual('background,labels,c,a');
+      expect(errors.length).assertEqual(0);
+    });
+
+    it('stops a pass when the style changes, and applies the content to the next style', 0, async () => {
+      const map = requireMap();
+      const errors: string[] = [];
+      const reconciler = new ContentReconciler(map, (error: Error) => errors.push(error.message));
+      reconciler.setContent(content(TWO, manyCircles(20)));
+      const loaded = reconciler.styleLoaded();
+      // The map runs commands in order, so once this one completes, the pass
+      // has its base layers and adds its first layer.
+      await map.getStyleLayer('labels');
+      reconciler.styleUnloaded();
+      const loading = map.setStyleJson(JSON.parse(baseStyle('#4ad94a')));
+      await loaded;
+      await loading;
+      await reconciler.styleLoaded();
+      const expected = ['background', 'labels'].concat(manyCircles(20).map((layer: MapLayer) => layer.id));
+      expect(await layerIds()).assertEqual(expected.join());
+      expect(errors.length).assertEqual(0);
+    });
+
+    it('puts a layer on top in a style without the layer it goes below', 0, async () => {
+      testMap.content = content(TWO, [circles('dots', '#ff0000', 'labels')]);
+      await untilLayers('background,dots,labels');
+      await setStyle(STYLE);
+      expect(await layerIds()).assertEqual('background,dots');
+      await setStyle(baseStyle('#4ad94a'));
+      expect(await layerIds()).assertEqual('background,dots,labels');
+      expect(testMap.errors.length).assertEqual(0);
+    });
+
+    it('applies the rest of the content after onMapError throws', 0, async () => {
+      testMap.throwOnError = true;
+      const lost: MapLayer = { id: 'lost', type: 'circle', source: 'missing' };
+      testMap.content = content(TWO, [lost, circles('dots', '#ff0000')]);
+      await until('the map reports the layer', () =>
+        testMap.errors.some((error: string) => error.includes('adding layer lost')));
+      await untilLayers('background,labels,dots');
+      testMap.content = content(TWO, [lost, circles('dots', '#00ff00')]);
+      await untilProperty('dots', 'circle-color', GREEN);
+    });
+
+    it('draws a snapshot without the content the map rejects', 0, async () => {
+      const west: MapContent = {
+        sources: [{ id: 'west', json: { 'type': 'geojson', 'data': WEST } }],
+        layers: [
+          { id: 'lost', type: 'fill', source: 'missing', paint: { 'fill-color': '#00ff00' } },
+          { id: 'west', type: 'fill', source: 'west', paint: { 'fill-color': '#ff0000', 'fill-antialias': false } },
+        ],
+      };
+      const pixelMap = await snapshot({
+        style: backgroundStyle('#0000ff'), content: west, width: 64, height: 32, scaleFactor: 2, camera: { zoom: 0 },
+      });
+      const pixels = await readPixels(pixelMap);
       expect(pixelAt(pixels, 128, 32, 32).join()).assertEqual('255,0,0,255');
       expect(pixelAt(pixels, 128, 96, 32).join()).assertEqual('0,0,255,255');
       await pixelMap.release();

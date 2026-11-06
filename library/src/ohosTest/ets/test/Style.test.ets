@@ -102,6 +102,32 @@ export default function styleTest(): void {
       rgba.release();
     });
 
+    it('rejects a PixelMap that it can\'t read', 0, async () => {
+      const rgb565 = image.createPixelMapSync(new Uint8Array([255, 0, 0, 255]).buffer, {
+        size: { width: 1, height: 1 },
+        srcPixelFormat: image.PixelMapFormat.RGBA_8888,
+        pixelFormat: image.PixelMapFormat.RGB_565,
+      });
+      expect(rgb565.getImageInfoSync().pixelFormat).assertEqual(image.PixelMapFormat.RGB_565);
+      expect(() => readPixelMap(rgb565)).assertThrowError('readPixelMap() reads RGBA_8888 and BGRA_8888 pixel maps, ' +
+        `not format ${image.PixelMapFormat.RGB_565}`);
+      rgb565.release();
+
+      const released = image.createPixelMapSync(new Uint8Array([255, 0, 0, 255]).buffer, {
+        size: { width: 1, height: 1 },
+        srcPixelFormat: image.PixelMapFormat.RGBA_8888,
+        pixelFormat: image.PixelMapFormat.RGBA_8888,
+      });
+      await released.release();
+      let threw = false;
+      try {
+        readPixelMap(released);
+      } catch (error) {
+        threw = true;
+      }
+      expect(threw).assertTrue();
+    });
+
     it('takes the options that the re-exported FFI enums name', 0, async () => {
       const map = requireMap();
       const debug = MapDebugFlag.tileBorders | MapDebugFlag.collision;

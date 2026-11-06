@@ -23,11 +23,12 @@ import {
 } from '@maplibre/arkui';
 
 import application from '@ohos.app.ability.application';
+import display from '@ohos.display';
 import fs from '@ohos.file.fs';
 import util from '@ohos.util';
 
 import { STYLE } from '../testability/TestMaps';
-import { settled } from './helpers';
+import { expectNear, settled } from './helpers';
 
 // A style that the cases' resource provider serves.
 const APP_STYLE = 'app://styles/test.json';
@@ -84,6 +85,20 @@ export default function runtimeTest(): void {
       expect(size.width).assertEqual(128);
       expect(size.height).assertEqual(64);
       await pixelMap.release();
+    });
+
+    it('renders a snapshot at the display\'s density by default', 0, async () => {
+      const density = display.getDefaultDisplaySync().densityPixels;
+      const pixelMap = await snapshot({ style: STYLE, width: 64, height: 32, camera: { zoom: 0 } });
+      const size = pixelMap.getImageInfoSync().size;
+      expectNear(size.width, 64 * density, 1);
+      expectNear(size.height, 32 * density, 1);
+      await pixelMap.release();
+    });
+
+    it('rejects a snapshot whose style document is not JSON', 0, async () => {
+      await expect(snapshot({ style: '{"version": 8, "sources": ', width: 16, height: 16, scaleFactor: 1 }))
+        .assertPromiseIsRejected();
     });
 
     it('rejects a snapshot whose style fails to load', 0, async () => {

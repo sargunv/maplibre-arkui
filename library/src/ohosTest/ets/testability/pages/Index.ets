@@ -1,6 +1,14 @@
-import { LatLng, MapLibreMap, MapMarker, MapScaleBar, ScaleBarUnits } from '@maplibre/arkui';
+import {
+  CameraPosition,
+  LatLng,
+  MapCompass,
+  MapLibreMap,
+  MapMarker,
+  MapScaleBar,
+  ScaleBarUnits,
+} from '@maplibre/arkui';
 
-import { testMap } from '../TestMaps';
+import { STYLE, testMap } from '../TestMaps';
 
 @Entry
 @ComponentV2
@@ -9,22 +17,47 @@ struct Index {
     testMap.context = this.getUIContext();
   }
 
-  // A box whose bottom center the map pins to the coordinate.
+  // A box whose bottom center the map pins to the coordinate, unless a case
+  // sets its anchor.
   @Builder
   marker(coordinate: LatLng) {
-    MapMarker({ controller: testMap.controller, coordinate: coordinate }) {
-      Column()
-        .id('marker')
-        .width(20)
-        .height(10)
-        .backgroundColor(Color.Red)
+    if (testMap.markerAnchor === undefined) {
+      MapMarker({ controller: testMap.controller, coordinate: coordinate }) {
+        this.markerBox()
+      }
+    } else {
+      MapMarker({ controller: testMap.controller, coordinate: coordinate, anchor: testMap.markerAnchor }) {
+        this.markerBox()
+      }
     }
+  }
+
+  @Builder
+  markerBox() {
+    Column()
+      .id('marker')
+      .width(20)
+      .height(10)
+      .backgroundColor(Color.Red)
   }
 
   // It reads the units itself, since a builder's arguments don't update it.
   @Builder
   scaleBar() {
-    MapScaleBar({ controller: testMap.controller, units: testMap.scaleBar ?? ScaleBarUnits.metric })
+    if (testMap.scaleBarMaxWidth === undefined) {
+      MapScaleBar({ controller: testMap.controller, units: testMap.scaleBar ?? ScaleBarUnits.metric })
+    } else {
+      MapScaleBar({
+        controller: testMap.controller,
+        units: testMap.scaleBar ?? ScaleBarUnits.metric,
+        maxWidth: testMap.scaleBarMaxWidth,
+      })
+    }
+  }
+
+  @Builder
+  alwaysShownCompass() {
+    MapCompass({ controller: testMap.controller, alwaysShown: true })
   }
 
   build() {
@@ -45,8 +78,19 @@ struct Index {
           }
           .width('100%')
           .height('100%')
-        } else {
-          this.map()
+        } else if (testMap.firstMap) {
+          Column() {
+            this.map()
+          }
+          .width('100%')
+          .height(testMap.secondMap ? '50%' : testMap.height)
+        }
+        if (testMap.secondMap) {
+          Column() {
+            this.secondMap()
+          }
+          .width('100%')
+          .height('50%')
         }
       }
     }
@@ -62,14 +106,25 @@ struct Index {
       style: testMap.style,
       content: testMap.content,
       cameraBounds: testMap.cameraBounds,
+      runtime: testMap.runtime,
       gestures: testMap.gestures,
       userLocation: testMap.userLocation,
       compassEnabled: testMap.compass,
+      scaleBarEnabled: testMap.scaleBarEnabled,
+      zoomButtonsEnabled: testMap.zoomButtons,
+      attributionEnabled: testMap.attribution,
+      ornamentPadding: testMap.ornamentPadding,
       onStyleLoaded: () => {
         testMap.styleLoads++;
       },
+      onCameraIdle: (camera: CameraPosition) => {
+        testMap.cameraIdles.push(camera);
+      },
       onMapError: (error: Error) => {
         testMap.errors.push(error.message);
+        if (testMap.throwOnError) {
+          throw new Error('the app handler failed');
+        }
       },
       onGestureStart: () => {
         testMap.gestureStarts++;
@@ -86,6 +141,20 @@ struct Index {
       if (testMap.marker !== undefined) {
         this.marker(testMap.marker)
       }
+      if (testMap.alwaysShownCompass) {
+        this.alwaysShownCompass()
+      }
     }
+  }
+
+  // The second map shows the same controller, without ornaments.
+  @Builder
+  secondMap() {
+    MapLibreMap({
+      controller: testMap.controller,
+      style: STYLE,
+      compassEnabled: false,
+      attributionEnabled: false,
+    })
   }
 }

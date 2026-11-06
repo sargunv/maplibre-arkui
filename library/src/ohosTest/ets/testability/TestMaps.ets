@@ -3,11 +3,13 @@
 
 import {
   BoundOptions,
+  CameraPosition,
   CameraUpdateMode,
   LatLng,
   MapContent,
   MapController,
   MapGestureOptions,
+  RuntimeHandle,
   ScaleBarUnits,
 } from '@maplibre/arkui';
 import { FrameCallback } from '@ohos.arkui.UIContext';
@@ -38,17 +40,38 @@ export class TestMap {
   // moves with the camera, the compass too, makes the emulator's llvmpipe
   // crash more often, so only the cases that need them turn them on.
   @Trace scaleBar: ScaleBarUnits | undefined = undefined;
+  // The scale bar's maxWidth, and the marker's anchor, when a case sets them.
+  @Trace scaleBarMaxWidth: number | undefined = undefined;
   @Trace marker: LatLng | undefined = undefined;
+  @Trace markerAnchor: Position | undefined = undefined;
   @Trace compass: boolean = false;
+  // A MapCompass of the case's own, alwaysShown, at the map's top start.
+  @Trace alwaysShownCompass: boolean = false;
+  // The map's own ornaments, besides the compass.
+  @Trace scaleBarEnabled: boolean = false;
+  @Trace zoomButtons: boolean = false;
+  @Trace attribution: boolean = true;
+  @Trace ornamentPadding: Padding = {};
   @Trace gestures: MapGestureOptions = {};
   @Trace userLocation: geoLocationManager.Location | undefined = undefined;
   // The map is 300 vp tall at the top of a Scroll while this is true, and fills
   // the page otherwise.
   @Trace inScroll: boolean = false;
+  // The map's height, while it isn't in the Scroll.
+  @Trace height: Length = '100%';
+  // A second map under the first, with the same controller, and whether the
+  // first shows.
+  @Trace secondMap: boolean = false;
+  @Trace firstMap: boolean = true;
   @Trace content: MapContent | undefined = undefined;
+  // The runtime that the map takes as it appears, or the default one.
+  @Trace runtime: RuntimeHandle | undefined = undefined;
   // What the map's events reported.
   styleLoads: number = 0;
   errors: string[] = [];
+  cameraIdles: CameraPosition[] = [];
+  // Whether onMapError throws after it records the error.
+  throwOnError: boolean = false;
   gestureStarts: number = 0;
   gestureEnds: number = 0;
   // What a case does as a gesture starts or ends, as an app would.
@@ -67,12 +90,30 @@ export class TestMap {
   async reset(style: string = STYLE, inScroll: boolean = false): Promise<void> {
     const controller = this.controller;
     controller.stopFollowingUserLocation();
+    // A map that took another runtime, or that another map shared the page
+    // with, starts again.
+    if (this.runtime !== undefined || this.secondMap || !this.firstMap || this.height !== '100%') {
+      this.shown = false;
+      await until('the map leaves', () => controller.map === undefined);
+      this.runtime = undefined;
+      this.secondMap = false;
+      this.firstMap = true;
+      this.height = '100%';
+    }
     this.onGestureStart = noop;
     this.onGestureEnd = noop;
+    this.throwOnError = false;
     this.cameraBounds = undefined;
     this.scaleBar = undefined;
+    this.scaleBarMaxWidth = undefined;
     this.marker = undefined;
+    this.markerAnchor = undefined;
     this.compass = false;
+    this.alwaysShownCompass = false;
+    this.scaleBarEnabled = false;
+    this.zoomButtons = false;
+    this.attribution = true;
+    this.ornamentPadding = {};
     this.gestures = {};
     this.userLocation = undefined;
     this.content = undefined;
@@ -84,6 +125,7 @@ export class TestMap {
     this.style = this.style === style ? `${style} ` : style;
     await until('the map loads the style', () => this.styleLoads > loads && controller.styleLoaded);
     this.errors = [];
+    this.cameraIdles = [];
     this.scroller.scrollTo({ xOffset: 0, yOffset: 0 });
     await controller.updateCamera({
       mode: CameraUpdateMode.jump,

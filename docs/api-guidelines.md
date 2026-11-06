@@ -100,7 +100,8 @@ management V2 only, and FFI's API where it already reads as ArkTS.
   load, a frame that fails to render, content the map rejects. Rejected content
   stays out until it changes; the rest applies.
 - A runtime event listener that throws is logged, and the other listeners still
-  get the event.
+  get the event. An `onMapError` handler that throws is logged too, and the map
+  goes on.
 - A promise that the library starts and nobody awaits ends in a `.catch()` that
   logs.
 

@@ -2,6 +2,7 @@ import contentTest from './Content.test';
 import expressionsTest from './Expressions.test';
 import gestureInputTest from './GestureInput.test';
 import gesturesTest from './Gestures.test';
+import lifecycleTest from './Lifecycle.test';
 import locationTest from './Location.test';
 import mapControllerTest from './MapController.test';
 import ornamentsTest from './Ornaments.test';
@@ -15,6 +16,7 @@ export default function testsuite(): void {
   gesturesTest();
   runtimeTest();
   mapControllerTest();
+  lifecycleTest();
   styleTest();
   ornamentsTest();
   gestureInputTest();

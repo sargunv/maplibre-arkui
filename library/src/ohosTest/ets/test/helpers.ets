@@ -2,7 +2,9 @@
 // comparisons, and where the map is on the display.
 
 import { expect } from '@ohos/hypium';
-import { CameraPosition, LatLng, MapHandle, MapProjectionHandle, ScreenPoint } from '@maplibre/arkui';
+import { CameraPosition, LatLng, MapHandle, MapProjectionHandle, readPixelMap, ScreenPoint } from '@maplibre/arkui';
+import application from '@ohos.app.ability.application';
+import fs from '@ohos.file.fs';
 import image from '@ohos.multimedia.image';
 import { Driver, ON, Point, Rect as Bounds } from '@ohos.UiTest';
 
@@ -119,4 +121,26 @@ export async function readPixels(pixelMap: image.PixelMap): Promise<Uint8Array> 
   const buffer = new ArrayBuffer(pixelMap.getPixelBytesNumber());
   await pixelMap.readPixelsToBuffer(buffer);
   return new Uint8Array(buffer);
+}
+
+// The pixel of the display at `point` in px, as red, green, and blue.
+export async function screenPixel(point: Point): Promise<number[]> {
+  const path = `${application.getApplicationContext().cacheDir}/screen-${Date.now()}.png`;
+  expect(await Driver.create().screenCap(path)).assertTrue();
+  const source = image.createImageSource(path);
+  const pixelMap = await source.createPixelMap();
+  try {
+    const pixels = readPixelMap(pixelMap);
+    const i = point.y * pixels.stride + point.x * 4;
+    return [pixels.pixels[i], pixels.pixels[i + 1], pixels.pixels[i + 2]];
+  } finally {
+    pixelMap.release();
+    source.release();
+    fs.unlinkSync(path);
+  }
+}
+
+// A color written #rrggbb, as red, green, and blue.
+export function rgb(color: string): number[] {
+  return [1, 3, 5].map((start: number) => parseInt(color.slice(start, start + 2), 16));
 }
