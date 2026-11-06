@@ -1,6 +1,6 @@
 ---
 title: The user's location
-description: Show the user's location from Location Kit, and let the camera follow it.
+description: Show the user's location from Location Kit and their heading from the compass, and let the camera follow them.
 ---
 
 import { Code } from "@astrojs/starlight/components";
@@ -27,3 +27,13 @@ don't show a location don't ask for one. An app that does declares
 location, and listens until the page goes away:
 
 <Code code={region(examples, "location-updates")} lang="ts" />
+
+## Heading
+
+The arrow points where the device faces while the app passes a heading as
+`userHeading`, in degrees clockwise from north, and shows the course again once
+it's `undefined`. The compass needs no permission. An app reads it from
+`@ohos.sensor`'s orientation sensor while the page shows, and turns the map with
+it by following with `FollowBearing.heading`:
+
+<Code code={region(examples, "heading")} lang="ts" />

@@ -1,7 +1,8 @@
 // The user's location on a map: the indicator that a MapLibreMap draws as a
 // style layer, and how the camera follows it. The app gets the location from
-// Location Kit, or anywhere else, and passes it to the map; this library
-// requests no permission and starts no location request.
+// Location Kit and the heading from the compass, or anywhere else, and passes
+// them to the map; this library requests no permission and starts no location
+// or sensor request.
 
 import { MapHandle } from '@maplibre/native-ffi';
 import { LengthMetricsUnit } from '@ohos.arkui.node';
@@ -14,15 +15,23 @@ import { readPixelMap } from './StyleImage';
 // while the map has a location, so it's internal.
 export const USER_LOCATION_LAYER = 'maplibre-arkui-user-location';
 
+/** Which direction `MapController.followUserLocation()` turns the map to point up. */
+export enum FollowBearing {
+  /** The direction of travel, while the location has one: a `speed` above 0. */
+  course,
+  /** The map's `userHeading`, the direction that the device faces, while it has one. */
+  heading,
+}
+
 /** How `MapController.followUserLocation()` moves the camera. */
 export interface FollowUserLocationOptions {
   /** The zoom that the camera eases to as it starts to follow. Keeps the zoom by default. */
   zoom?: number;
   /**
-   * Turns the map so the direction of travel points up, while the location
-   * has one: a `speed` above 0. Keeps the bearing by default.
+   * The direction that the map turns to point up. While there is none, and
+   * by default, the camera keeps its bearing.
    */
-  course?: boolean;
+  bearing?: FollowBearing;
 }
 
 // How long the indicator and a following camera take to reach a new location.
@@ -30,7 +39,7 @@ export interface FollowUserLocationOptions {
 export const FOLLOW_MS = 1000;
 
 const DOT_IMAGE = 'maplibre-arkui-user-location-dot';
-const COURSE_IMAGE = 'maplibre-arkui-user-location-course';
+const ARROW_IMAGE = 'maplibre-arkui-user-location-arrow';
 // The dot's color, and its radius and its white border's, in vp.
 export const DOT_COLOR = '#1e88e5';
 export const DOT_RADIUS = 7;
@@ -42,22 +51,28 @@ export function course(location: geoLocationManager.Location): number | undefine
   return location.speed > 0 ? location.direction : undefined;
 }
 
+// The direction that the arrow points: where the device faces, or else where
+// it moves.
+function arrowBearing(location: geoLocationManager.Location, heading: number | undefined): number | undefined {
+  return heading ?? course(location);
+}
+
 // The indicator layer of one map. A new style starts without it, so the view
 // adds it again as each style loads.
 export class UserLocationLayer {
   private readonly density: number;
   private loaded: boolean = false;
   private added: boolean = false;
-  private hasCourse: boolean = false;
+  private hasArrow: boolean = false;
 
   constructor(density: number) {
     this.density = density;
   }
 
-  styleLoaded(map: MapHandle, location: geoLocationManager.Location | undefined): void {
+  styleLoaded(map: MapHandle, location: geoLocationManager.Location | undefined, heading: number | undefined): void {
     this.loaded = true;
     this.added = false;
-    this.draw(map, location);
+    this.draw(map, location, heading);
   }
 
   styleChanging(): void {
@@ -65,7 +80,7 @@ export class UserLocationLayer {
   }
 
   // Adds, moves, or removes the indicator. The style animates the move.
-  draw(map: MapHandle, location: geoLocationManager.Location | undefined): void {
+  draw(map: MapHandle, location: geoLocationManager.Location | undefined, heading: number | undefined): void {
     if (!this.loaded) {
       return;
     }
@@ -76,25 +91,25 @@ export class UserLocationLayer {
       }
       return;
     }
-    const bearing = course(location);
+    const direction = arrowBearing(location, heading);
     if (!this.added) {
       this.added = true;
-      this.hasCourse = bearing !== undefined;
+      this.hasArrow = direction !== undefined;
       setImage(map, DOT_IMAGE, dotImage(this.density), this.density);
-      setImage(map, COURSE_IMAGE, courseImage(this.density), this.density);
-      map.discarding.addStyleLayerJson(layerJson(location, bearing));
+      setImage(map, ARROW_IMAGE, arrowImage(this.density), this.density);
+      map.discarding.addStyleLayerJson(layerJson(location, direction));
       return;
     }
     map.discarding.setStyleLayerProperty(USER_LOCATION_LAYER, 'location', position(location));
     map.discarding.setStyleLayerProperty(USER_LOCATION_LAYER, 'accuracy-radius', location.accuracy);
-    // A hidden arrow keeps its last course, so the next one eases from there.
-    if (bearing !== undefined) {
-      map.discarding.setStyleLayerProperty(USER_LOCATION_LAYER, 'bearing', bearing);
+    // A hidden arrow keeps its last bearing, so the next one eases from there.
+    if (direction !== undefined) {
+      map.discarding.setStyleLayerProperty(USER_LOCATION_LAYER, 'bearing', direction);
     }
-    if (this.hasCourse !== (bearing !== undefined)) {
-      this.hasCourse = bearing !== undefined;
+    if (this.hasArrow !== (direction !== undefined)) {
+      this.hasArrow = direction !== undefined;
       map.discarding.setStyleLayerProperty(USER_LOCATION_LAYER, 'bearing-image',
-        bearing !== undefined ? COURSE_IMAGE : '');
+        direction !== undefined ? ARROW_IMAGE : '');
     }
   }
 }
@@ -109,7 +124,7 @@ function layerJson(location: geoLocationManager.Location, bearing: number | unde
   const transition: Record<string, Object> = { 'duration': FOLLOW_MS, 'delay': 0 };
   const layout: Record<string, Object> = {
     'top-image': DOT_IMAGE,
-    'bearing-image': bearing !== undefined ? COURSE_IMAGE : '',
+    'bearing-image': bearing !== undefined ? ARROW_IMAGE : '',
   };
   const paint: Record<string, Object> = {
     'location': position(location),
@@ -162,8 +177,8 @@ function dotImage(density: number): image.PixelMap {
 }
 
 // An arrow that points north from beyond the dot's border, centered on the
-// dot. The layer turns it to the course.
-function courseImage(density: number): image.PixelMap {
+// dot. The layer turns it to the heading or the course.
+function arrowImage(density: number): image.PixelMap {
   const context = canvas(36, density);
   context.fillStyle = DOT_COLOR;
   context.beginPath();

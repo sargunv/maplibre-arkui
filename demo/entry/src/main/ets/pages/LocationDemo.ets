@@ -2,8 +2,9 @@ import abilityAccessCtrl, { Permissions } from '@ohos.abilityAccessCtrl';
 import { BusinessError } from '@ohos.base';
 import common from '@ohos.app.ability.common';
 import geoLocationManager from '@ohos.geoLocationManager';
+import sensor from '@ohos.sensor';
 
-import { MapController, MapLibreMap } from '@maplibre/arkui';
+import { FollowBearing, MapController, MapLibreMap } from '@maplibre/arkui';
 
 import { LIBERTY, PANEL } from './common';
 
@@ -17,6 +18,17 @@ const RADIUS_M = 350;
 const SPEED_M_S = 2 * Math.PI * RADIUS_M / 120;
 const METERS_PER_DEGREE = 111320;
 
+// The course `seconds` into the walk: clockwise around the loop, so 90° past
+// the angle from the center.
+function simulatedCourse(seconds: number): number {
+  return (360 * seconds / 120 + 90) % 360;
+}
+
+// The heading `seconds` into the walk, as the walker looks from side to side.
+function simulatedHeading(seconds: number): number {
+  return (simulatedCourse(seconds) + 60 * Math.sin(2 * Math.PI * seconds / 12) + 360) % 360;
+}
+
 // The location `seconds` into the walk, as Location Kit reports one.
 function simulatedLocation(seconds: number): geoLocationManager.Location {
   const angle = 2 * Math.PI * seconds / 120;
@@ -29,20 +41,27 @@ function simulatedLocation(seconds: number): geoLocationManager.Location {
     // Between 10 and 40 m, as a real fix varies.
     accuracy: 25 + 15 * Math.sin(seconds / 7),
     speed: SPEED_M_S,
-    // Clockwise around the loop, so the course is 90° past the angle.
-    direction: (angle * 180 / Math.PI + 90) % 360,
+    direction: simulatedCourse(seconds),
     timeStamp: Date.now(),
     timeSinceBoot: 0,
   };
 }
 
-// A map that shows where the user is, from Location Kit or a simulated walk,
-// and follows it until a gesture moves the map.
+// The camera's bearing while it follows, by the label of its button.
+const BEARINGS: (FollowBearing | undefined)[] = [undefined, FollowBearing.course, FollowBearing.heading];
+const BEARING_LABELS: string[] = ['Keep the bearing', 'Turn with course', 'Turn with heading'];
+
+// A map that shows where the user is and where they face, from Location Kit
+// and the compass or a simulated walk, and follows it until a gesture moves
+// the map.
 @ComponentV2
 export struct LocationDemo {
   @Local location: geoLocationManager.Location | undefined = undefined;
   @Local simulating: boolean = false;
-  @Local course: boolean = false;
+  @Local heading: number | undefined = undefined;
+  @Local compass: boolean = false;
+  // The index in BEARINGS of how the camera turns.
+  @Local bearing: number = 0;
   @Local message: string = '';
   private map: MapController = new MapController({
     camera: { center: { latitude: CENTER_LATITUDE, longitude: CENTER_LONGITUDE }, zoom: 15 },
@@ -55,9 +74,13 @@ export struct LocationDemo {
       this.location = location;
     }
   };
+  private readonly onOrientation = (data: sensor.OrientationResponse): void => {
+    this.heading = data.alpha;
+  };
 
   aboutToDisappear(): void {
     this.stopSimulating();
+    this.stopCompass();
     if (this.listening) {
       try {
         geoLocationManager.off('locationChange', this.onLocation);
@@ -74,6 +97,7 @@ export struct LocationDemo {
           controller: this.map,
           style: LIBERTY,
           userLocation: this.location,
+          userHeading: this.heading,
           onMapError: (error: Error) => {
             this.message = error.message;
           },
@@ -89,16 +113,18 @@ export struct LocationDemo {
             Button(this.map.followingUserLocation ? 'Following' : 'Locate me')
               .margin(4)
               .onClick(() => this.locate())
-            Toggle({ type: ToggleType.Button, isOn: this.course }) {
-              Text('Turn with course').fontSize(14).padding({ left: 12, right: 12 })
-            }
-            .margin(4)
-            .onChange((isOn: boolean) => {
-              this.course = isOn;
-              if (this.map.followingUserLocation) {
-                this.map.followUserLocation({ course: isOn });
-              }
-            })
+            Button(BEARING_LABELS[this.bearing])
+              .margin(4)
+              .onClick(() => {
+                this.bearing = (this.bearing + 1) % BEARINGS.length;
+                if (this.map.followingUserLocation) {
+                  this.map.followUserLocation({ bearing: BEARINGS[this.bearing] });
+                }
+              })
+            // A button, as a toggle would stay on when the compass fails.
+            Button(this.compass ? 'Stop the compass' : 'Use the compass')
+              .margin(4)
+              .onClick(() => this.compass ? this.stopCompass() : this.startCompass())
             Toggle({ type: ToggleType.Button, isOn: this.simulating }) {
               Text('Simulate a walk').fontSize(14).padding({ left: 12, right: 12 })
             }
@@ -120,13 +146,14 @@ export struct LocationDemo {
       return 'No location yet';
     }
     const following = this.map.followingUserLocation ? 'following' : 'not following';
+    const heading = this.heading !== undefined ? `, facing ${this.heading.toFixed(0)}°` : '';
     return `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)} ` +
-      `± ${location.accuracy.toFixed(0)} m, ${following}`;
+      `± ${location.accuracy.toFixed(0)} m${heading}, ${following}`;
   }
 
   // Follows the location, and asks for Location Kit's first.
   private locate(): void {
-    this.map.followUserLocation({ zoom: 16, course: this.course });
+    this.map.followUserLocation({ zoom: 16, bearing: BEARINGS[this.bearing] });
     if (!this.simulating) {
       this.listen().catch((error: BusinessError) => {
         this.map.stopFollowingUserLocation();
@@ -156,17 +183,52 @@ export struct LocationDemo {
     this.message = 'Waiting for Location Kit…';
   }
 
+  // The compass needs no permission. The emulator has none, so on() throws.
+  private startCompass(): void {
+    this.stopSimulating();
+    try {
+      sensor.on(sensor.SensorId.ORIENTATION, this.onOrientation, { interval: 'ui' });
+      this.compass = true;
+    } catch (error) {
+      this.compass = false;
+      this.message = `Compass: ${(error as BusinessError).message}`;
+    }
+  }
+
+  private stopCompass(): void {
+    if (!this.compass) {
+      return;
+    }
+    this.compass = false;
+    this.heading = undefined;
+    try {
+      sensor.off(sensor.SensorId.ORIENTATION, this.onOrientation);
+    } catch (error) {
+      console.error(`Compass: ${(error as BusinessError).message}`);
+    }
+  }
+
+  // The walk simulates the heading too, in place of the compass.
   private startSimulating(): void {
+    this.stopCompass();
     this.simulating = true;
     this.message = '';
-    this.location = simulatedLocation(this.seconds);
+    this.simulate();
     this.timer = setInterval(() => {
       this.seconds++;
-      this.location = simulatedLocation(this.seconds);
+      this.simulate();
     }, 1000);
   }
 
+  private simulate(): void {
+    this.location = simulatedLocation(this.seconds);
+    this.heading = simulatedHeading(this.seconds);
+  }
+
   private stopSimulating(): void {
+    if (this.simulating) {
+      this.heading = undefined;
+    }
     this.simulating = false;
     clearInterval(this.timer);
   }

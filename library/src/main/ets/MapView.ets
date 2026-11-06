@@ -88,6 +88,7 @@ export class MapView extends XComponentController implements GestureTarget {
   // The limits a new map has, which apply again when the app removes its own.
   private defaultBounds: BoundOptions | undefined = undefined;
   private userLocation: geoLocationManager.Location | undefined = undefined;
+  private userHeading: number | undefined = undefined;
   private readonly locationLayer: UserLocationLayer;
 
   // The component's latest size, its latest surface, and the surface that the
@@ -168,22 +169,33 @@ export class MapView extends XComponentController implements GestureTarget {
 
   setUserLocation(location: geoLocationManager.Location | undefined): void {
     this.userLocation = location;
+    this.drawUserLocation(false);
+  }
+
+  // A compass reports many times a second, so a new heading moves the camera
+  // only while it turns with the heading, and other camera changes last.
+  setUserHeading(heading: number | undefined): void {
+    this.userHeading = heading;
+    this.drawUserLocation(true);
+  }
+
+  private drawUserLocation(headingChanged: boolean): void {
     const map = this.map;
     if (map !== undefined) {
-      this.locationLayer.draw(map, location);
-      this.followUserLocation();
+      this.locationLayer.draw(map, this.userLocation, this.userHeading);
+      this.followUserLocation(headingChanged);
     }
   }
 
   // Moves the camera to the user's location while the controller follows it.
-  followUserLocation(): void {
+  followUserLocation(headingChanged: boolean = false): void {
     const map = this.map;
     const location = this.userLocation;
     const controller = this.controller;
     if (map === undefined || location === undefined || controller === undefined || controller.map !== map) {
       return;
     }
-    const camera = controller.followCamera(location);
+    const camera = controller.followCamera(location, this.userHeading, headingChanged);
     if (camera !== undefined) {
       map.discarding.updateCamera({
         mode: CameraUpdateMode.ease,
@@ -407,7 +419,7 @@ export class MapView extends XComponentController implements GestureTarget {
         }
         this.events.onStyleLoaded();
         // Above what the content and the app added as the style loaded.
-        this.locationLayer.styleLoaded(map, this.userLocation);
+        this.locationLayer.styleLoaded(map, this.userLocation, this.userHeading);
       }
     }, () => {
       // A style that fails to load reports mapLoadingFailed.

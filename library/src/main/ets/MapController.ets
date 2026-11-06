@@ -19,7 +19,7 @@ import {
 import geoLocationManager from '@ohos.geoLocationManager';
 
 import { GeoJsonGeometry } from './GeoJson';
-import { FollowUserLocationOptions, course } from './location';
+import { FollowBearing, FollowUserLocationOptions, course } from './location';
 import { MapView } from './MapView';
 
 /** Options for a new `MapController`. */
@@ -235,12 +235,17 @@ export class MapController {
 
   /**
    * Moves the camera to the map's `userLocation`, and then to each new one,
+   * and to each new `userHeading` too while `options` follows the heading,
    * until the user starts a gesture or the app calls
    * `stopFollowingUserLocation()`. Without a location yet, the camera moves
    * once the map gets one. Each move eases the center, the first also the
    * zoom that `options` names, and each the bearing if `options` asks; the
    * rest of the camera stays as the app leaves it. A camera change that the
-   * app makes while following lasts until the next location.
+   * app makes while following lasts until the next location or heading.
+   *
+   * ```ets
+   * this.controller.followUserLocation({ zoom: 16, bearing: FollowBearing.heading });
+   * ```
    */
   followUserLocation(options?: FollowUserLocationOptions): void {
     this.followOptions = options ?? {};
@@ -256,11 +261,15 @@ export class MapController {
   }
 
   /**
-   * Internal: where the map moves the camera for `location`, or undefined
-   * while the camera doesn't follow it.
+   * Internal: where the map moves the camera for `location` and `heading`, or
+   * undefined while the camera doesn't follow them. A new heading alone, which
+   * `headingChanged` says, moves the camera only while it turns with the
+   * heading.
    */
-  followCamera(location: geoLocationManager.Location): CameraOptions | undefined {
-    if (!this.followingUserLocation) {
+  followCamera(location: geoLocationManager.Location, heading: number | undefined,
+    headingChanged: boolean): CameraOptions | undefined {
+    const follow = this.followOptions.bearing;
+    if (!this.followingUserLocation || (headingChanged && follow !== FollowBearing.heading)) {
       return undefined;
     }
     const zoom = this.followZoom;
@@ -268,7 +277,8 @@ export class MapController {
     return {
       center: { latitude: location.latitude, longitude: location.longitude },
       zoom: zoom,
-      bearing: this.followOptions.course === true ? course(location) : undefined,
+      bearing: follow === FollowBearing.course ? course(location) :
+        follow === FollowBearing.heading ? heading : undefined,
     };
   }
 
