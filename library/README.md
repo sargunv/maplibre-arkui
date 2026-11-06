@@ -65,13 +65,13 @@ struct MapPage {
 }
 ```
 
-## Guide
+## Documentation
 
-The [repository's README][guide] is the guide: the map and its camera, gestures,
-ornaments and markers, map content and expressions, the style API, the user's
-location, snapshots, requests, offline regions, and logs. Its examples build in
-the repository's demo app, which shows each feature.
+The [documentation] has the guides, from the map and its camera to requests,
+offline regions, and logs, and the [API reference]. Its examples build in the
+repository's demo app, which shows each feature.
 
-[guide]: https://github.com/sargunv/maplibre-arkui#readme
+[API reference]: https://sargunv.github.io/maplibre-arkui/api/
+[documentation]: https://sargunv.github.io/maplibre-arkui/
 [MapLibre Native]: https://github.com/maplibre/maplibre-native
 [MapLibre Native FFI]: https://maplibre.org/maplibre-native-ffi/

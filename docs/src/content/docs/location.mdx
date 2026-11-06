@@ -1,0 +1,29 @@
+---
+title: The user's location
+description: Show the user's location from Location Kit, and let the camera follow it.
+---
+
+import { Code } from "@astrojs/starlight/components";
+import Api from "../../components/Api.astro";
+import { region } from "../../snippets";
+
+import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
+
+The map shows the location that the app passes as `userLocation`, a Location Kit
+`geoLocationManager.Location`, as a dot in a circle of its accuracy, with an
+arrow for its course while it moves.
+
+<Api of="MapController.followUserLocation" display="followUserLocation()" />
+
+moves the camera with each new location until the user starts a gesture, which
+sets the controller's observable `followingUserLocation` to false:
+
+<Code code={region(examples, "location")} lang="ts" />
+
+The library declares no permission and starts no location request, so apps that
+don't show a location don't ask for one. An app that does declares
+`ohos.permission.APPROXIMATELY_LOCATION` and `ohos.permission.LOCATION` in its
+`module.json5`, with a `reason`, asks for them when the user wants to see their
+location, and listens until the page goes away:
+
+<Code code={region(examples, "location-updates")} lang="ts" />

@@ -1,0 +1,26 @@
+---
+title: Expressions
+description: Build style expressions with functions named after their operators.
+---
+
+import { Code } from "@astrojs/starlight/components";
+import Api from "../../components/Api.astro";
+import { region } from "../../snippets";
+
+import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
+
+Build [style expressions] with functions named after their operators, such as
+<Api of="get" />, <Api of="match" />, <Api of="interpolate" />, and
+<Api of="featureState" /> for `feature-state`. Symbols get words (`eq` for `==`,
+`add` for `+`), and `case` is <Api of="cases" />. Use them in
+[`MapContent`](/maplibre-arkui/content/), or pass them to FFI's style functions
+as they are:
+
+<Code code={region(examples, "expressions")} lang="ts" />
+
+<Api of="call" display="call(operator, ...args)" /> and
+<Api of="Expression" display="new Expression(json)" /> cover the operators that
+have no function. Expressions are untyped: MapLibre checks their types as it
+parses them.
+
+[style expressions]: https://maplibre.org/maplibre-style-spec/expressions/

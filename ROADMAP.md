@@ -839,15 +839,18 @@ References:
 
 Decided:
 
-- `docs/api-guidelines.md` writes down the conventions the code follows, and how
-  they differ from MapLibre Compose's. The ArkTS style guide's UPPER_SNAKE
-  constants hold for internal constants; enum members follow FFI's
+- `docs/src/content/docs/api-guidelines.md` writes down the conventions the code
+  follows, and how they differ from MapLibre Compose's. The ArkTS style guide's
+  UPPER_SNAKE constants hold for internal constants; enum members follow FFI's
   lowerCamelCase. Options are interfaces of optional fields, which grow without
   breaking callers. Doc comments are prose with backticks, without JSDoc tags.
-- The repository's `README.md` is the guide, and `library/README.md` the ohpm
-  page. No docs site yet: the guide's examples are in the demo's `ets/docs/`,
-  which the demo build compiles and `mise run check` matches against both
-  READMEs, so they can't drift from the API.
+- The documentation site in `docs/`, on GitHub Pages, is the guide, with an API
+  reference that TypeDoc generates from the doc comments and that links FFI's
+  re-exports to FFI's reference. `README.md` is a stub, and `library/README.md`
+  the ohpm page. The site's examples are regions of the demo's `ets/docs/`,
+  which the demo build compiles and the site build cuts out by name, and
+  `mise run check` matches the READMEs' quick start against them, so they can't
+  drift from the API.
 - `@maplibre/arkui`, version `0.1.0-preview.1`, with a `CHANGELOG.md` that names
   each version, as OHPM's review requires. `mise run pack` makes a HAR that
   `ohpm prepublish` accepts once the FFI dependency names a published version;
@@ -888,7 +891,7 @@ Decided:
   types, the `Record` literals). Static ArkTS may reach native code through ANI
   rather than Node-API, which FFI's binding uses.
 - **Smaller follow-ups.** The ones under [Status](#status), and those in
-  `docs/api-guidelines.md`.
+  `docs/src/content/docs/api-guidelines.md`.
 
 ## Later
 

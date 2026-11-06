@@ -1,0 +1,47 @@
+---
+title: Overview
+description: MapLibre ArkUI adds MapLibre Native maps to ArkUI apps on HarmonyOS and OpenHarmony.
+---
+
+import { Code } from "@astrojs/starlight/components";
+import Api from "../../components/Api.astro";
+import { region } from "../../snippets";
+
+import quickStart from "../../../../demo/entry/src/main/ets/docs/QuickStart.ets?raw";
+
+MapLibre ArkUI is an ArkUI library for [MapLibre Native] on HarmonyOS and
+OpenHarmony, built on the ArkTS bindings of [MapLibre Native FFI]. It is a
+cousin of [MapLibre Compose]. The package, `@maplibre/arkui`, has a
+<Api of="MapLibreMap" /> component that moves with touch, mouse, touchpad, and
+keyboard gestures, a <Api of="MapController" /> that reads and moves its camera,
+ornaments, markers made of ArkUI content, the user's location, map content that
+the app declares from its state, style expressions, and snapshots. It passes on
+FFI's style API, request handlers, offline regions, and logs as they are.
+
+This page shows a map of Paris, with a button that flies to New York:
+
+<Code code={region(quickStart, "quick-start")} lang="ts" title="MapPage.ets" />
+
+It's a preview, and it isn't on [ohpm] yet: it waits for FFI to publish its
+packages there. See [the changelog] and [the roadmap].
+
+## Next
+
+- [Getting started](/maplibre-arkui/getting-started/): install the library and
+  show a map.
+- The guides, from [the map](/maplibre-arkui/map/) to
+  [requests, offline regions, and logs](/maplibre-arkui/requests/).
+- The [API reference](/maplibre-arkui/api/), generated from the library's doc
+  comments.
+
+[MapLibre Compose]: https://maplibre.org/maplibre-compose/
+
+[MapLibre Native]: https://github.com/maplibre/maplibre-native
+
+[MapLibre Native FFI]: https://maplibre.org/maplibre-native-ffi/
+
+[ohpm]: https://ohpm.openharmony.cn/
+
+[the changelog]: https://github.com/sargunv/maplibre-arkui/blob/main/library/CHANGELOG.md
+
+[the roadmap]: https://github.com/sargunv/maplibre-arkui/blob/main/ROADMAP.md

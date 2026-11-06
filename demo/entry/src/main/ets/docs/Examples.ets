@@ -1,8 +1,7 @@
-// The examples of README.md and library/README.md, which the demo builds, so
-// they keep to the API. scripts/check-doc-examples.sh checks that each `ets`
-// block of those files is in this file or QuickStart.ets, line for line, and
-// the build checks that they compile. The demo's "README examples" page shows
-// them in tabs.
+// The examples of the documentation site, which the demo builds, so they keep
+// to the API. Each `// #region <name>` is an example that a page of docs/ cuts
+// out by name, and the site build fails on a region that's missing. The
+// demo's "Guide examples" page shows them in tabs.
 
 import abilityAccessCtrl, { Permissions } from '@ohos.abilityAccessCtrl';
 import common from '@ohos.app.ability.common';
@@ -68,10 +67,12 @@ const PARIS: GeoJsonFeatureCollection = {
   ],
 };
 
+// #region geojson
 const LOUVRE: GeoJsonFeature = {
   type: 'Feature', id: 3, geometry: { type: 'Point', coordinates: [2.3376, 48.8606] },
   properties: { 'name': 'Louvre', 'kind': 'museum' },
 };
+// #endregion geojson
 
 // Decodes an image from the app's resources/rawfile into the pixels a style
 // takes.
@@ -93,9 +94,12 @@ struct ContentExample {
   private controller: MapController = new MapController({
     camera: { center: { latitude: 48.858, longitude: 2.315 }, zoom: 12 },
   });
+  // #region content-image
   // Read once: the map compares images by reference.
   private pin: PremultipliedRgba8Image = readImage(this.getUIContext(), 'pin.png');
+  // #endregion content-image
 
+  // #region content
   @Computed
   get content(): MapContent {
     return {
@@ -115,17 +119,22 @@ struct ContentExample {
       images: [{ id: 'pin', image: this.pin, options: { pixelRatio: 3 } }],
     };
   }
+  // #endregion content
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
+      // #region query-click
       MapLibreMap({ controller: this.controller, style: STYLE, content: this.content })
         .onClick((event: ClickEvent) => this.select(event.x, event.y))
+      // #endregion query-click
       Column({ space: 8 }) {
         Text(this.selected)
         Row({ space: 8 }) {
           Button('Add the Louvre').onClick(() => {
             // A new value: the map doesn't see changes inside the one it has.
+            // #region content-change
             this.places = { type: 'FeatureCollection', features: this.places.features.concat([LOUVRE]) };
+            // #endregion content-change
           })
           Button('Color').onClick(() => {
             this.color = this.color === '#1e88e5' ? '#8e24aa' : '#1e88e5';
@@ -137,6 +146,7 @@ struct ContentExample {
   }
 
   // A click's point is in vp from the map's top-left corner, as queries take it.
+  // #region query
   private async select(x: number, y: number): Promise<void> {
     const session = this.controller.renderSession;
     if (session === undefined) {
@@ -147,6 +157,7 @@ struct ContentExample {
     const feature = hits.length > 0 ? hits[0].feature as GeoJsonFeature : undefined;
     this.selected = feature === undefined ? 'Nothing here' : `${feature.properties?.['name']}`;
   }
+  // #endregion query
 }
 
 // Ornaments, markers, the camera, and gestures
@@ -158,6 +169,7 @@ struct MarkerExample {
   });
 
   build() {
+    // #region marker
     MapLibreMap({ controller: this.controller, style: STYLE, scaleBarEnabled: true }) {
       MapMarker({ controller: this.controller, coordinate: { latitude: 48.8566, longitude: 2.3522 } }) {
         Text('Paris')
@@ -165,6 +177,7 @@ struct MarkerExample {
           .backgroundColor(Color.White)
       }
     }
+    // #endregion marker
   }
 }
 
@@ -175,11 +188,13 @@ struct CompassExample {
   });
 
   build() {
+    // #region compass
     Stack({ alignContent: Alignment.TopStart }) {
       MapLibreMap({ controller: this.controller, style: STYLE, compassEnabled: false })
       MapCompass({ controller: this.controller, alwaysShown: true })
         .margin(16)
     }
+    // #endregion compass
   }
 }
 
@@ -198,6 +213,7 @@ struct CameraExample {
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
+      // #region gestures
       MapLibreMap({
         controller: this.controller,
         style: STYLE,
@@ -209,9 +225,12 @@ struct CameraExample {
           this.moving = false;
         },
       })
+      // #endregion gestures
       Column({ space: 8 }) {
         // `camera` is observable, so this text changes as the camera comes to rest.
+        // #region camera-observable
         Text(this.moving ? 'Moving' : `Zoom ${this.controller.camera?.zoom.toFixed(1) ?? '…'}`)
+        // #endregion camera-observable
         Text(this.message)
         Button('Fit Switzerland').onClick(() => this.fitSwitzerland())
       }
@@ -220,6 +239,7 @@ struct CameraExample {
   }
 
   private fitSwitzerland(): void {
+    // #region camera-fit
     this.controller.fitCameraToLatLngBounds(SWITZERLAND, {
       mode: CameraUpdateMode.ease,
       fit: { padding: { top: 24, left: 24, bottom: 24, right: 24 } },
@@ -231,6 +251,7 @@ struct CameraExample {
       // No map is on screen, or the map rejected the move.
       this.message = error.message;
     });
+    // #endregion camera-fit
   }
 }
 
@@ -240,6 +261,7 @@ const PERMISSIONS: Permissions[] = ['ohos.permission.APPROXIMATELY_LOCATION', 'o
 
 @ComponentV2
 struct LocationExample {
+  // #region location
   @Local location: geoLocationManager.Location | undefined = undefined;
   private controller: MapController = new MapController();
   private listening: boolean = false;
@@ -259,7 +281,9 @@ struct LocationExample {
         })
     }
   }
+  // #endregion location
 
+  // #region location-updates
   aboutToDisappear(): void {
     this.gone = true;
     if (!this.listening) {
@@ -298,12 +322,14 @@ struct LocationExample {
     this.listening = false;
     this.controller.stopFollowingUserLocation();
   }
+  // #endregion location-updates
 }
 
 // Snapshots
 
 @ComponentV2
 struct SnapshotExample {
+  // #region snapshot
   @Local preview: image.PixelMap | undefined = undefined;
   private disappeared: boolean = false;
 
@@ -326,6 +352,7 @@ struct SnapshotExample {
     this.disappeared = true;
     this.preview?.release();
   }
+  // #endregion snapshot
 
   build() {
     Column() {
@@ -340,6 +367,7 @@ struct SnapshotExample {
 }
 
 // An image of what a MapLibreMap shows: its style, its content, and its camera.
+// #region snapshot-of
 function snapshotOf(controller: MapController, content: MapContent): Promise<image.PixelMap> {
   const camera = controller.getCamera();
   return snapshot({
@@ -350,18 +378,22 @@ function snapshotOf(controller: MapController, content: MapContent): Promise<ima
     camera: camera === undefined ? undefined : cameraToOptions(camera),
   });
 }
+// #endregion snapshot-of
 
 // Expressions and the style API
 
+// #region expressions
 async function styleWithExpressions(map: MapHandle): Promise<void> {
   const radius = interpolate(linear(), zoom(), [[0, 2], [12, get('size')]]);
   const color = match(get('kind'), [['park', '#8c8'], [['lake', 'river'], '#88c']], '#ccc');
   await map.setStyleLayerProperty('places', 'circle-radius', radius);
   await map.setStyleLayerProperty('places', 'circle-color', color);
 }
+// #endregion expressions
 
 // Requests, offline regions, and logs
 
+// #region resource-transform
 async function useApiKey(): Promise<void> {
   const runtime = await getDefaultRuntime();
   await runtime.setResourceTransform({
@@ -372,6 +404,7 @@ async function useApiKey(): Promise<void> {
     }],
   });
 }
+// #endregion resource-transform
 
 const PARIS_REGION: OfflineRegionDefinition = {
   kind: 'tilePyramid',
@@ -386,6 +419,7 @@ const PARIS_REGION: OfflineRegionDefinition = {
 };
 
 async function downloadParis(runtime: RuntimeHandle): Promise<void> {
+  // #region offline
   const region = await runtime.createOfflineRegion(PARIS_REGION, new util.TextEncoder().encodeInto('Paris'));
   addRuntimeEventListener(runtime, (event: RuntimeEvent) => {
     const payload = event.payload;
@@ -396,18 +430,22 @@ async function downloadParis(runtime: RuntimeHandle): Promise<void> {
   });
   await runtime.setOfflineRegionObserved(region.id, RuntimeEventFlag.offlineRegionStatusChanged);
   await runtime.setOfflineRegionDownloadState(region.id, OfflineRegionDownloadState.active);
+  // #endregion offline
 }
 
 function watchMissingImages(runtime: RuntimeHandle): void {
+  // #region map-events
   addRuntimeEventListener(runtime, (event: RuntimeEvent) => {
     const payload = event.payload;
     if (event.type === RuntimeEventType.mapStyleImageMissing && payload.kind === 'styleImage') {
       console.warn(`The style needs the image ${payload.value.imageId}`);
     }
   }, RuntimeEventFlag.mapStyleImageMissing);
+  // #endregion map-events
 }
 
 function takeLogs(): void {
+  // #region logs
   setLogCallback({
     callback: (severity: LogSeverity, event: LogEvent, code: bigint, message: string) => {
       console.info(`MapLibre (${event}): ${message}`);
@@ -415,6 +453,7 @@ function takeLogs(): void {
     // Errors still go to hilog too.
     platformSeverities: LogSeverityFlag.error,
   });
+  // #endregion logs
 }
 
 // Each example in a tab. The functions only need to compile.
@@ -444,9 +483,10 @@ export struct DocExamples {
       }
       .barMode(BarMode.Scrollable)
     }
-    .title('README examples')
+    .title('Guide examples')
   }
 }
 
 // Keeps the functions that no tab calls from being unused.
-export const COMPILED_EXAMPLES: Object[] = [snapshotOf, styleWithExpressions, useApiKey, downloadParis, takeLogs];
+export const COMPILED_EXAMPLES: Object[] = [snapshotOf, styleWithExpressions, useApiKey, downloadParis, watchMissingImages,
+  takeLogs];

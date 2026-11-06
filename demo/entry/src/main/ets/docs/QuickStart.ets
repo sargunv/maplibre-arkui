@@ -1,6 +1,7 @@
-// The quick start of README.md and library/README.md, as they write it. The
-// demo's "Quick start" button opens it.
+// The quick start of README.md, library/README.md, and the documentation site,
+// as they write it. The demo's "Quick start" button opens it.
 
+// #region quick-start
 import { CameraUpdateMode, MapController, MapLibreMap } from '@maplibre/arkui';
 
 @Entry
@@ -31,3 +32,4 @@ struct MapPage {
     .height('100%')
   }
 }
+// #endregion quick-start

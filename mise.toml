@@ -34,6 +34,8 @@ ohos_sdk_version = "6.1"
 "aqua:cli/cli" = "2.103.3"
 # ets-loader, the SDK's ArkTS compiler front end, runs on Node.
 "core:node" = "26.13.0"
+# Installs the documentation site's packages in docs/.
+"aqua:pnpm/pnpm" = "12.17.0"
 # The SDK packs and signs HAPs with Java tools.
 "core:java" = "zulu-25.38.109.0"
 # devices-cli gives each worktree its own emulator. It has no releases, so mise
@@ -66,10 +68,13 @@ postinstall = ["hk install --mise"]
 
 [tasks.check]
 description = "Run every formatter and linter check."
+# dprint formats the documentation site's pages with its mdxlint.
+depends = ["docs:install"]
 run = "hk check --all"
 
 [tasks.fix]
 description = "Apply every formatter and linter fix."
+depends = ["docs:install"]
 run = "hk fix --all"
 
 [tasks."ffi:download"]
@@ -143,3 +148,48 @@ abi=$(scripts/device-abi.sh "$device")
 mise run test:build --abi "$abi"
 scripts/run-tests.sh "$device" "build/test/$abi/entry_test.hap"
 '''
+
+[tasks."docs:install"]
+description = "Install the documentation site's packages in docs/node_modules."
+dir = "docs"
+sources = ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml"]
+outputs = ["node_modules/.modules.yaml"]
+run = "pnpm install --frozen-lockfile"
+
+[tasks."docs:api"]
+description = "Generate the API reference from the library's doc comments into docs/public/api, against build/ffi."
+depends = ["docs:install"]
+run = '''
+if [[ ! -f build/ffi/native-ffi.har ]]; then
+  echo "error: build/ffi has no FFI packages; run mise run ffi:download" >&2
+  exit 1
+fi
+rm -rf build/docs docs/public/api
+mkdir -p build/docs/ffi
+# FFI's types, as a package that TypeDoc links to FFI's reference.
+tar -xzf build/ffi/native-ffi.har -C build/docs/ffi --strip-components 1 package/index.d.ts
+echo '{ "name": "@maplibre/native-ffi", "types": "index.d.ts" }' > build/docs/ffi/package.json
+node docs/scripts/emit-declarations.mjs "$(dirname "$OHOS_SDK_NATIVE")/ets" library/Index.ets \
+  build/docs/ffi/index.d.ts build/docs/declarations
+node docs/scripts/ffi-reference.mjs build/docs/declarations/Index.d.ts build/docs
+(cd docs && pnpm exec typedoc)
+node docs/scripts/api-index.mjs docs/public/api build/docs/ffi-reference.json docs/src/generated/api-index.json
+'''
+
+[tasks."docs:build"]
+description = "Build the documentation site, with the API reference, into docs/dist."
+depends = ["docs:api"]
+dir = "docs"
+run = "pnpm exec astro build"
+
+[tasks."docs:dev"]
+description = "Serve the documentation site with live reload."
+depends = ["docs:api"]
+dir = "docs"
+run = "pnpm exec astro dev"
+
+[tasks."docs:preview"]
+description = "Build the documentation site and serve docs/dist."
+depends = ["docs:build"]
+dir = "docs"
+run = "pnpm exec astro preview"

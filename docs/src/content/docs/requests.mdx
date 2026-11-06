@@ -1,0 +1,46 @@
+---
+title: Requests, offline regions, and logs
+description: Rewrite and serve requests, download offline regions, and take MapLibre's logs, with MapLibre Native FFI's API.
+---
+
+import { Code } from "@astrojs/starlight/components";
+import Api from "../../components/Api.astro";
+import { region } from "../../snippets";
+
+import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
+
+These are [MapLibre Native FFI]'s API, which the package re-exports. Maps and
+snapshots share a default runtime unless the app passes its own. Set request
+handlers on it, before or after maps appear:
+
+<Code code={region(examples, "resource-transform")} lang="ts" />
+
+For other rewrites, pass a `callback` instead of `rules`; it must answer every
+request. On OpenHarmony, FFI has no header transform: serve the requests that
+need headers with `runtime.setResourceProvider()` instead. See FFI's [network
+guide].
+
+The default runtime, from <Api of="getDefaultRuntime" display="getDefaultRuntime()" />,
+keeps its cache database, `maplibre-cache.db`, in the app's files directory, so
+[offline regions] last between launches. The library owns the runtime's one
+event handler, so watch a download with
+<Api of="addRuntimeEventListener" display="addRuntimeEventListener()" />:
+
+<Code code={region(examples, "offline")} lang="ts" />
+
+A listener gets the runtime's own events, such as offline progress, and only the
+map events that it asks for. The library sets each map's event mask to what the
+listeners ask for, so a map's other events cost nothing:
+
+<Code code={region(examples, "map-events")} lang="ts" />
+
+MapLibre logs to hilog with the tag `MapLibreNative`. To take the logs, set a
+callback with <Api of="setLogCallback" display="setLogCallback()" />:
+
+<Code code={region(examples, "logs")} lang="ts" />
+
+[MapLibre Native FFI]: https://maplibre.org/maplibre-native-ffi/
+
+[network guide]: https://maplibre.org/maplibre-native-ffi/guides/network/
+
+[offline regions]: https://maplibre.org/maplibre-native-ffi/guides/offline/

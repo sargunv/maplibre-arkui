@@ -1,9 +1,13 @@
-# API guidelines
+---
+title: API guidelines
+description: The conventions that the public API of @maplibre/arkui follows.
+---
 
 The conventions that `@maplibre/arkui`'s public API follows. The public API is
 what `library/Index.ets` exports. These describe the code as it is; when a rule
 doesn't fit a new case, change the rule in the same change rather than make an
-exception. The priorities behind them are in [ROADMAP.md](../ROADMAP.md)'s
+exception. The priorities behind them are in
+[ROADMAP.md](https://github.com/sargunv/maplibre-arkui/blob/main/ROADMAP.md)'s
 guiding ideas: simple code, ArkUI idiom over MapLibre Compose's shape, state
 management V2 only, and FFI's API where it already reads as ArkTS.
 
@@ -146,8 +150,9 @@ management V2 only, and FFI's API where it already reads as ArkTS.
 - A public member that only the library should call, because ArkTS has no
   package-private members, starts its comment with "Internal:".
 - Internal code uses `//` comments that say why.
-- The READMEs' examples are in the demo's `ets/docs/`, which the demo build
-  compiles and `mise run check` matches against the READMEs.
+- The documentation's examples are regions of the demo's `ets/docs/`, which the
+  demo build compiles and the site build cuts out by name. `mise run check`
+  matches the READMEs' examples against those files.
 
 ## Compared with MapLibre Compose
 
