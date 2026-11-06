@@ -191,10 +191,18 @@ export class MapGestures {
         lifted.add(touch.id);
       }
     }
+    // Each event moves one finger. On HarmonyOS 6, the other fingers in
+    // `touches` have window coordinates of 0, which makes their x and y wrong,
+    // so they stay where their last change put them.
+    const changed = new Map<number, TouchPoint>();
+    for (const touch of event.changedTouches) {
+      changed.set(touch.id, { id: touch.id, x: touch.x, y: touch.y });
+    }
     const pressed: TouchPoint[] = [];
     for (const touch of event.touches) {
       if (!lifted.has(touch.id)) {
-        pressed.push({ id: touch.id, x: touch.x, y: touch.y });
+        pressed.push(changed.get(touch.id) ?? this.touches.find((p: TouchPoint) => p.id === touch.id) ??
+          { id: touch.id, x: touch.x, y: touch.y });
       }
     }
     this.touch(event.timestamp / 1e6, inOrder(this.touches, pressed));
@@ -533,6 +541,13 @@ export class MapGestures {
     }
     if (delta.anchor !== undefined) {
       this.anchor = delta.anchor;
+      // ArkUI reports one finger at a time, so the midpoint moves by half that
+      // finger's step even when the pair doesn't pan. Moving with it keeps the
+      // content under both fingers; scaling or turning about it alone drifts.
+      if (delta.offset === undefined && options.pan !== false) {
+        const center0 = midpoint(a0, b0);
+        delta.offset = { x: center.x - center0.x, y: center.y - center0.y };
+      }
     }
     if (delta.offset !== undefined || delta.scale !== undefined || delta.bearing !== undefined ||
       delta.pitch !== undefined) {

@@ -144,6 +144,17 @@ release. Each entry names the FFI commit it was seen at.
   stage 2 worktree's gitignored `.proof/` (`ffi-repro-cppcrash-*.log`,
   `review-cppcrash*.log`).
 
+  **On an emulator with a GPU, the suite doesn't crash.** On DevEco Studio's
+  HarmonyOS 6.0.2 emulator (arm64, with a hardware GPU), this repository's whole
+  suite (103 to 107 cases, with the scale bar, markers, compass, and injected
+  gestures over the map) finished in each of 8 runs during #15, against 2 of 18
+  runs on the Oniro emulator during stage 11. So the crash is very likely
+  llvmpipe's rather than a race between FFI's render threads. That's one
+  emulator, not a phone, and the suite shows one map at a time, so several maps
+  at once on a GPU are still untried. Suggested fix: report the stacks to Oniro
+  or Mesa, and note in FFI's OpenHarmony guide that the Oniro emulator's
+  llvmpipe can't render maps reliably.
+
 ## Stage 6: expressions (FFI `5c4c9084`, `11ffaaf6`)
 
 - **`StyleExpressionHandle.evaluate` doesn't document the JSON of colors,
@@ -335,7 +346,8 @@ release. Each entry names the FFI commit it was seen at.
   Suggested fix: trace how the OpenHarmony surface hands buffers between FFI's
   render thread and `RSRenderThread` (fences on `eglSwapBuffers`, and whether
   the native window's buffers are shared across contexts), and check whether a
-  GPU driver crashes too.
+  GPU driver crashes too. On DevEco Studio's emulator, which has one, the suite
+  finished every run without the patch (see the entry above).
 
 - **The webpack build that FFI's example uses rejects more ArkUI.** In SDK 6.1,
   besides the limits in stage 1 and 2: (a) any component written directly in a
@@ -400,6 +412,19 @@ release. Each entry names the FFI commit it was seen at.
   "install @maplibre/native-ffi-opengl or @maplibre/native-ffi-vulkan, at this
   facade's version", when the addon is missing. The ABI check already covers a
   backend of another version.
+
+## Test suite cleanup (FFI `5c4c9084`)
+
+- **A map's size is in whole logical pixels.** `mln_logical_extent` and
+  `mln_logical_size` take `uint32_t` widths and heights, as MapLibre Native's
+  `Size` does, so where a surface isn't a whole number of vp the map is up to
+  half a vp larger or smaller than its view. On DevEco Studio's emulator, at a
+  density of 3.5, a 1308 px surface is 373.71 vp; the map is 374 vp wide,
+  renders 1309 px into it, and has its center 0.14 vp right of the view's, which
+  showed as a 0.1 vp drift when the wheel zoomed at the view's center. Small,
+  but code that projects with the view's own size is off by as much. Suggested
+  fix: note it in the window guide, unless MapLibre Native takes fractional
+  sizes.
 
 [42012958276]:
   https://github.com/maplibre/maplibre-native-ffi/actions/runs/42012958276

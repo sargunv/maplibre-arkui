@@ -31,7 +31,10 @@ export const FOLLOW_MS = 1000;
 
 const DOT_IMAGE = 'maplibre-arkui-user-location-dot';
 const COURSE_IMAGE = 'maplibre-arkui-user-location-course';
-const BLUE = '#1e88e5';
+// The dot's color, and its radius and its white border's, in vp.
+export const DOT_COLOR = '#1e88e5';
+export const DOT_RADIUS = 7;
+export const BORDER_RADIUS = 10;
 
 // Location Kit reports a direction even at rest, so only a moving location has
 // a course.
@@ -143,25 +146,26 @@ function pixels(context: OffscreenCanvasRenderingContext2D, size: number, densit
   return context.getPixelMap(0, 0, side, side);
 }
 
-// A blue dot with a white border, 22 vp across.
+// A blue dot with a white border, with 1 vp around it.
 function dotImage(density: number): image.PixelMap {
-  const context = canvas(22, density);
+  const size = 2 * BORDER_RADIUS + 2;
+  const context = canvas(size, density);
   context.fillStyle = '#ffffff';
   context.beginPath();
-  context.arc(11, 11, 10, 0, 2 * Math.PI);
+  context.arc(size / 2, size / 2, BORDER_RADIUS, 0, 2 * Math.PI);
   context.fill();
-  context.fillStyle = BLUE;
+  context.fillStyle = DOT_COLOR;
   context.beginPath();
-  context.arc(11, 11, 7, 0, 2 * Math.PI);
+  context.arc(size / 2, size / 2, DOT_RADIUS, 0, 2 * Math.PI);
   context.fill();
-  return pixels(context, 22, density);
+  return pixels(context, size, density);
 }
 
 // An arrow that points north from beyond the dot's border, centered on the
 // dot. The layer turns it to the course.
 function courseImage(density: number): image.PixelMap {
   const context = canvas(36, density);
-  context.fillStyle = BLUE;
+  context.fillStyle = DOT_COLOR;
   context.beginPath();
   context.moveTo(18, 0);
   context.lineTo(12, 8);

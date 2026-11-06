@@ -36,9 +36,10 @@ library/                 @maplibre/arkui, a source HAR
     Snapshot.ets         snapshot(): a still image of a map, as a PixelMap
   src/main/module.json   the HAR's module manifest
   src/ohosTest/          the hypium suite, a test HAP in DevEco's layout
-    ets/test/            the cases; List.test.ets registers them, until.ets
-                         waits for frames
-    ets/testability/     the test ability and the page whose map cases drive
+    ets/test/            the cases; List.test.ets registers them, helpers.ets
+                         holds what they share
+    ets/testability/     the test ability, the page, and TestMaps.ets: the
+                         page's map, its reset(), and the frame waits
 demo/entry/src/main/     the demo app's only module (module.json holds the app's
                          fields too, as FFI's ArkUI example does): a map with
                          camera buttons, a page with two maps, a map in a
@@ -81,8 +82,9 @@ SDK plugin unpacks with the host's `python3`, and the scripts use `perl` and
   another device).
 - `mise run test:build` / `mise run test`: build the hypium suite, or build and
   run it on the emulator. It fails unless hypium reports every case passed. A
-  run that ends without hypium's tally crashed, most likely in llvmpipe (see
-  `docs/ffi-feedback.md`); that crash is FFI's to fix, not a reason to retry.
+  run that ends without hypium's tally crashed, most likely in the Oniro
+  emulator's llvmpipe (see `docs/ffi-feedback.md`), which isn't a reason to
+  retry. The suite finishes on DevEco Studio's emulator, which has a GPU.
 - `scripts/ohos-key.sh`: print this worktree's emulator key, booting it if
   needed. `devices-cli release` stops it. It runs `scripts/wake-device.sh`,
   which turns the screen on, keeps it on for a day, and swipes the lock screen
@@ -209,22 +211,32 @@ ohpm. To publish:
   component derives values from it.
 - Ornaments use `sys.color.*` and `sys.media.*` resources so they follow dark
   mode; the HAR has no resources of its own yet.
-- On the emulator, content that moves every frame over a map makes the llvmpipe
-  crash likelier, so test cases turn on the scale bar and markers only while
-  they need them.
+- On the Oniro emulator, content that moves every frame over a map makes the
+  llvmpipe crash likelier, so test cases turn on the scale bar, markers, and
+  compass only while they need them, and the suites that need no map run before
+  any suite shows it.
+- Each suite that uses the test page's map calls `testMap.reset()` in its
+  `beforeEach`, which loads the style afresh and turns every flag off, rather
+  than undoing its changes in `afterEach` or `finally`. Shared helpers go in
+  `test/helpers.ets`.
 - The map's ArkUI gestures only claim touches; `MapGestures` moves the camera
   from the raw touches, and only after a claim. Keep camera math out of the
-  gesture callbacks, except for input that has no touches (touchpad pinch).
+  gesture callbacks, except for input that has no touches (touchpad pinch). Each
+  touch event moves one finger, and on HarmonyOS 6 the other fingers in its
+  `touches` have wrong coordinates, so the recognizer reads positions from
+  `changedTouches` only.
 - Tests may import the library's internal files by path, such as
   `@maplibre/arkui/src/main/ets/gestures`; `build-hap.sh` rewrites those
   imports. `Gestures.test.ets` feeds the recognizer made-up touches, and
-  `GestureInput.test.ets` injects real input with `@ohos.UiTest`'s `Driver`.
+  `GestureInput.test.ets` injects real input with `@ohos.UiTest`'s `Driver`,
+  which takes px: aim and time input in vp and convert, and measure the camera's
+  motion in vp with the map's projection, so the cases hold at any density.
 - The library declares no permission; a HAR's `requestPermissions` merge into
   every app that uses it. Location comes from the app as Location Kit's
   `geoLocationManager.Location`. The emulator's Location Kit has no fixes (the
   location switch is off), so tests and the demo make up locations.
-- hypium's `assertClose` divides the difference by the actual value, so check
-  values near zero with `Math.abs(...)` and `assertLessOrEqual`.
+- hypium's `assertClose` divides the difference by the actual value; compare
+  with a tolerance through `expectNear()` in `test/helpers.ets` instead.
 - Map content is data: `MapContent` goes to `MapLibreMap` and `snapshot()` as a
   value, and a new value is a change. `ContentReconciler` (internal) runs one
   pass at a time and awaits each FFI command, so its record of the style stays

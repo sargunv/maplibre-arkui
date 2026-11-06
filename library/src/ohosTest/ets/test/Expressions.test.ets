@@ -8,6 +8,8 @@ import {
   toColor, toNumber, toString, upcase, zoom
 } from '@maplibre/arkui';
 
+import { expectNear } from './helpers';
+
 function point(properties: Record<string, JsonValue>): Record<string, JsonValue> {
   const geometry: Record<string, JsonValue> = { 'type': 'Point', 'coordinates': [0, 0] };
   return { 'type': 'Feature', 'id': 7, 'properties': properties, 'geometry': geometry };
@@ -147,11 +149,11 @@ export default function expressionsTest(): void {
       expect(evaluate(ramp, NUMBER, atZoom(10))).assertEqual('50');
       expect(evaluate(ramp, NUMBER, atZoom(30))).assertEqual('100');
       const curve = interpolate(exponential(2), zoom(), [[0, 0], [2, 3]]);
-      expect(Number(evaluate(curve, NUMBER, atZoom(1)))).assertClose(1, 0.000001);
+      expectNear(Number(evaluate(curve, NUMBER, atZoom(1))), 1, 0.000001);
       expect(evaluate(step(zoom(), 1, [[5, 2], [10, 3]]), NUMBER, atZoom(7))).assertEqual('2');
       // An ease-in curve: y is 0.3248 where x is 0.5.
       const eased = interpolate(cubicBezier(0.4, 0, 1, 1), zoom(), [[0, 0], [1, 1]]);
-      expect(Number(evaluate(eased, NUMBER, atZoom(0.5)))).assertClose(0.3248, 0.001);
+      expectNear(Number(evaluate(eased, NUMBER, atZoom(0.5))), 0.3248, 0.001);
     });
 
     it('interpolates heatmap density and line progress', 0, () => {
