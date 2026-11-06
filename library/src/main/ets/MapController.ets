@@ -74,9 +74,11 @@ export interface FitCameraOptions {
  * and reject without one.
  *
  * The camera's `padding` is the app's: the space, in vp, around the part of
- * the map that the camera centers in. The map's `viewportInsets` add to it on
- * the map, but never show in a camera that the controller reports, so a saved
- * camera restores the same way under different insets.
+ * the map that the camera centers in. It's what `updateCamera()` or a fit last
+ * set, even while an animation still moves the map toward it. The map's
+ * `viewportInsets` add to it on the map, but never show in a camera that the
+ * controller reports, so a saved camera restores the same way under different
+ * insets.
  */
 @ObservedV2
 export class MapController {
@@ -142,7 +144,10 @@ export class MapController {
    * so request one on an idle map (see the style API guide). Don't release it; the
    * `MapLibreMap` that created it does. Change the style through the map's
    * `style` param, not this handle's style setters, so that the map adds its
-   * `content` and fires `onStyleLoaded`.
+   * `content` and fires `onStyleLoaded`. Camera padding set through this
+   * handle bypasses the controller: the camera that it reports keeps the
+   * padding that `updateCamera()` or a fit last set, and the next viewport
+   * inset change puts that back on the map.
    */
   get map(): MapHandle | undefined {
     return this.view?.map;
@@ -220,9 +225,9 @@ export class MapController {
    * the map rejects the change.
    */
   updateCamera(update: CameraUpdate): Promise<CameraTransitionOutcome> {
-    return this.transition(update.animation, (map: MapHandle, animation: AnimationOptions) => map.updateCamera({
+    return this.transition(update.animation, (map: MapHandle, animation: AnimationOptions) => this.view!.updateCamera(map, {
       mode: update.mode,
-      camera: this.view?.mapCamera(update.camera),
+      camera: update.camera,
       gesturePhase: update.gesturePhase,
       animation: animation,
     }));
@@ -410,7 +415,7 @@ export class MapController {
     if (view.gestureStarts !== gestures) {
       return endEarly(options, CameraTransitionOutcome.cancelled);
     }
-    return this.transition(options.animation, (map: MapHandle, animation: AnimationOptions) => map.updateCamera({
+    return this.transition(options.animation, (map: MapHandle, animation: AnimationOptions) => view.updateCamera(map, {
       mode: options.mode,
       camera: camera,
       animation: animation,
@@ -421,7 +426,7 @@ export class MapController {
   // resolves with how it ended. A jump runs the handler as soon as the camera
   // moves.
   private async transition(options: AnimationOptions | undefined,
-    start: (map: MapHandle, animation: AnimationOptions) => Promise<Object>): Promise<CameraTransitionOutcome> {
+    start: (map: MapHandle, animation: AnimationOptions) => void): Promise<CameraTransitionOutcome> {
     const map = this.requireMap();
     this.takeOverCamera(CameraTransitionOutcome.replaced);
     return new Promise<CameraTransitionOutcome>((resolve, reject) => {
@@ -440,7 +445,11 @@ export class MapController {
           },
         },
       };
-      start(map, animation).catch((error: Error) => reject(error));
+      try {
+        start(map, animation);
+      } catch (error) {
+        reject(error as Error);
+      }
     });
   }
 

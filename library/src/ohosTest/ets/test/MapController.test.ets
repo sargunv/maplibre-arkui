@@ -17,7 +17,7 @@ import {
 } from '@maplibre/arkui';
 
 import { backgroundStyle, NO_INSETS, testMap } from '../testability/TestMaps';
-import { camera, expectNear, near, pixelFor, requireMap, setStyle, until } from './helpers';
+import { camera, expectNear, near, nextFrame, pixelFor, requireMap, settled, setStyle, until } from './helpers';
 
 const SWITZERLAND: LatLngBounds = {
   southwest: { latitude: 45.82, longitude: 5.96 },
@@ -50,6 +50,16 @@ async function setInsets(insets: EdgeInsets, cameraPadding: EdgeInsets = NO_INSE
       near(padding.bottom, insets.bottom + cameraPadding.bottom, 0.01) &&
       near(padding.right, insets.right + cameraPadding.right, 0.01);
   });
+}
+
+// A style whose hidden layers keep the map's thread parsing it for several
+// frames, so the commands sent after it wait.
+function busyStyle(layers: number): string {
+  const parts: string[] = [];
+  for (let i = 0; i < layers; i++) {
+    parts.push(`{"id":"busy-${i}","type":"background","layout":{"visibility":"none"}}`);
+  }
+  return `{"version":8,"sources":{},"layers":[${parts.join(',')}]}`;
 }
 
 function expectPadding(actual: EdgeInsets, expected: EdgeInsets): void {
@@ -232,6 +242,65 @@ export default function mapControllerTest(): void {
       const extent = requireMap().getSnapshot().view.extent;
       expectNear(pixelFor(target).y, (extent.height + 100) / 2, 1);
       expectNear(camera().center.latitude, target.latitude, 0.001);
+      expectNoPadding(camera().padding);
+    });
+
+    it('keeps the camera padding through inset changes that the map has yet to apply', 0, async () => {
+      await setInsets({ top: 0, left: 0, bottom: 200, right: 0 });
+      // While the map's thread parses the style, the page sends two inset
+      // changes a frame apart, with a padding move between them.
+      testMap.style = busyStyle(5000);
+      await nextFrame();
+      testMap.viewportInsets = NO_INSETS;
+      await nextFrame();
+      const padding: EdgeInsets = { top: 0, left: 30, bottom: 0, right: 0 };
+      const move = map.updateCamera({ mode: CameraUpdateMode.jump, camera: { padding: padding } });
+      testMap.viewportInsets = { top: 0, left: 0, bottom: 100, right: 0 };
+      await nextFrame();
+      // None of them has applied yet.
+      expectPadding(requireMap().getSnapshot().view.camera.padding, { top: 0, left: 0, bottom: 200, right: 0 });
+
+      await settled('the move', move);
+      // After the commands sent before it.
+      await requireMap().getCamera();
+      expectPadding(requireMap().getSnapshot().view.camera.padding, { top: 0, left: 30, bottom: 100, right: 0 });
+      expectPadding(camera().padding, padding);
+    });
+
+    it('keeps the camera padding that a move sent, though the app changes its object', 0, async () => {
+      const padding: EdgeInsets = { top: 0, left: 30, bottom: 0, right: 0 };
+      await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { padding: padding } });
+      padding.left = 90;
+      testMap.viewportInsets = { top: 0, left: 0, bottom: 100, right: 0 };
+      await until('the map takes the insets', () => near(requireMap().getSnapshot().view.camera.padding.bottom, 100, 0.01));
+      expectNear(camera().padding.left, 30, 0.01);
+    });
+
+    it('keeps the camera padding when the map rejects moves', 0, async () => {
+      const padding: EdgeInsets = { top: 0, left: 30, bottom: 0, right: 0 };
+      await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { padding: padding } });
+      // Two in a row, one for its padding and one for its zoom.
+      const negative = map.updateCamera({
+        mode: CameraUpdateMode.jump,
+        camera: { padding: { top: 0, left: -10, bottom: 0, right: 0 } },
+      });
+      const notANumber = map.updateCamera({
+        mode: CameraUpdateMode.jump,
+        camera: { padding: { top: 0, left: 60, bottom: 0, right: 0 }, zoom: NaN },
+      });
+      await expect(negative).assertPromiseIsRejected();
+      await expect(notANumber).assertPromiseIsRejected();
+      testMap.viewportInsets = { top: 0, left: 0, bottom: 100, right: 0 };
+      await until('the map takes the insets', () => near(requireMap().getSnapshot().view.camera.padding.bottom, 100, 0.01));
+      expectPadding(camera().padding, padding);
+    });
+
+    it('rejects negative camera padding that the viewport insets would cover', 0, async () => {
+      await setInsets({ top: 0, left: 20, bottom: 0, right: 0 });
+      await expect(map.updateCamera({
+        mode: CameraUpdateMode.jump,
+        camera: { padding: { top: 0, left: -10, bottom: 0, right: 0 } },
+      })).assertPromiseIsRejected();
       expectNoPadding(camera().padding);
     });
 

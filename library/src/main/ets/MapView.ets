@@ -13,6 +13,7 @@ import {
   CameraOptions,
   CameraQueryResult,
   CameraTransitionOutcome,
+  CameraUpdate,
   CameraUpdateMode,
   cameraToOptions,
   CommandCompletion,
@@ -47,7 +48,7 @@ import { playTick } from './haptics';
 import { FOLLOW_MS, UserLocationIndicatorOptions, UserLocationLayer } from './location';
 import { logError } from './log';
 import { FitCameraOptions, MapController } from './MapController';
-import { addInsets, NO_INSETS, sameInsets, subtractInsets, withoutInsets, withPadding } from './padding';
+import { addInsets, NO_INSETS, sameInsets, withAppPadding, withPadding } from './padding';
 import {
   addRuntimeEventListener,
   addRuntimeMap,
@@ -134,6 +135,10 @@ export class MapView extends XComponentController implements GestureTarget {
   // The component's viewportInsets, which the map's camera padding includes on
   // top of the app's.
   private insets: EdgeInsets = NO_INSETS;
+  // The app's camera padding, which only the app's camera changes set: the
+  // map's padding is the insets around it, and the camera the app reads has
+  // it.
+  private padding: EdgeInsets = NO_INSETS;
 
   // The component's latest size in px, its latest surface, and the surface
   // that the session renders to. A surface ID is the one the component
@@ -226,31 +231,48 @@ export class MapView extends XComponentController implements GestureTarget {
   // The map keeps the app's camera padding inside the new insets, and its
   // center, which moves to the middle of what they leave.
   setViewportInsets(insets: EdgeInsets): void {
-    const previous = this.insets;
-    if (sameInsets(previous, insets)) {
+    if (sameInsets(this.insets, insets)) {
       return;
     }
     this.insets = insets;
-    const map = this.map;
-    if (map !== undefined) {
-      const padding = subtractInsets(map.getSnapshot().view.camera.padding, previous);
-      map.discarding.updateCamera({ mode: CameraUpdateMode.jump, camera: { padding: addInsets(insets, padding) } });
-    }
+    this.map?.discarding.updateCamera({
+      mode: CameraUpdateMode.jump,
+      camera: { padding: addInsets(insets, this.padding) },
+    });
   }
 
-  // The map's camera as the app sees it, without the insets.
+  // The map's camera as the app sees it, with the app's padding.
   appCamera(camera: CameraPosition): CameraPosition {
-    return withoutInsets(camera, this.insets);
+    return withAppPadding(camera, this.padding);
   }
 
-  // The app's camera options as the map takes them, with the insets around the
-  // app's padding. Options without padding keep the map's.
-  mapCamera(camera: CameraOptions | undefined): CameraOptions | undefined {
+  // Sends the app's camera change, with the insets around its padding. FFI
+  // checks the change as it takes it and throws if it rejects it, so the
+  // padding becomes the app's only once the map has taken it. FFI checks the
+  // padding with the insets added, which can cover a negative one, so the
+  // view checks the app's own first.
+  updateCamera(map: MapHandle, update: CameraUpdate): void {
+    const camera = update.camera;
     const padding = camera?.padding;
-    return camera === undefined || padding === undefined ? camera : withPadding(camera, addInsets(this.insets, padding));
+    if (camera === undefined || padding === undefined) {
+      map.discarding.updateCamera(update);
+      return;
+    }
+    const sides = [padding.top, padding.left, padding.bottom, padding.right];
+    if (!sides.every((side: number) => Number.isFinite(side) && side >= 0)) {
+      throw new Error(`Camera padding must be finite and at least 0: ${JSON.stringify(padding)}`);
+    }
+    map.discarding.updateCamera({
+      mode: update.mode,
+      camera: withPadding(camera, addInsets(this.insets, padding)),
+      gesturePhase: update.gesturePhase,
+      animation: update.animation,
+    });
+    // A copy, since the app can change its object later.
+    this.padding = addInsets(NO_INSETS, padding);
   }
 
-  // The camera that fits what `query` finds, as the map takes it. FFI's fit
+  // The camera that fits what `query` finds, for `updateCamera()`. FFI's fit
   // keeps its padding as the camera's, so the query fits inside the margin too,
   // and the camera then centers the same view inside the insets and the camera
   // padding alone. Undefined when the map leaves first.
@@ -260,17 +282,7 @@ export class MapView extends XComponentController implements GestureTarget {
     if (map === undefined) {
       return undefined;
     }
-    let cameraPadding = options.cameraPadding;
-    if (cameraPadding === undefined) {
-      // In command order, so it includes padding that the app set just before,
-      // inside the insets that the map had then.
-      const insets = this.insets;
-      const current = await map.getCamera();
-      if (this.map !== map) {
-        return undefined;
-      }
-      cameraPadding = subtractInsets(current.camera.padding, insets);
-    }
+    const cameraPadding = options.cameraPadding ?? this.padding;
     // A layout change during the query leaves a different part of the map to
     // fit in, so the fit asks again.
     let insets: EdgeInsets;
@@ -297,7 +309,7 @@ export class MapView extends XComponentController implements GestureTarget {
     } finally {
       projection.release();
     }
-    return withPadding(fitted, padding, center);
+    return withPadding(fitted, cameraPadding, center);
   }
 
   // Options that an app writes in `build()` are a new value each time, so
@@ -625,9 +637,10 @@ export class MapView extends XComponentController implements GestureTarget {
     // none.
     const attached = attach ? controller.attach(this) : undefined;
     const startCamera: CameraOptions = (camera !== undefined ? cameraToOptions(camera) : attached) ?? {};
+    this.padding = addInsets(NO_INSETS, startCamera.padding ?? NO_INSETS);
     map.discarding.updateCamera({
       mode: CameraUpdateMode.jump,
-      camera: withPadding(startCamera, addInsets(this.insets, startCamera.padding ?? NO_INSETS)),
+      camera: withPadding(startCamera, addInsets(this.insets, this.padding)),
     });
     this.applyBounds();
     this.applyStyle();
