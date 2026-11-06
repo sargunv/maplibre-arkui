@@ -3,7 +3,7 @@
 // its simulated walk makes them; the emulator's Location Kit has no fixes.
 
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
-import { CameraUpdateMode, MapHandle, readPixelMap } from '@maplibre/arkui';
+import { CameraUpdateMode, MapHandle } from '@maplibre/arkui';
 import {
   BORDER_RADIUS,
   DOT_COLOR,
@@ -11,11 +11,8 @@ import {
   USER_LOCATION_LAYER,
 } from '@maplibre/arkui/src/main/ets/location';
 
-import application from '@ohos.app.ability.application';
-import fs from '@ohos.file.fs';
 import geoLocationManager from '@ohos.geoLocationManager';
-import image from '@ohos.multimedia.image';
-import { Driver, Point } from '@ohos.UiTest';
+import { Driver } from '@ohos.UiTest';
 
 import { backgroundStyle, testMap } from '../testability/TestMaps';
 import {
@@ -27,6 +24,8 @@ import {
   near,
   offset,
   requireMap,
+  rgb,
+  screenPixel,
   setStyle,
   until,
   vp2px,
@@ -73,28 +72,6 @@ async function drawnAt(latitude: number, longitude: number): Promise<void> {
     return drawn !== undefined && near(drawn[0], latitude, 1e-9) && near(drawn[1], longitude, 1e-9) ?
       true : undefined;
   });
-}
-
-// The pixel of the display at `point` in px, as red, green, and blue.
-async function screenPixel(point: Point): Promise<number[]> {
-  const path = `${application.getApplicationContext().cacheDir}/location-${Date.now()}.png`;
-  expect(await Driver.create().screenCap(path)).assertTrue();
-  const source = image.createImageSource(path);
-  const pixelMap = await source.createPixelMap();
-  try {
-    const pixels = readPixelMap(pixelMap);
-    const i = point.y * pixels.stride + point.x * 4;
-    return [pixels.pixels[i], pixels.pixels[i + 1], pixels.pixels[i + 2]];
-  } finally {
-    pixelMap.release();
-    source.release();
-    fs.unlinkSync(path);
-  }
-}
-
-// A color written #rrggbb, as red, green, and blue.
-function rgb(color: string): number[] {
-  return [1, 3, 5].map((start: number) => parseInt(color.slice(start, start + 2), 16));
 }
 
 async function accuracyRadius(): Promise<number> {
@@ -176,6 +153,20 @@ export default function locationTest(): void {
       expectNear(camera().bearing, 90, 0.001);
       // The hidden arrow keeps its course, so the next one eases from it.
       expect(await requireMap().getStyleLayerProperty(USER_LOCATION_LAYER, 'bearing') as number).assertEqual(90);
+    });
+
+    it('follows from the start a map that appears after the app asks', 0, async () => {
+      const map = testMap.controller;
+      testMap.shown = false;
+      await until('the map leaves', () => map.map === undefined);
+      map.followUserLocation({ zoom: 8 });
+      expect(map.followingUserLocation).assertTrue();
+      testMap.userLocation = fix(7, 8);
+
+      testMap.shown = true;
+      await until('the camera reaches the location', () => restsAt(7, 8));
+      expectNear(camera().zoom, 8, 0.001);
+      expect(map.followingUserLocation).assertTrue();
     });
 
     it('reaches the zoom it follows with while locations come quickly', 0, async () => {

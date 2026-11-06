@@ -489,10 +489,17 @@ export class MapView extends XComponentController implements GestureTarget {
     }
   }
 
+  // An error handler that throws doesn't reach ArkUI, which would end the app,
+  // or the map's own callbacks.
   private fail(error: Error): void {
     logError(error.message);
-    if (!this.disposed) {
+    if (this.disposed) {
+      return;
+    }
+    try {
       this.events.onMapError(error);
+    } catch (thrown) {
+      logError(`onMapError threw: ${(thrown as Error).message}`);
     }
   }
 }
