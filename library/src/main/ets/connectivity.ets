@@ -73,11 +73,7 @@ export function followConnectivity(): Promise<boolean> {
 }
 
 function startMonitor(): Promise<boolean> {
-  // The permission is a normal one, which installs with the app, so a check
-  // that throws means the app didn't declare it.
-  try {
-    networkChanged(connection.hasDefaultNetSync() ? connection.getDefaultNetSync().netId : undefined);
-  } catch (error) {
+  if (!readDefaultNet()) {
     return Promise.resolve(false);
   }
   const created = connection.createNetConnection();
@@ -89,10 +85,25 @@ function startMonitor(): Promise<boolean> {
       const failed = error !== undefined && error !== null && error.code !== 0;
       if (failed) {
         logError(`can't follow the device's network: ${error.message}`);
+      } else {
+        // No callback reports a loss from before the registration.
+        readDefaultNet();
       }
       resolve(!failed);
     });
   });
+}
+
+// Reads the device's default network, and returns whether it could. The
+// permission is a normal one, which installs with the app, so a read that
+// throws means the app didn't declare it.
+function readDefaultNet(): boolean {
+  try {
+    networkChanged(connection.hasDefaultNetSync() ? connection.getDefaultNetSync().netId : undefined);
+    return true;
+  } catch (error) {
+    return false;
+  }
 }
 
 // The default network that `netId` names is connected. It replaces the one
