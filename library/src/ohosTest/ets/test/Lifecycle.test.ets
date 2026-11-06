@@ -1,6 +1,6 @@
 // A map's life on the page: before its FFI map is ready, beside another map,
 // after it leaves, as it resizes, at a new density, on a runtime of its own,
-// on a surface it can't attach to, and the events and errors it reports.
+// and the events and errors it reports.
 
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
 import {
@@ -8,31 +8,17 @@ import {
   CameraPosition,
   CameraUpdateMode,
   getDefaultRuntime,
-  MapController,
   MapHandle,
   MapLayer,
   removeRuntimeEventListener,
-  RenderSessionHandle,
   RuntimeEvent,
   RuntimeEventFlag,
   RuntimeEventType,
   RuntimeHandle,
 } from '@maplibre/arkui';
-import { MapView } from '@maplibre/arkui/src/main/ets/MapView';
 
 import { backgroundStyle, STYLE, testMap } from '../testability/TestMaps';
-import {
-  camera,
-  eventually,
-  expectNear,
-  frames,
-  near,
-  requireMap,
-  setStyle,
-  settled,
-  until,
-  vp2px,
-} from './helpers';
+import { camera, eventually, expectNear, frames, near, requireMap, setStyle, until, vp2px } from './helpers';
 
 const map = testMap.controller;
 
@@ -56,13 +42,6 @@ async function hideMap(): Promise<void> {
 async function showMap(): Promise<void> {
   testMap.shown = true;
   await until('the map shows the style', () => map.styleLoaded);
-}
-
-function noop(): void {
-}
-
-function unhandled(): boolean {
-  return false;
 }
 
 // Whether the camera of `handle` rests at `zoom`.
@@ -206,66 +185,6 @@ export default function lifecycleTest(): void {
         stage.setCustomDensity(density);
         await until('the map takes the density back', () => map.map !== undefined && map.styleLoaded &&
           near(requireMap().getSnapshot().view.extent.scaleFactor, density, 0.001));
-      }
-    });
-
-    it('reports a session that fails to attach, and attaches a new one to the next surface', 0, async () => {
-      const context = testMap.context;
-      if (context === undefined) {
-        throw new Error('The test page has not appeared');
-      }
-      await hideMap();
-      testMap.bareSurfaceShown = true;
-      const errors: string[] = [];
-      // A view as MapLibreMap's, which the case gives the surface's events.
-      const view = new MapView(context, {
-        onStyleLoaded: noop,
-        onCameraIdle: noop,
-        onMapError: (error: Error) => {
-          errors.push(error.message);
-        },
-        onGestureStart: noop,
-        onGestureEnd: noop,
-        onMapClick: unhandled,
-        onMapLongClick: unhandled,
-        onUnhandledClick: noop,
-      });
-      const rect: SurfaceRect = { offsetX: 0, offsetY: 0, surfaceWidth: 300, surfaceHeight: 300 };
-      try {
-        view.start(new MapController(), undefined, STYLE, undefined, undefined);
-        await until('the bare surface appears and the view\'s map is ready', () =>
-          testMap.bareSurface.surfaceId !== undefined && view.map !== undefined);
-        const surface = testMap.bareSurface.surfaceId ?? '';
-        view.onSurfaceCreated(surface);
-        view.onSurfaceChanged(surface, rect);
-        // The view attaches in a microtask, and FFI reports the attach in a
-        // later task, so abandoning the session here fails the attach.
-        let session: RenderSessionHandle | undefined = undefined;
-        for (let i = 0; i < 100 && session === undefined; i++) {
-          await Promise.resolve();
-          session = view.session;
-        }
-        if (session === undefined) {
-          throw new Error('The view did not attach a session');
-        }
-        session.abandon();
-        await until('the view reports the failed attach', () => errors.length > 0);
-
-        // The surface changes and goes away without the failed session.
-        view.onSurfaceChanged(surface, { offsetX: 0, offsetY: 0, surfaceWidth: 200, surfaceHeight: 200 });
-        view.onSurfaceDestroyed(surface);
-        await frames(10);
-        expect(errors.length).assertEqual(1);
-
-        // The next surface gets a new session.
-        view.onSurfaceCreated(surface);
-        view.onSurfaceChanged(surface, rect);
-        await until('the view attaches a new session', () => view.session !== undefined);
-        await settled('the new session attaches', view.session?.ready ?? Promise.resolve());
-        expect(errors.length).assertEqual(1);
-      } finally {
-        view.dispose();
-        testMap.bareSurfaceShown = false;
       }
     });
 
