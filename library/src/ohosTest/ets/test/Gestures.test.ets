@@ -620,6 +620,45 @@ export default function gesturesTest(): void {
       expect(counts[0]).assertEqual(pans);
     });
 
+    it("doesn't start a movement until it moves the camera", 0, async () => {
+      let pans = 0;
+      let zooms = 0;
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      gestures.options = {
+        pan: {
+          onStart: () => {
+            pans++;
+          },
+        },
+        zoom: {
+          onStart: () => {
+            zooms++;
+          },
+        },
+      };
+      // A pinch starts, then the fingers move together without changing their
+      // span, so the zoom that was recognized doesn't scale.
+      gestures.touch(0, [touch(1, 150, 300), touch(2, 250, 300)]);
+      gestures.touch(16, [touch(1, 149, 300), touch(2, 251, 300)]);
+      gestures.claim();
+      gestures.touch(32, [touch(1, 139, 300), touch(2, 261, 300)]);
+      gestures.touch(48, [touch(1, 149, 300), touch(2, 271, 300)]);
+      gestures.touch(200, []);
+      expect(zooms).assertEqual(0);
+
+      // Opposite keys cancel, so only the zoom key starts a movement.
+      gestures.keyDown(KeyCode.KEYCODE_DPAD_LEFT, false);
+      gestures.keyDown(KeyCode.KEYCODE_DPAD_RIGHT, false);
+      gestures.keyDown(KeyCode.KEYCODE_EQUALS, false);
+      gestures.keyUp(KeyCode.KEYCODE_DPAD_LEFT);
+      gestures.keyUp(KeyCode.KEYCODE_DPAD_RIGHT);
+      gestures.keyUp(KeyCode.KEYCODE_EQUALS);
+      await until('the keys finish their steps', () => camera.ends === 2);
+      expect(zooms).assertEqual(1);
+      expect(pans).assertEqual(0);
+    });
+
     it('keeps momentum when the options change but the movements stay on', 0, async () => {
       const camera = new Recorder();
       const gestures = new MapGestures(camera);

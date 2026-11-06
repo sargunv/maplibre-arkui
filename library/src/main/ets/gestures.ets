@@ -1210,11 +1210,26 @@ export class MapGestures {
     if (delta.gesturePhase === GesturePhase.begin) {
       this.target.gestureStarted();
     }
-    this.began(movements);
+    this.began(delta, movements);
   }
 
-  // Runs the onStart of the movements that haven't started in this gesture.
-  private began(movements: number): void {
+  // Runs the onStart of the movements that haven't started in this gesture,
+  // once `delta` moves the camera their way: a pinch that pans for a moment
+  // hasn't zoomed yet, and keys that cancel don't move.
+  private began(delta: CameraDelta, movements: number): void {
+    const offset = delta.offset;
+    if (offset === undefined || (offset.x === 0 && offset.y === 0)) {
+      movements &= ~PAN;
+    }
+    if ((delta.scale ?? 1) === 1) {
+      movements &= ~ZOOM;
+    }
+    if ((delta.bearing ?? 0) === 0) {
+      movements &= ~ROTATE;
+    }
+    if ((delta.pitch ?? 0) === 0) {
+      movements &= ~PITCH;
+    }
     const fresh = movements & ~this.started;
     this.started |= movements;
     const options = this.options;
@@ -1283,7 +1298,7 @@ export class MapGestures {
     this.target.applyCameraDelta(delta);
     this.target.gestureStarted();
     this.started = 0;
-    this.began(movements);
+    this.began(delta, movements);
   }
 
   private endStep(): void {
