@@ -71,6 +71,11 @@ API reference. Each ArkTS example on the site is a region of the demo's
 
 ## Issues and pull requests
 
+PR titles follow Conventional Commits, because the title becomes the
+squash-merge commit message. Mark a title as breaking only when the change
+breaks a user-facing contract. Changes to tooling, tests, or CI are never
+breaking.
+
 Write a short title and description for a reviewer who will read the diff. Say
 what the diff, its doc comments, and CI can't:
 
