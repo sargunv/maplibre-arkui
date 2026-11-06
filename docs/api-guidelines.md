@@ -77,8 +77,9 @@ management V2 only, and FFI's API where it already reads as ArkTS.
   (`MapLibreMap`), observable state (`MapController`), ArkUI and Kit types
   (`PixelMap` in `readPixelMap()` and `snapshot()`, Location Kit's `Location`),
   ownership that FFI gives one caller (the runtime's event handler, shared
-  through `addRuntimeEventListener()`), declarative data (`MapContent`), and
-  types that strict ArkTS needs for literals (GeoJSON, expressions).
+  through `addRuntimeEventListener()`, and each map's event mask, the union of
+  the map events that the listeners ask for), declarative data (`MapContent`),
+  and types that strict ArkTS needs for literals (GeoJSON, expressions).
 - A wrapper names the FFI call it makes and doesn't repeat FFI's docs.
 
 ## Errors

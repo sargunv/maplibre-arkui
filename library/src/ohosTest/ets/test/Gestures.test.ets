@@ -2,7 +2,7 @@
 // in GestureInput.test.ets.
 
 import { describe, expect, it } from '@ohos/hypium';
-import { CameraDelta, GesturePhase } from '@maplibre/native-ffi';
+import { CameraDelta, GesturePhase } from '@maplibre/arkui';
 import {
   GestureTarget,
   MapGestures,

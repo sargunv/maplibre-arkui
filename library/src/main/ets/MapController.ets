@@ -18,6 +18,7 @@ import {
 } from '@maplibre/native-ffi';
 import geoLocationManager from '@ohos.geoLocationManager';
 
+import { GeoJsonGeometry } from './GeoJson';
 import { FollowUserLocationOptions, course } from './location';
 import { MapView } from './MapView';
 
@@ -189,6 +190,36 @@ export class MapController {
   fitCameraToLatLngBounds(bounds: LatLngBounds, update: CameraFitUpdate): Promise<CameraTransitionOutcome> {
     return this.transition(update.animation,
       (map: MapHandle, animation: AnimationOptions) => map.fitCameraToLatLngBounds(bounds, {
+        mode: update.mode,
+        fit: update.fit,
+        animation: animation,
+      }));
+  }
+
+  /**
+   * Moves the camera so `coordinates` fit in the map, as FFI's
+   * `MapHandle.fitCameraToLatLngs()` does. `coordinates` must not be empty.
+   * `update.fit.padding` keeps space between them and the map's edges.
+   * Resolves as `updateCamera()` does.
+   */
+  fitCameraToLatLngs(coordinates: LatLng[], update: CameraFitUpdate): Promise<CameraTransitionOutcome> {
+    return this.transition(update.animation,
+      (map: MapHandle, animation: AnimationOptions) => map.fitCameraToLatLngs(coordinates, {
+        mode: update.mode,
+        fit: update.fit,
+        animation: animation,
+      }));
+  }
+
+  /**
+   * Moves the camera so `geometry` fits in the map, as FFI's
+   * `MapHandle.fitCameraToGeometry()` does. `geometry` is a GeoJSON geometry
+   * with at least one position, not a feature. `update.fit.padding` keeps
+   * space between it and the map's edges. Resolves as `updateCamera()` does.
+   */
+  fitCameraToGeometry(geometry: GeoJsonGeometry, update: CameraFitUpdate): Promise<CameraTransitionOutcome> {
+    return this.transition(update.animation,
+      (map: MapHandle, animation: AnimationOptions) => map.fitCameraToGeometry(geometry, {
         mode: update.mode,
         fit: update.fit,
         animation: animation,

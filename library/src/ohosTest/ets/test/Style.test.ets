@@ -2,18 +2,27 @@ import { afterEach, describe, expect, it } from '@ohos/hypium';
 import image from '@ohos.multimedia.image';
 import {
   CameraUpdateMode,
+  ConstrainMode,
   FeatureStateSelector,
   GeoJsonFeature,
   GeoJsonFeatureCollection,
+  ImageContent,
   interpolate,
+  latLngForProjectedMeters,
   linear,
+  MapDebugFlag,
   MapHandle,
   MapProjectionHandle,
+  NorthOrientation,
+  PremultipliedRgba8Image,
+  projectedMetersForLatLng,
   readPixelMap,
   RenderedFeature,
   ScreenPoint,
+  StyleImageTextFit,
   StyleLayerVisibility,
   StyleSourceType,
+  TileLodMode,
   zoom,
 } from '@maplibre/arkui';
 
@@ -141,6 +150,48 @@ export default function styleTest(): void {
       expect(await map.getStyleImage('dots')).assertUndefined();
       bgra.release();
       rgba.release();
+    });
+
+    it('takes the options that the re-exported FFI enums name', 0, async () => {
+      const map = requireMap();
+      const debug = MapDebugFlag.tileBorders | MapDebugFlag.collision;
+      await map.setDebugFlags(debug);
+      await until('the debug flags apply', () => map.getSnapshot().debugFlags === debug);
+      await map.setDebugFlags(0);
+
+      const lodMode = map.getSnapshot().tile.lodMode;
+      await map.setTileOptions({ lodMode: TileLodMode.distance });
+      await until('the tile options apply', () => map.getSnapshot().tile.lodMode === TileLodMode.distance);
+      await map.setTileOptions({ lodMode: lodMode });
+
+      const viewport = map.getSnapshot().view.viewport;
+      await map.setViewportOptions({ constrainMode: ConstrainMode.screen, northOrientation: NorthOrientation.up });
+      await until('the viewport options apply',
+        () => map.getSnapshot().view.viewport.constrainMode === ConstrainMode.screen);
+      expect(map.getSnapshot().view.viewport.northOrientation).assertEqual(NorthOrientation.up);
+      await map.setViewportOptions({ constrainMode: viewport.constrainMode });
+
+      // An opaque white pixel, whose content box text fits proportionally.
+      const pixel: PremultipliedRgba8Image = {
+        width: 1, height: 1, stride: 4, pixels: new Uint8Array([255, 255, 255, 255]),
+      };
+      const content: ImageContent = { left: 0, top: 0, right: 1, bottom: 1 };
+      await map.setStyleImage('label', pixel, {
+        content: content,
+        textFitWidth: StyleImageTextFit.proportional,
+        textFitHeight: StyleImageTextFit.stretchOnly,
+      });
+      const stored = await map.getStyleImage('label');
+      expect(stored?.content?.right).assertEqual(1);
+      expect(stored?.textFitWidth).assertEqual(StyleImageTextFit.proportional);
+      expect(stored?.textFitHeight).assertEqual(StyleImageTextFit.stretchOnly);
+      await map.removeStyleImage('label');
+
+      const meters = projectedMetersForLatLng({ latitude: 10, longitude: 20 });
+      expect(meters.easting).assertLarger(0);
+      const back = latLngForProjectedMeters(meters);
+      expect(back.latitude).assertClose(10, 0.0001);
+      expect(back.longitude).assertClose(20, 0.0001);
     });
 
     it('sets, reads, and removes feature state', 0, async () => {

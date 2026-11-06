@@ -110,8 +110,9 @@ Text(this.moving ? 'Moving' : `Zoom ${this.controller.camera?.zoom.toFixed(1) ??
 ```
 
 `camera` changes when the camera comes to rest; `getCamera()` reads where it is
-now. `updateCamera()` jumps, eases, or flies, `fitCameraToLatLngBounds()` fits
-an area, and both resolve with how the move ended:
+now. `updateCamera()` jumps, eases, or flies; `fitCameraToLatLngBounds()`,
+`fitCameraToLatLngs()`, and `fitCameraToGeometry()` fit an area, coordinates, or
+a GeoJSON geometry; and each resolves with how the move ended:
 
 ```ets
 this.controller.fitCameraToLatLngBounds(SWITZERLAND, {
@@ -480,6 +481,19 @@ addRuntimeEventListener(runtime, (event: RuntimeEvent) => {
 });
 await runtime.setOfflineRegionObserved(region.id, RuntimeEventFlag.offlineRegionStatusChanged);
 await runtime.setOfflineRegionDownloadState(region.id, OfflineRegionDownloadState.active);
+```
+
+A listener gets the runtime's own events, such as offline progress, and only the
+map events that it asks for. The library sets each map's event mask to what the
+listeners ask for, so a map's other events cost nothing:
+
+```ets
+addRuntimeEventListener(runtime, (event: RuntimeEvent) => {
+  const payload = event.payload;
+  if (event.type === RuntimeEventType.mapStyleImageMissing && payload.kind === 'styleImage') {
+    console.warn(`The style needs the image ${payload.value.imageId}`);
+  }
+}, RuntimeEventFlag.mapStyleImageMissing);
 ```
 
 MapLibre logs to hilog with the tag `MapLibreNative`. To take the logs, set a

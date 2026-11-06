@@ -31,7 +31,21 @@ import { ContentReconciler, MapContent } from './Content';
 import { GESTURE_ANIMATION_MS, GestureTarget, MapGestures, snapBearing } from './gestures';
 import { FOLLOW_MS, UserLocationLayer } from './location';
 import { MapController } from './MapController';
-import { addRuntimeEventListener, getDefaultRuntime, getFramePacer, removeRuntimeEventListener } from './runtime';
+import {
+  addRuntimeEventListener,
+  addRuntimeMap,
+  getDefaultRuntime,
+  getFramePacer,
+  removeRuntimeEventListener,
+  removeRuntimeMap,
+  runtimeEventMask,
+} from './runtime';
+
+// The map events that the view handles.
+const HANDLED_EVENTS: RuntimeEventFlag = RuntimeEventFlag.mapLoadingFailed |
+  RuntimeEventFlag.mapRenderError |
+  RuntimeEventFlag.mapCameraDidChange |
+  RuntimeEventFlag.mapSourceChanged;
 
 // What the view reports to its component.
 export interface MapViewEvents {
@@ -243,6 +257,11 @@ export class MapView extends XComponentController implements GestureTarget {
     const map = this.created;
     const session = this.session;
     if (runtime !== undefined) {
+      // The map goes first, so the mask change that the listener's removal
+      // makes skips the map being released.
+      if (map !== undefined) {
+        removeRuntimeMap(runtime, map);
+      }
       removeRuntimeEventListener(runtime, this.listener);
     }
     this.controller?.detach(this);
@@ -266,6 +285,10 @@ export class MapView extends XComponentController implements GestureTarget {
     if (this.disposed || controller === undefined) {
       return;
     }
+    // The view's listener asks for the events it handles, so the map reports
+    // them with those the app's listeners ask for.
+    this.runtime = runtime;
+    addRuntimeEventListener(runtime, this.listener, HANDLED_EVENTS);
     const map = runtime.createMap({
       initialExtent: {
         width: this.size?.width ?? 1,
@@ -273,12 +296,8 @@ export class MapView extends XComponentController implements GestureTarget {
         scaleFactor: this.context.vp2px(1),
       },
       mapMode: MapMode.continuous,
-      eventMask: RuntimeEventFlag.mapLoadingFailed |
-        RuntimeEventFlag.mapRenderError |
-        RuntimeEventFlag.mapCameraDidChange |
-        RuntimeEventFlag.mapSourceChanged,
+      eventMask: runtimeEventMask(runtime),
     });
-    this.runtime = runtime;
     this.created = map;
     await map.ready;
     if (this.disposed) {
@@ -288,7 +307,7 @@ export class MapView extends XComponentController implements GestureTarget {
     this.reconciler = new ContentReconciler(map, (error: Error) => this.fail(error));
     this.reconciler.setContent(this.content);
     this.defaultBounds = boundOptions(map.getSnapshot().bounds);
-    addRuntimeEventListener(runtime, this.listener);
+    addRuntimeMap(runtime, map, (error: Error) => this.fail(error));
     // The controller takes camera changes from here on, and the map runs
     // commands in order, so they follow the starting camera.
     const startCamera = controller.attach(this);

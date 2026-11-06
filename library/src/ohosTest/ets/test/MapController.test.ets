@@ -1,10 +1,19 @@
 import { describe, expect, it } from '@ohos/hypium';
 import {
+  addRuntimeEventListener,
   CameraPosition,
   CameraTransitionOutcome,
   CameraUpdateMode,
+  GeoJsonGeometry,
+  LatLng,
   LatLngBounds,
   MapController,
+  MapHandle,
+  removeRuntimeEventListener,
+  RuntimeEvent,
+  RuntimeEventFlag,
+  RuntimeEventType,
+  RuntimeHandle,
 } from '@maplibre/arkui';
 
 import { STYLE, testMap } from '../testability/TestMaps';
@@ -22,6 +31,41 @@ const SWITZERLAND: LatLngBounds = {
   southwest: { latitude: 45.82, longitude: 5.96 },
   northeast: { latitude: 47.81, longitude: 10.49 },
 };
+
+// Switzerland's corners and a point inside, and the polygon they span.
+const SWISS_POINTS: LatLng[] = [SWITZERLAND.southwest, { latitude: 46.8, longitude: 8.2 }, SWITZERLAND.northeast];
+const SWISS_POLYGON: GeoJsonGeometry = {
+  type: 'Polygon',
+  coordinates: [[[5.96, 45.82], [10.49, 45.82], [10.49, 47.81], [5.96, 47.81], [5.96, 45.82]]],
+};
+
+function expectInSwitzerland(controller: MapController): void {
+  const center = camera(controller).center;
+  expect(center.latitude).assertLarger(SWITZERLAND.southwest.latitude);
+  expect(center.latitude).assertLess(SWITZERLAND.northeast.latitude);
+  expect(center.longitude).assertLarger(SWITZERLAND.southwest.longitude);
+  expect(center.longitude).assertLess(SWITZERLAND.northeast.longitude);
+}
+
+function reports(map: MapHandle, flag: RuntimeEventFlag): boolean {
+  return (map.getSnapshot().eventMask & flag) !== RuntimeEventFlag.none;
+}
+
+function requireMap(controller: MapController): MapHandle {
+  const map = controller.map;
+  if (map === undefined) {
+    throw new Error('No map shows the controller');
+  }
+  return map;
+}
+
+function requireRuntime(controller: MapController): RuntimeHandle {
+  const runtime = controller.runtime;
+  if (runtime === undefined) {
+    throw new Error('No map shows the controller');
+  }
+  return runtime;
+}
 
 export default function mapControllerTest(): void {
   describe('MapController', () => {
@@ -114,6 +158,102 @@ export default function mapControllerTest(): void {
       expect(center.latitude).assertLess(SWITZERLAND.northeast.latitude);
       expect(center.longitude).assertLarger(SWITZERLAND.southwest.longitude);
       expect(center.longitude).assertLess(SWITZERLAND.northeast.longitude);
+    });
+
+    it('fits coordinates inside its padding', 0, async () => {
+      await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { center: { latitude: 0, longitude: 0 }, zoom: 1 } });
+      const outcome = await map.fitCameraToLatLngs(SWISS_POINTS, {
+        mode: CameraUpdateMode.jump,
+        fit: { padding: { top: 20, left: 20, bottom: 20, right: 20 }, bearing: 0, pitch: 0 },
+      });
+      expect(outcome).assertEqual(CameraTransitionOutcome.completed);
+      expectInSwitzerland(map);
+      expect(camera(map).zoom).assertLarger(4);
+    });
+
+    it('fits a geometry with an animation, which a later move can replace', 0, async () => {
+      await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { center: { latitude: 0, longitude: 0 }, zoom: 1 } });
+      const outcome = await map.fitCameraToGeometry(SWISS_POLYGON, {
+        mode: CameraUpdateMode.ease,
+        fit: { padding: { top: 20, left: 20, bottom: 20, right: 20 }, bearing: 0, pitch: 0 },
+        animation: { durationMs: 300 },
+      });
+      expect(outcome).assertEqual(CameraTransitionOutcome.completed);
+      expectInSwitzerland(map);
+      expect(camera(map).zoom).assertLarger(4);
+
+      const fit = map.fitCameraToLatLngs([{ latitude: -33.86, longitude: 151.21 }], {
+        mode: CameraUpdateMode.ease,
+        animation: { durationMs: 10000 },
+      });
+      // It replaces the fit by setting every field that the fit animates,
+      // which includes the padding that the first fit left.
+      const move = map.updateCamera({
+        mode: CameraUpdateMode.ease,
+        camera: {
+          center: { latitude: 0, longitude: 0 },
+          padding: { top: 0, left: 0, bottom: 0, right: 0 },
+          zoom: 2,
+          bearing: 0,
+          pitch: 0,
+        },
+        animation: { durationMs: 200 },
+      });
+      expect(await fit).assertEqual(CameraTransitionOutcome.replaced);
+      expect(await move).assertEqual(CameraTransitionOutcome.completed);
+    });
+
+    it('rejects a fit without a map', 0, async () => {
+      const unused = new MapController();
+      await expect(unused.fitCameraToLatLngs(SWISS_POINTS, {})).assertPromiseIsRejected();
+      await expect(unused.fitCameraToGeometry(SWISS_POLYGON, {})).assertPromiseIsRejected();
+    });
+
+    it('reports the map events that a runtime listener asks for, while it listens', 0, async () => {
+      await until('the style loads', () => map.styleLoaded);
+      const runtime = requireRuntime(map);
+      let handle = requireMap(map);
+      // The library's own events don't include idle.
+      expect(reports(handle, RuntimeEventFlag.mapIdle)).assertFalse();
+      expect(reports(handle, RuntimeEventFlag.mapCameraDidChange)).assertTrue();
+      let idles = 0;
+      let unaskedIdles = 0;
+      const listener = (event: RuntimeEvent) => {
+        if (event.type === RuntimeEventType.mapIdle && event.source === map.map?.id) {
+          idles++;
+        }
+      };
+      // A listener that asks for no map events gets none.
+      const other = (event: RuntimeEvent) => {
+        if (event.type === RuntimeEventType.mapIdle) {
+          unaskedIdles++;
+        }
+      };
+      addRuntimeEventListener(runtime, other);
+      addRuntimeEventListener(runtime, listener, RuntimeEventFlag.mapIdle);
+      try {
+        await until('the map reports idle events', () => reports(handle, RuntimeEventFlag.mapIdle));
+        await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 3 } });
+        await until('the map goes idle', () => idles > 0);
+
+        // A map that appears while the listener listens reports them from the
+        // start.
+        testMap.shown = false;
+        await until('the map leaves', () => map.map === undefined);
+        testMap.shown = true;
+        await until('the map comes back', () => map.styleLoaded);
+        handle = requireMap(map);
+        expect(reports(handle, RuntimeEventFlag.mapIdle)).assertTrue();
+        const before = idles;
+        await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 4 } });
+        await until('the new map goes idle', () => idles > before);
+      } finally {
+        removeRuntimeEventListener(runtime, listener);
+      }
+      await until('the map stops reporting idle events', () => !reports(handle, RuntimeEventFlag.mapIdle));
+      expect(reports(handle, RuntimeEventFlag.mapCameraDidChange)).assertTrue();
+      removeRuntimeEventListener(runtime, other);
+      expect(unaskedIdles).assertEqual(0);
     });
 
     it('keeps the camera within the bounds the map is given', 0, async () => {
