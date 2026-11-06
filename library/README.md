@@ -71,7 +71,7 @@ The [documentation] has the guides, from the map and its camera to requests,
 offline regions, and logs, and the [API reference]. Its examples build in the
 repository's demo app, which shows each feature.
 
-[API reference]: https://sargunv.github.io/maplibre-arkui/api/
-[documentation]: https://sargunv.github.io/maplibre-arkui/
+[API reference]: https://code.sargunv.dev/maplibre-arkui/api/
+[documentation]: https://code.sargunv.dev/maplibre-arkui/
 [MapLibre Native]: https://github.com/maplibre/maplibre-native
 [MapLibre Native FFI]: https://maplibre.org/maplibre-native-ffi/

@@ -1,7 +1,7 @@
 # MapLibre ArkUI
 
-[![Documentation](https://img.shields.io/badge/Documentation-blue?logo=astro&logoColor=white)](https://sargunv.github.io/maplibre-arkui/)
-[![API Reference](https://img.shields.io/badge/API_Reference-blue?logo=typescript&logoColor=white)](https://sargunv.github.io/maplibre-arkui/api/)
+[![Documentation](https://img.shields.io/badge/Documentation-blue?logo=astro&logoColor=white)](https://code.sargunv.dev/maplibre-arkui/)
+[![API Reference](https://img.shields.io/badge/API_Reference-blue?logo=typescript&logoColor=white)](https://code.sargunv.dev/maplibre-arkui/api/)
 [![License](https://img.shields.io/github/license/sargunv/maplibre-arkui?label=License)](./LICENSE)
 
 An ArkUI library for [MapLibre Native] on HarmonyOS and OpenHarmony, built on
@@ -78,9 +78,9 @@ snapshots, requests, offline regions, and logs.
 image. [Build from source] lists the tasks, and [AGENTS.md](AGENTS.md) describes
 the layout, how the build works without hvigor, and how to release.
 
-[Build from source]: https://sargunv.github.io/maplibre-arkui/development/
-[documentation]: https://sargunv.github.io/maplibre-arkui/
-[Getting started]: https://sargunv.github.io/maplibre-arkui/getting-started/
+[Build from source]: https://code.sargunv.dev/maplibre-arkui/development/
+[documentation]: https://code.sargunv.dev/maplibre-arkui/
+[Getting started]: https://code.sargunv.dev/maplibre-arkui/getting-started/
 [MapLibre Compose]: https://maplibre.org/maplibre-compose/
 [MapLibre Native]: https://github.com/maplibre/maplibre-native
 [MapLibre Native FFI]: https://maplibre.org/maplibre-native-ffi/

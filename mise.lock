@@ -172,6 +172,10 @@ specifiers = ["6.1"]
 checksum = "sha256:a30e01f1b161e0fdcd91263f30f29cc92bfa49c1776d5ee2c46caefef055b2da"
 url = "https://github.com/eclipse-oniro4openharmony/device_board_oniro/releases/download/v6.1/oniro_emulator.zip"
 
+[tools."http:oniro-emulator"."platforms.macos-arm64"]
+checksum = "sha256:a30e01f1b161e0fdcd91263f30f29cc92bfa49c1776d5ee2c46caefef055b2da"
+url = "https://github.com/eclipse-oniro4openharmony/device_board_oniro/releases/download/v6.1/oniro_emulator.zip"
+
 [[tools.java]]
 version = "zulu-25.38.109.0"
 backend = "core:java"

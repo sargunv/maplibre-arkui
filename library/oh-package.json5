@@ -6,7 +6,7 @@
   "main": "Index.ets",
   "author": { "name": "MapLibre", "url": "https://maplibre.org" },
   "license": "BSD-2-Clause",
-  "homepage": "https://sargunv.github.io/maplibre-arkui/",
+  "homepage": "https://code.sargunv.dev/maplibre-arkui/",
   "repository": "https://github.com/sargunv/maplibre-arkui",
   "bugs": { "url": "https://github.com/sargunv/maplibre-arkui/issues" },
   "compatibleSdkType": "OpenHarmony",
