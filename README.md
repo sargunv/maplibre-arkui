@@ -14,8 +14,7 @@ and snapshots. It passes on FFI's style API, request handlers, offline regions,
 and logs as they are.
 
 It's a preview, and it isn't on [ohpm] yet: it waits for FFI to publish its
-packages there. See [the changelog](library/CHANGELOG.md) and
-[ROADMAP.md](ROADMAP.md).
+packages there ([#26]). See [the changelog](library/CHANGELOG.md).
 
 The [documentation] has the guides and the API reference.
 
@@ -78,6 +77,7 @@ snapshots, requests, offline regions, and logs.
 image. [Build from source] lists the tasks, and [AGENTS.md](AGENTS.md) describes
 the layout, how the build works without hvigor, and how to release.
 
+[#26]: https://github.com/sargunv/maplibre-arkui/issues/26
 [Build from source]: https://code.sargunv.dev/maplibre-arkui/development/
 [documentation]: https://code.sargunv.dev/maplibre-arkui/
 [Getting started]: https://code.sargunv.dev/maplibre-arkui/getting-started/

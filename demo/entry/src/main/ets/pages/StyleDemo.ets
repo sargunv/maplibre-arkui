@@ -292,7 +292,7 @@ export struct StyleDemo {
       }
       await Promise.all(changes);
       // FFI draws a feature state change only from the frame after the one
-      // that applies it, so ask for that frame. See docs/ffi-feedback.md.
+      // that applies it, so ask for that frame (maplibre-native-ffi#1706).
       this.getUIContext().postDelayedFrameCallback(new Repaint(this.controller), 100);
     } catch (error) {
       this.message = (error as Error).message;

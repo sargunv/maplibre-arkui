@@ -73,11 +73,6 @@ export default defineConfig({
           items: [
             { label: "Build from source", slug: "development" },
             { label: "API guidelines", slug: "api-guidelines" },
-            {
-              label: "Roadmap",
-              link: `${repository}/blob/main/ROADMAP.md`,
-              attrs: { target: "_blank", rel: "noopener noreferrer" },
-            },
           ],
         },
       ],

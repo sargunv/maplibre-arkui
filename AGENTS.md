@@ -1,289 +1,238 @@
-# maplibre-arkui
+# Repository guidance
 
-An ArkUI library for MapLibre Native on HarmonyOS and OpenHarmony, built on the
-ArkTS bindings of MapLibre Native FFI. `ROADMAP.md` is the plan; its guiding
-ideas set the priorities.
+maplibre-arkui is an ArkUI library for MapLibre Native on HarmonyOS and
+OpenHarmony, built on the ArkTS bindings of [MapLibre Native FFI][ffi]. It is a
+cousin of [MapLibre Compose][compose], whose `maplibreNativeMain` source set
+also runs on FFI.
 
-## Project map
+## Priorities
 
-```
-library/                 @maplibre/arkui, a source HAR
-  Index.ets              the public API: only what this exports is public
-  oh-package.json5       name, version, API floor (20), FFI dependency, and
-                         the metadata ohpm shows
-  README.md              the ohpm page: install, quick start, and links to the
-                         site
-  CHANGELOG.md           a section per version, which pack-har.sh requires
-  src/main/ets/
-    Expressions.ets      style expressions: functions that build style-spec JSON
-    GeoJson.ets          GeoJSON types, so ArkTS can write GeoJSON literals
-    StyleImage.ets       readPixelMap(): a PixelMap as FFI's style image
-    Content.ets          MapContent (sources, layers, images as data), the
-                         reconciler that applies it to each style a map loads,
-                         and loadStyle()
-    MapLibreMap.ets      the map component: params, events, lifecycle
-    MapController.ets    the app's handle: observable camera, camera methods,
-                         FFI handles
-    MapView.ets          the XComponent controller that owns the FFI map and
-                         render session (internal)
-    gestures.ets         gesture options, and the recognizer that turns touch,
-                         wheel, and keys into camera deltas and momentum
-    MapMarker.ets        ArkUI content pinned to a coordinate
-    Ornaments.ets        the compass, scale bar, attribution, and zoom buttons
-    location.ets         the user location's indicator layer and its images,
-                         and where a following camera moves
-    runtime.ets          the default runtime and its cache file, the frame
-                         pacer, and per-runtime event dispatch to maps and app
-                         listeners
-    Snapshot.ets         snapshot(): a still image of a map, as a PixelMap
-    log.ets              logError(), which every library log message goes
-                         through, after a `MapLibre:` prefix
-  src/main/module.json   the HAR's module manifest
-  src/ohosTest/          the hypium suite, a test HAP in DevEco's layout
-    ets/test/            the cases; List.test.ets registers them, helpers.ets
-                         holds what they share
-    ets/testability/     the test ability, the page, and TestMaps.ets: the
-                         page's map, its reset(), and the frame waits
-demo/entry/src/main/     the demo app's only module (module.json holds the app's
-                         fields too, as FFI's ArkUI example does): a map with
-                         camera buttons, a page with two maps, a map in a
-                         Scroll, a runtime page (RuntimeDemo.ets) with a
-                         snapshot, a resource transform, and an offline region,
-                         a style page (StyleDemo.ets)
-                         whose content comes from its state, with a snapshot
-                         of it and queries on tap, and a location page
-                         (LocationDemo.ets) with Location Kit and a simulated
-                         walk
-  ets/pages/common.ets   the style URLs and the panel look the pages share
-  ets/docs/              the documentation's examples, as `// #region`s:
-                         QuickStart.ets (a page of its own) and Examples.ets
-                         (a page of tabs)
-scripts/                 the build, pack, FFI, and device scripts the tasks run
-docs/                    the documentation site: Astro with Starlight, a pnpm
-                         package of its own, for GitHub Pages
-  astro.config.mts       the site's base path and sidebar
-  src/content/docs/      the pages; api-guidelines.md holds the public API's
-                         conventions
-  src/snippets.ts        region(): cuts a page's example out of ets/docs/
-  src/components/Api.astro  <Api of="Name" />: a link into the API reference
-  scripts/               the API reference's pipeline (see docs:api)
-  typedoc.config.mjs     TypeDoc's options for the reference
-docs/ffi-feedback.md     FFI gaps and bugs found here, for upstream
-README.md                a stub: what the library is, install, quick start, and
-                         a link to the site
-build/                   outputs (gitignored): ffi/, har/, demo/<abi>/,
-                         test/<abi>/, and docs/ (the reference's declarations)
-.proof/                  screenshots and logs of runs (gitignored)
-```
+In order:
 
-## Dev tool commands
+- Simple, clear code. A map that behaves well with simple code beats one that
+  matches MapLibre Compose or any other reference exactly.
+- Idiomatic ArkTS and ArkUI over imitating MapLibre Compose. Compose is a
+  reference for what a map library needs; when its shape conflicts with what
+  ArkUI developers expect, follow ArkUI.
+- Modern over legacy: state management V2 and current APIs only. The API floor
+  is FFI's, 20.
+- Wrap FFI only where wrapping helps. Re-export FFI types and expose FFI handles
+  where that already reads as ArkTS.
+- Build the imperative core first. Every declarative feature sits on imperative
+  operations that apps can also call. FFI renders, paces frames, and moves the
+  camera; this library adds input, widgets, and declarative UI for ArkUI.
+- Avoid native code. FFI's packages attach to an XComponent surface from ArkTS.
+- Gestures are intricate. Study ArkUI's gesture idioms and Compose's
+  [interaction source][compose-interaction] before changing them.
 
-Run `mise install` once. It installs the OpenHarmony SDK (about 4 GB) and the
-Oniro emulator image (1.4 GB), which no other command installs on its own. The
-SDK comes through the [mise-ohos-sdk](https://github.com/sargunv/mise-ohos-sdk)
-plugin that `[plugins]` in `mise.toml` pins, which unpacks it with the host's
-`python3` and puts only `hdc` on PATH. The scripts use `perl` and `unzip`.
+Nothing is published, so the public API has no users to keep working. When a
+better name or shape appears, change it everywhere: no deprecations, aliases, or
+compatibility shims until the first release.
 
-- `mise run check` / `mise run fix`: formatters and linters through hk, and
-  `scripts/check-doc-examples.sh`, which checks that each `ets` block of the
-  READMEs is in the demo's `ets/docs/`. They install the site's packages first,
-  since dprint formats its `.mdx` pages with the site's mdxlint.
-- `mise run docs:build` / `mise run docs:dev`: build the documentation site into
-  `docs/dist`, or serve it with live reload. `mise run docs:preview` serves the
-  build. Each runs `docs:api` first, which needs the SDK and `build/ffi`: the
-  SDK's TypeScript fork emits the library's declarations
-  (`docs/scripts/emit-declarations.mjs`), a rewrite turns structs into classes
-  and decorators into TypeDoc badges, `docs/scripts/ffi-reference.mjs` links
-  FFI's re-exports to FFI's TypeDoc, and TypeDoc writes `docs/public/api`.
-- `mise run ffi:download`: fetch the FFI packages that FFI's CI packed at
-  `vars.ffi_commit` into `build/ffi`. Needs `gh` signed in.
-- `FFI_DIR=<checkout> mise run ffi:pack [preset]`: pack them from an FFI
-  checkout instead (default preset `ohos-x64-egl`, for the Oniro emulator;
-  `ohos-arm64-egl` for arm64 devices). Use it to try FFI changes; it warns when
-  the checkout isn't at the pin.
-- `mise run pack`: pack the library into `build/har/maplibre-arkui.har`.
-- `mise run demo:build` / `mise run demo`: build the demo HAP into
-  `build/demo/<abi>`, or build, install, and start it on this worktree's
-  emulator (`--device <key>` for another device). The build takes `--abi x86_64`
-  (the default, for the Oniro emulator and CI) or `--abi arm64-v8a`; `demo`
-  reads the device's ABI with `scripts/device-abi.sh` and builds for it, so it
-  runs on arm64 devices and DevEco Studio's emulator too.
-- `mise run test:build` / `mise run test`: build the hypium suite into
-  `build/test/<abi>`, with the same `--abi`, or build it for the device's ABI
-  and run it on the emulator or `--device <key>`. It fails unless hypium reports
-  every case passed. A run that ends without hypium's tally crashed, most likely
-  in the Oniro emulator's llvmpipe (see `docs/ffi-feedback.md`), which isn't a
-  reason to retry. The suite finishes on DevEco Studio's emulator, which has a
-  GPU.
-- `scripts/ohos-key.sh`: print this worktree's emulator key, booting it if
-  needed. `devices-cli release` stops it. It runs `scripts/wake-device.sh`,
-  which turns the screen on, keeps it on for a day, and swipes the lock screen
-  away, since the emulator locks after it sleeps and `aa start` and the UI cases
-  fail behind the lock screen. A device named with `--device` is left as it is.
-  Don't run `power-shell suspend`: `hdc shell` hangs until the emulator is
-  released.
-- Screenshot:
-  `hdc -t "$(scripts/ohos-key.sh)" shell snapshot_display -f /data/local/tmp/x.jpeg`,
-  then `hdc -t ... file recv /data/local/tmp/x.jpeg .proof/x.jpeg`.
+Report FFI gaps and bugs upstream in [maplibre-native-ffi][ffi-issues] instead
+of working around them with complex code.
 
-The build and device tasks need `build/ffi` from `ffi:download` or `ffi:pack`.
+## Development
 
-## How the build works
+Public API is what `library/Index.ets` exports, and it follows the
+[API guidelines](docs/src/content/docs/api-guidelines.md). `library/` is the
+source HAR, `demo/` the demo app, `docs/` the documentation site, and `scripts/`
+what the mise tasks run.
 
-HAPs build without hvigor, whose packages have no clear license.
-`scripts/build-hap.sh` adapts FFI's `examples/arkui/scripts/build-hap.sh` and
-`tools/ohos/pack-hap`: ets-loader's webpack build compiles ArkTS, es2abc merges
-the records, and `scripts/pack-hap.sh` packs and signs with the SDK's debug
-keys. It takes the packages as ohpm would install them:
+Run `mise install` once. It installs the OpenHarmony SDK (about 4 GB, through
+the [mise-ohos-sdk](https://github.com/sargunv/mise-ohos-sdk) plugin) and the
+Oniro emulator image (1.4 GB). `mise tasks` lists the tasks:
 
-- The library HAR's sources join the module's `ets/`, and the module's imports
-  of `@maplibre/arkui` become relative imports of them. The tests and the demo
-  build against the packed HAR. The script ignores package dependencies, and the
-  packed HAR still names FFI by its `file:` path in this repository, so ohpm
-  can't install it into an app until FFI is on OHPM.
-- JavaScript packages (FFI's facade, hypium) stay external and become records of
-  their own. The backend supplies the native libraries.
-- `scripts/ets-loader-patches.cjs` fixes two bugs in the webpack build for
-  imported `@ComponentV2` structs and for source HAR records. A SDK update that
-  changes the patched text stops the build with an error.
+- `mise run check` / `mise run fix`: formatters and linters through hk.
+- `mise run ffi:download`: fetch FFI's packages into `build/ffi`, which the
+  build tasks need. `FFI_DIR=<checkout> mise run ffi:pack [preset]` packs them
+  from an FFI checkout instead.
+- `mise run pack`, `demo:build`, `test:build`, `docs:build`: build the HAR, the
+  demo HAP, the test HAP, or the site. The HAPs take `--abi x86_64` (the
+  default, for the Oniro emulator and CI) or `--abi arm64-v8a`.
+- `mise run demo` / `mise run test`: build for the device's ABI, then start the
+  demo or run the hypium suite on this worktree's Oniro emulator, or on the
+  device that `--device <key>` names. The test task fails unless hypium reports
+  every case passed.
+- `mise run docs:dev`: serve the site with live reload.
 
-## FFI pin and CI
+The Oniro emulator's llvmpipe crashes the app in most full suite runs
+([maplibre-native-ffi#1692][ffi-1692]); a run that ends without hypium's tally
+crashed, which isn't a reason to retry. DevEco Studio's emulator has a GPU and
+finishes the suite. `scripts/ohos-key.sh` prints this worktree's emulator key,
+booting it and waking it if needed; `devices-cli release` stops it. Don't run
+`power-shell suspend`, which hangs `hdc shell`. Screenshot with
+`hdc -t <key> shell snapshot_display -f /data/local/tmp/x.jpeg`, then
+`hdc -t <key> file recv /data/local/tmp/x.jpeg .proof/x.jpeg`.
 
-FFI isn't on OHPM in the form this library needs. `vars.ffi_commit` in
-`mise.toml` names the FFI main commit to build against, and
-`library/oh-package.json5` points at `build/ffi/native-ffi.har`. CI runs
-`ffi:download`, which uses the `ohpm-packages-*` artifact of FFI's CI run for
-that commit. FFI keeps those artifacts for 30 days and packs them only when
-every target passes, so pick the newest main commit whose CI has the artifact,
-and bump the pin within 30 days or CI breaks. Building FFI in CI instead would
-mean building MapLibre Native, which is far slower.
+`vars.ffi_commit` in `mise.toml` pins the FFI main commit whose CI packages
+`ffi:download` fetches. FFI keeps them for 30 days, so pick the newest main
+commit whose CI has the `ohpm-packages-*` artifact.
 
-CI (`.github/workflows/ci.yml`) runs `mise run check` and builds the HAR, the
-demo HAP, the test HAP, and the documentation site. On pushes to `main`, its
-`deploy-pages` job publishes the site to GitHub Pages, built for the origin that
-the Pages settings give it (now `https://code.sargunv.dev/maplibre-arkui/`). It
-doesn't run the hypium suite, which llvmpipe's crash makes fail most runs
-(ROADMAP.md, Next).
+HAPs build without hvigor: `scripts/build-hap.sh` runs ets-loader's webpack
+build, es2abc, and `scripts/pack-hap.sh`, with the library HAR's sources joined
+into the module and FFI's facade and hypium kept as external records.
+`scripts/ets-loader-patches.cjs` patches two ets-loader bugs and stops the build
+if an SDK update changes the patched text. ets-loader only warns on ArkTS
+errors, so `build-hap.sh` fails on its `ArkTSLinter_output.json`.
 
-## Releasing
+### ArkTS and ArkUI
 
-Nothing is published yet. `mise run pack` warns about what keeps the HAR off
-ohpm. To publish:
+- State management V2 only; no V1 decorators.
+- Strict ArkTS. Check ideas against the [migration rules][arkts-migration]: no
+  object spread, `as const`, destructuring, structural typing, or `#private`
+  fields. Style JSON is a `Record<string, Object>` literal with quoted keys,
+  each nested object in a variable of its own.
+- Import `@ohos.*` modules, not `@kit.*`, which the webpack build doesn't
+  rewrite.
+- Import FFI's `Camera` type as `CameraPosition`; ArkUI reserves the name.
+- The webpack build's tsconfig omits `NodeContainer`, `ContentSlot`, and
+  `SymbolGlyph`, and rejects `layoutGravity`. In a `ForEach` item, a built-in
+  component fails to build and a custom component's trailing closure is silently
+  lost; have the item call a `@Builder`.
+- The build has no resource table, so no `$r()`; load files from
+  `resources/rawfile` with `getRawFileContentSync()`. Ornaments use `sys.*`
+  resources so they follow dark mode.
+- No formatter understands `.ets`: format it by hand like the existing files (2
+  spaces, single quotes). `oh-package.json5` files stay plain JSON, which the
+  scripts read with jq.
+- The library declares no permission, since a HAR's `requestPermissions` merge
+  into every app. Location comes from the app as a
+  `geoLocationManager.Location`.
 
-1. Once FFI publishes `@maplibre/native-ffi` and its backends on OHPM, set the
-   dependency in `library/oh-package.json5` to that exact version, such as
-   `"@maplibre/native-ffi": "0.202612.0"`. FFI breaks its API in most releases,
-   and the backend the app installs must match the facade, so pin it exactly,
-   and tell apps that version in the READMEs' install line
-   (`ohpm install @maplibre/arkui @maplibre/native-ffi-opengl@<version>`). Then
-   `vars.ffi_commit` and `ffi:download` can give way to the published packages.
-2. Set `version` and add its section to `library/CHANGELOG.md`.
-3. `mise run pack`, then `ohpm prepublish build/har/maplibre-arkui.har` with
-   DevEco's or the command-line tools' ohpm, which isn't part of this
-   repository's toolchain. It warns that the HAR has source code, which a source
-   HAR does. Then `ohpm publish build/har/maplibre-arkui.har`. OHPM lists the
-   version after a review, which checks the README's install line.
+### Library internals
 
-## Project invariants
-
-- Nothing is published, so the public API has no users to keep working. When a
-  better name or shape appears, change it everywhere: no deprecations, aliases,
-  or compatibility shims until the first release.
-- State management V2 only (`@ComponentV2`, `@ObservedV2`/`@Trace`, `@Param`,
-  `@Event`, `@Local`, `@Provider`/`@Consumer`, `@Monitor`, `@Computed`); no V1
-  decorators. API floor 20, FFI's.
-- Strict ArkTS. Import `@ohos.*` modules, not `@kit.*`, which the webpack build
-  doesn't rewrite.
-- No formatter understands `.ets`, so format it by hand in the style of the
-  existing files (2 spaces, single quotes). The build enforces the ArkTS rules.
-- `oh-package.json5` files stay plain JSON, which the scripts read with jq.
-- Record FFI gaps and bugs in `docs/ffi-feedback.md` instead of working around
-  them with complex code.
-- Expressions are untyped and immutable, and FFI's style functions take an
-  `Expression` as is, through its `toJSON()`. A new expression function gets a
-  JSON case and a case that FFI's `StyleExpressionHandle` parses and evaluates
-  in `Expressions.test.ets`.
-- Import FFI's `Camera` type as `CameraPosition`; ArkUI reserves the name for a
-  built-in component, and ets-loader rejects the import.
-- The FFI map is usable only once `map.ready` settles: its snapshot throws
-  before then. `MapView` exposes it to the controller only after that.
-- Tests wait with frame callbacks, not timers. OpenHarmony's main thread can
-  lose a timer's wakeup while nothing else wakes its event loop, which hangs a
-  `setTimeout` poll.
-- The webpack build's ESM tsconfig omits some built-in components, such as
-  `NodeContainer`, `ContentSlot`, and `SymbolGlyph`, so `.ets` files can't use
-  them yet. It also rejects `layoutGravity`. In a `ForEach` item, a built-in
-  component fails to build, and a custom component with a trailing closure
-  builds but silently loses that content; have the item call a `@Builder`.
-- ets-loader only warns when code breaks the ArkTS rules, so `build-hap.sh`
-  fails on the errors in its `ArkTSLinter_output.json`.
+- The FFI map is usable only once `map.ready` settles; `MapView` exposes it to
+  the controller only after that.
 - The library owns each runtime's one FFI event handler and its maps' event
-  masks. Code that needs a runtime's events, such as offline progress, uses
-  `addRuntimeEventListener()`, with the map events it needs as flags, never
-  `RuntimeHandle.setEventHandler()` or `MapHandle.setEventMask()`. A listener
-  gets only the map events it asks for.
-- Request handlers, offline regions, and logs are FFI's API, re-exported from
-  `Index.ets`; wrap them only where ArkUI needs it.
-- Test cases don't need the network, except the resource transform case, which
-  rewrites a URL to a real style.
-- Each ArkTS example of the documentation site is a `// #region <name>` of
-  `demo/entry/src/main/ets/docs/`, which a page shows with
-  `<Code code={region(examples, "<name>")} lang="ts" />`; the site build fails
-  on a missing region. The READMEs keep only the quick start, in an `ets` block,
-  which dprint leaves alone, that is lines of those files: change both together.
-- The API reference comes from the doc comments of what `Index.ets` exports. A
-  struct's members other than its params, and comments that start with
-  "Internal:", stay out of it. FFI's re-exports link to FFI's reference rather
-  than being documented here; link names in pages with `<Api of="Name" />`,
-  which fails the build on a name the reference doesn't have.
-- `docs/src/content/docs/api-guidelines.md` describes the public API as it is; a
-  change that departs from it changes it too.
-- The build has no resource table, so `.ets` files can't use `$r()`; load files
-  from `resources/rawfile` with `getRawFileContentSync()`.
-- The style and query API is FFI's, through `MapController.map` and
-  `renderSession`; wrap a part of it only where ArkUI apps need more than the
-  FFI types, which `Index.ets` re-exports. Style JSON in ArkTS is a
-  `Record<string, Object>` literal with quoted keys, each nested object in a
-  variable of its own, since ArkTS types an object literal only from a declared
-  type.
-- Per-frame state lives in one traced field, the controller's frame view, which
-  the map sets from the render session's frame results. Read it through
-  `frameCamera` and the projection methods, in `@Computed` getters where a
-  component derives values from it.
-- Ornaments use `sys.color.*` and `sys.media.*` resources so they follow dark
-  mode; the HAR has no resources of its own yet.
-- On the Oniro emulator, content that moves every frame over a map makes the
-  llvmpipe crash likelier, so test cases turn on the scale bar, markers, and
-  compass only while they need them, and the suites that need no map run before
-  any suite shows it.
-- Each suite that uses the test page's map calls `testMap.reset()` in its
-  `beforeEach`, which loads the style afresh and turns every flag off, rather
-  than undoing its changes in `afterEach` or `finally`. Shared helpers go in
-  `test/helpers.ets`.
+  masks. Code that needs events uses `addRuntimeEventListener()` with the map
+  events it needs, never `setEventHandler()` or `setEventMask()`.
+- Map content is data. `ContentReconciler` runs one pass at a time and awaits
+  each FFI command, so its record of the style stays true; don't pipeline
+  commands. It owns only what it added, by ID, and starts over on each style
+  load.
+- Per-frame state lives in one traced field, the controller's frame view. Read
+  it through `frameCamera` and the projection methods, in `@Computed` getters.
 - The map's ArkUI gestures only claim touches; `MapGestures` moves the camera
-  from the raw touches, and only after a claim. Keep camera math out of the
-  gesture callbacks, except for input that has no touches (touchpad pinch). Each
-  touch event moves one finger, and on HarmonyOS 6 the other fingers in its
-  `touches` have wrong coordinates, so the recognizer reads positions from
-  `changedTouches` only.
-- Tests may import the library's internal files by path, such as
-  `@maplibre/arkui/src/main/ets/gestures`; `build-hap.sh` rewrites those
-  imports. `Gestures.test.ets` feeds the recognizer made-up touches, and
-  `GestureInput.test.ets` injects real input with `@ohos.UiTest`'s `Driver`,
-  which takes px: aim and time input in vp and convert, and measure the camera's
-  motion in vp with the map's projection, so the cases hold at any density.
-- The library declares no permission; a HAR's `requestPermissions` merge into
-  every app that uses it. Location comes from the app as Location Kit's
-  `geoLocationManager.Location`. The emulator's Location Kit has no fixes (the
-  location switch is off), so tests and the demo make up locations.
-- hypium's `assertClose` divides the difference by the actual value; compare
-  with a tolerance through `expectNear()` in `test/helpers.ets` instead.
-- Map content is data: `MapContent` goes to `MapLibreMap` and `snapshot()` as a
-  value, and a new value is a change. `ContentReconciler` (internal) runs one
-  pass at a time and awaits each FFI command, so its record of the style stays
-  true; keep it that way rather than pipelining commands. It owns only what it
-  added, by ID, and starts over on each style load.
+  from the raw touches after a claim. Keep camera math out of gesture callbacks,
+  except for touchpad pinch. On HarmonyOS 6 only `changedTouches` has correct
+  coordinates, so the recognizer reads positions from it.
+- Expressions are untyped and immutable; FFI takes them through `toJSON()`. A
+  new expression function gets a JSON case and a case that FFI's
+  `StyleExpressionHandle` parses and evaluates.
+
+### Tests
+
+The hypium suite is in `library/src/ohosTest/`; `test/helpers.ets` holds what
+cases share.
+
+- Wait with frame callbacks, not timers: OpenHarmony's main thread can lose a
+  timer's wakeup and hang a `setTimeout` poll.
+- Each suite that uses the test page's map calls `testMap.reset()` in its
+  `beforeEach` rather than undoing its changes afterward.
+- Turn on the scale bar, markers, and compass only while a case needs them; the
+  suites that need no map run before any suite shows it. Content moving over a
+  map makes the llvmpipe crash likelier.
+- hypium's `assertClose` divides by the actual value; use `expectNear()`.
 - The map reads layer properties back normalized: colors as
-  `["rgba", r, g, b, a]`, expressions wrapped in their type's coercion
-  (`["to-color", ...]`), and unset properties as `undefined`. Tests compare
-  against those forms.
+  `["rgba", r, g, b, a]`, expressions wrapped in their type's coercion, unset
+  properties as `undefined`.
+- Cases may import internal files by path
+  (`@maplibre/arkui/src/main/ets/gestures`). `GestureInput.test.ets` injects
+  real input through `@ohos.UiTest`, which takes px: aim and time input in vp,
+  and measure motion with the map's projection, so cases hold at any density.
+- Cases don't need the network, except the resource transform case. The
+  emulators have no location fixes, so cases pass made-up locations.
+
+## Documentation
+
+Documentation describes the library as it is, for a reader who doesn't know its
+history. Notes about what changed belong in the PR description.
+
+- Site pages in `docs/src/content/docs/` help a user complete a task or
+  understand a concept. Exact contracts belong in the doc comments, which become
+  the API reference. A struct's members other than its params, and comments that
+  start with "Internal:", stay out of it. FFI's re-exports link to FFI's
+  reference; name symbols in pages with `<Api of="Name" />`, which fails the
+  build on a name the reference doesn't have.
+- Each ArkTS example on the site is a `// #region <name>` of
+  `demo/entry/src/main/ets/docs/`, which compiles with the demo; the site build
+  fails on a missing region. The READMEs keep only the quick start, in an `ets`
+  block that is lines of those files; `mise run check` enforces it.
+- The API guidelines describe the public API as it is; a change that departs
+  from them changes them too.
+
+## Issues and pull requests
+
+Write a short PR title and description for a reviewer who will read the diff.
+Say what the diff, its doc comments, and CI can't: open with the problem and
+what users can now do, show one small example, and add validation that CI
+doesn't run, such as a hypium run on a device. CI runs `mise run check` and the
+builds, and deploys the site from `main`; it doesn't run the hypium suite.
+
+When you post AI-contributed GitHub content, append this disclosure:
+`*AI-assisted — Tool: <tool>; model: <provider>/<model>*`
+
+## Later
+
+Directions without a plan:
+
+- Android and iOS through [ArkUI-X][arkuix], which has a cross-platform
+  XComponent but no surface holder, and would need FFI runtime packages for it.
+- Native components through ContentSlot and the NDK node API, if hosting from
+  ArkTS limits performance.
+- Compose on HarmonyOS ([ovCompose][ovcompose], [KuiklyUI][kuikly]), another
+  path for MapLibre Compose that could share the native layer.
+- OpenHarmony devices, which have no Map Kit; [TPC MapLibre][tpc-maplibre]
+  already targets them.
+
+## References
+
+- FFI: the [ArkUI example][ffi-arkui], the [OpenHarmony header][ffi-ohos-h], and
+  the guides to [create a map][ffi-create-map] and [show it in a
+  window][ffi-window].
+- [MapLibre Compose][compose].
+- OpenHarmony: [ArkUI API design][arkui-api-design], [state management
+  V2][oh-componentv2], [XComponent][oh-xcomponent], [HAR packages][oh-har],
+  [publishing a HAR][hw-har-publish], [unit tests][oh-unittest], and the [Oniro
+  emulator][oniro].
+- Other maps on HarmonyOS, all imperative controller APIs: [Map Kit][hw-mapkit],
+  [AMap][amap], [Baidu Maps][bdmap] (state management V2), and [Tencent
+  Maps][tencentmap].
+
+[amap]: https://ohpm.openharmony.cn/#/cn/detail/@amap%2Famap_lbs_map3d
+[arkts-migration]:
+  https://github.com/openharmony/docs/blob/master/en/application-dev/quick-start/typescript-to-arkts-migration-guide.md
+[arkui-api-design]: https://gitcode.com/openharmony-skills/arkui-api-design
+[arkuix]: https://gitcode.com/arkui-x
+[bdmap]: https://ohpm.openharmony.cn/#/cn/detail/@bdmap%2Fmap
+[compose]: https://maplibre.org/maplibre-compose/
+[compose-interaction]:
+  https://github.com/maplibre/maplibre-compose/tree/main/lib/maplibre-compose/src/commonMain/kotlin/org/maplibre/compose/interaction
+[ffi]: https://maplibre.org/maplibre-native-ffi/
+[ffi-1692]: https://github.com/maplibre/maplibre-native-ffi/issues/1692
+[ffi-arkui]:
+  https://github.com/maplibre/maplibre-native-ffi/tree/main/examples/arkui
+[ffi-create-map]: https://maplibre.org/maplibre-native-ffi/guides/create-a-map/
+[ffi-issues]: https://github.com/maplibre/maplibre-native-ffi/issues
+[ffi-ohos-h]:
+  https://github.com/maplibre/maplibre-native-ffi/blob/main/include/maplibre_native_c/platform/ohos.h
+[ffi-window]:
+  https://github.com/maplibre/maplibre-native-ffi/blob/main/docs/src/content/docs/guides/window.mdx
+[hw-har-publish]:
+  https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/ide-har-publish
+[hw-mapkit]:
+  https://developer.huawei.com/consumer/cn/doc/harmonyos-references/map-mapcomponent
+[kuikly]: https://github.com/Tencent-TDS/KuiklyUI
+[oh-componentv2]:
+  https://github.com/openharmony/docs/blob/master/en/application-dev/ui/state-management/arkts-new-componentV2.md
+[oh-har]:
+  https://github.com/openharmony/docs/blob/master/en/application-dev/quick-start/har-package.md
+[oh-unittest]:
+  https://github.com/openharmony/docs/blob/master/en/application-dev/application-test/unittest-guidelines.md
+[oh-xcomponent]:
+  https://github.com/openharmony/docs/blob/master/en/application-dev/reference/apis-arkui/arkui-ts/ts-basic-components-xcomponent.md
+[oniro]: https://github.com/eclipse-oniro4openharmony/device_board_oniro
+[ovcompose]: https://github.com/Tencent-TDS/ovCompose-sample
+[tencentmap]: https://ohpm.openharmony.cn/#/cn/detail/@tencentmap%2Fmap
+[tpc-maplibre]: https://gitcode.com/CPF-ApplicationTPC/ohos_maplibre-native
