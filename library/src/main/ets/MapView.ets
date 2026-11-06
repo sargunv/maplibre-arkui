@@ -83,6 +83,8 @@ export class MapView extends XComponentController implements GestureTarget {
   private disposed: boolean = false;
   // How many times the app has moved the camera, which ends a gesture's say.
   private cameraTakeovers: number = 0;
+  // How many gestures the user has started, which end a fit's say.
+  gestureStarts: number = 0;
   // The map from when it's created, which the view disposes.
   private created: MapHandle | undefined = undefined;
   private style: string = '';
@@ -213,14 +215,31 @@ export class MapView extends XComponentController implements GestureTarget {
     if (map === undefined) {
       return undefined;
     }
-    const cameraPadding = options.cameraPadding ?? subtractInsets(map.getSnapshot().view.camera.padding, this.insets);
-    const fitPadding = addInsets(addInsets(this.insets, cameraPadding), options.fitPadding ?? NO_INSETS);
-    const fitted = await query(map, { padding: fitPadding, bearing: options.bearing, pitch: options.pitch });
-    if (this.map !== map) {
-      return undefined;
+    let cameraPadding = options.cameraPadding;
+    if (cameraPadding === undefined) {
+      // In command order, so it includes padding that the app set just before,
+      // inside the insets that the map had then.
+      const insets = this.insets;
+      const current = await map.getCamera();
+      if (this.map !== map) {
+        return undefined;
+      }
+      cameraPadding = subtractInsets(current.camera.padding, insets);
     }
-    // The insets as they are now, should they have changed during the query.
-    const padding = addInsets(this.insets, cameraPadding);
+    // A layout change during the query leaves a different part of the map to
+    // fit in, so the fit asks again.
+    let insets: EdgeInsets;
+    let fitPadding: EdgeInsets;
+    let fitted: CameraOptions;
+    do {
+      insets = this.insets;
+      fitPadding = addInsets(addInsets(insets, cameraPadding), options.fitPadding ?? NO_INSETS);
+      fitted = await query(map, { padding: fitPadding, bearing: options.bearing, pitch: options.pitch });
+      if (this.map !== map) {
+        return undefined;
+      }
+    } while (this.insets !== insets);
+    const padding = addInsets(insets, cameraPadding);
     const view = map.getSnapshot().view;
     const projection = MapProjectionHandle.create(view);
     let center: LatLng;
@@ -294,6 +313,7 @@ export class MapView extends XComponentController implements GestureTarget {
 
   // The user takes the camera from the location it follows.
   gestureStarted(): void {
+    this.gestureStarts++;
     const controller = this.controller;
     if (controller !== undefined && controller.map === this.map) {
       controller.stopFollowingUserLocation();

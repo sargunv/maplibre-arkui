@@ -275,6 +275,14 @@ export default function mapControllerTest(): void {
       await setInsets({ top: 0, left: 0, bottom: 100, right: 0 }, padding);
       expectPadding(camera().padding, padding);
 
+      // A fit keeps padding that a move sent just before it set, though the
+      // move hasn't finished.
+      const sent: EdgeInsets = { top: 0, left: 30, bottom: 0, right: 0 };
+      const move = map.updateCamera({ mode: CameraUpdateMode.jump, camera: { padding: sent } });
+      await map.fitCameraToLatLngs(SWISS_POINTS);
+      await move;
+      expectPadding(camera().padding, sent);
+
       // A fit with camera padding sets it, and fits inside it.
       const after: EdgeInsets = { top: 40, left: 0, bottom: 0, right: 0 };
       await map.fitCameraToLatLngBounds(SWITZERLAND, { cameraPadding: after, bearing: 0, pitch: 0 });

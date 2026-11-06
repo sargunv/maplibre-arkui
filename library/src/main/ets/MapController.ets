@@ -371,20 +371,24 @@ export class MapController {
     this.lastMove = outcome;
   }
 
-  // Finds the camera for a fit, then moves it there, unless the map leaves or
-  // the app moves the camera first.
+  // Finds the camera for a fit, then moves it there, unless the map leaves, or
+  // the app or the user moves the camera first.
   private async fit(options: FitCameraOptions,
     query: (map: MapHandle, fit: CameraFitOptions) => Promise<CameraOptions>): Promise<CameraTransitionOutcome> {
-    const view = this.view;
     this.requireMap();
+    const view = this.view!;
     this.takeOverCamera(CameraTransitionOutcome.replaced);
     const moves = this.moves;
-    const camera = await view?.fitCamera(options, query);
+    const gestures = view.gestureStarts;
+    const camera = await view.fitCamera(options, query);
     if (camera === undefined || this.view !== view) {
       return endEarly(options, CameraTransitionOutcome.closed);
     }
     if (this.moves !== moves) {
       return endEarly(options, this.lastMove);
+    }
+    if (view.gestureStarts !== gestures) {
+      return endEarly(options, CameraTransitionOutcome.cancelled);
     }
     return this.transition(options.animation, (map: MapHandle, animation: AnimationOptions) => map.updateCamera({
       mode: options.mode,
