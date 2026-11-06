@@ -32,8 +32,8 @@ under it get it, from the top layer down, until a layer's `onClick` or
 
 <Code code={region(examples, "map-click")} lang="ts" />
 
-A layer's handler gets the layer's features under the click, topmost first, and
-the click's point and coordinate (see <Api of="MapClickEvent" />). `hitPadding`
+A layer's handler gets the layer's features under the click, as FFI's query
+returns them, and the click's point and coordinate (see <Api of="MapClickEvent" />). `hitPadding`
 widens what counts as under the click, so small circles and thin lines are
 easier to tap:
 

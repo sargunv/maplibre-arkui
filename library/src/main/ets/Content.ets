@@ -31,8 +31,8 @@ export interface MapClickEvent {
 }
 
 /**
- * Handles a click on a layer's features: those under the click, topmost
- * first, as FFI's `queryRenderedFeatures()` finds them. It returns `true` to
+ * Handles a click on a layer's features: those under the click, in the order
+ * that FFI's `queryRenderedFeatures()` returns them. It returns `true` to
  * consume the click, so the layers under it and `onUnhandledClick` don't get
  * it, or `false` to pass it on.
  */
