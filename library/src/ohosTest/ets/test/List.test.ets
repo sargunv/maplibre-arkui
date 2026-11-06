@@ -1,3 +1,4 @@
+import connectivityTest from './Connectivity.test';
 import contentTest from './Content.test';
 import expressionsTest from './Expressions.test';
 import gestureInputTest from './GestureInput.test';
@@ -15,6 +16,7 @@ export default function testsuite(): void {
   expressionsTest();
   gesturesTest();
   runtimeTest();
+  connectivityTest();
   mapControllerTest();
   lifecycleTest();
   styleTest();

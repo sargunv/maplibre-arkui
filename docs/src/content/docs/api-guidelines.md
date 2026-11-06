@@ -82,9 +82,11 @@ as ArkTS.
   (`MapLibreMap`), observable state (`MapController`), ArkUI and Kit types
   (`PixelMap` in `readPixelMap()` and `snapshot()`, Location Kit's `Location`),
   ownership that FFI gives one caller (the runtime's event handler, shared
-  through `addRuntimeEventListener()`, and each map's event mask, the union of
-  the map events that the listeners ask for), declarative data (`MapContent`),
-  and types that strict ArkTS needs for literals (GeoJSON, expressions).
+  through `addRuntimeEventListener()`; each map's event mask, the union of the
+  map events that the listeners ask for; and the process's network status, which
+  `setConnectivityMode()` and the device's network set), declarative data
+  (`MapContent`), and types that strict ArkTS needs for literals (GeoJSON,
+  expressions).
 - A wrapper names the FFI call it makes and doesn't repeat FFI's docs.
 
 ## Errors
@@ -114,7 +116,8 @@ as ArkTS.
   render session as it appears and releases them as it disappears. A controller
   outlives its maps and keeps the camera between them.
 - The library creates the default runtime on first use and keeps it for the
-  app's life; an app that passes its own runtime owns it.
+  app's life; an app that passes its own runtime owns it. The monitor of the
+  device's network starts as a runtime is first used and lasts as long.
 - FFI's map is usable once its `ready` settles, so the controller exposes it
   only after that.
 - FFI commands whose order matters are awaited one at a time
