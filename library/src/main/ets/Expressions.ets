@@ -6,7 +6,7 @@
 // `case`, a reserved word, is `cases`. Expressions are untyped: MapLibre checks
 // an expression's types when it parses it, and a phantom `Expression<T>` would
 // check nothing in ArkTS without a brand, or type assertions at every feature
-// property with one. See ROADMAP.md, stage 6.
+// property with one.
 
 /** A JSON value, as a style holds it. */
 export type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;

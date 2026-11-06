@@ -6,10 +6,9 @@ description: The conventions that the public API of @maplibre/arkui follows.
 The conventions that `@maplibre/arkui`'s public API follows. The public API is
 what `library/Index.ets` exports. These describe the code as it is; when a rule
 doesn't fit a new case, change the rule in the same change rather than make an
-exception. The priorities behind them are in
-[ROADMAP.md](https://github.com/sargunv/maplibre-arkui/blob/main/ROADMAP.md)'s
-guiding ideas: simple code, ArkUI idiom over MapLibre Compose's shape, state
-management V2 only, and FFI's API where it already reads as ArkTS.
+exception. The priorities behind them: simple code, ArkUI idiom over MapLibre
+Compose's shape, state management V2 only, and FFI's API where it already reads
+as ArkTS.
 
 ## Naming
 
@@ -197,7 +196,7 @@ marker, and ornament members; `{@link}` tags; `FollowLocationOptions`, now
   module-private registry could hide them.
 - The ornaments' accessibility labels are English until the HAR has resources.
 - Open names that are plain strings (`MapLayer.type`, `GeoJsonGeometry.type`)
-  could become string-literal unions once static ArkTS is checked; see
-  ROADMAP.md, Next.
+  could become string-literal unions once static ArkTS is checked
+  ([#28](https://github.com/sargunv/maplibre-arkui/issues/28)).
 - Errors are plain `Error`s with messages; an app can't tell "no map on screen"
   from other rejections except by message. A named error, if apps need it.
