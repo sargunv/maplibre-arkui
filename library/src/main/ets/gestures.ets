@@ -11,30 +11,88 @@ import { KeyCode } from '@ohos.multimodalInput.keyCode';
 import { CameraDelta, GesturePhase, ScreenPoint } from '@maplibre/native-ffi';
 
 /**
- * Which gestures move the map. Each defaults to on, except `cooperative`.
- * Clicks reach the map's handlers whichever are on.
+ * How the user moves the map: which camera movements input makes, what the app
+ * does as each starts, and what the wheel, rotation, and haptics do. Fields
+ * that it leaves out keep their defaults, so every movement is on. Clicks reach
+ * the map's handlers whichever movements are on.
  *
  * ```ets
- * MapLibreMap({ controller: this.map, style: STYLE, gestures: { rotate: false, pitch: false } })
+ * MapLibreMap({
+ *   controller: this.map,
+ *   style: STYLE,
+ *   interactions: { rotate: { enabled: false }, pitch: { enabled: false } },
+ * })
  * ```
  */
-export interface MapGestureOptions {
-  /** Drag with one finger or the mouse, or two fingers, to move the map. */
-  pan?: boolean;
+export interface MapInteractionOptions {
   /**
-   * Pinch, double tap, two-finger tap, wheel, and keys, and double tap and
-   * drag while `pan` is on.
+   * Drag with one finger or the mouse, or with two fingers; swipe two fingers
+   * on a touchpad; and the arrow keys.
    */
-  zoom?: boolean;
-  /** Twist two fingers. A rotation that ends near north snaps to it. */
-  rotate?: boolean;
-  /** Drag two fingers up or down together. */
-  pitch?: boolean;
+  pan?: MovementOptions;
   /**
-   * Leave one-finger drags and the plain wheel to a scrolling parent, so a
-   * map in a Scroll or List moves only with two fingers or Ctrl and the wheel.
+   * Pinch, double tap, tap with two fingers, the wheel, a touchpad pinch, and
+   * the plus and minus keys, and double tap and drag while `pan` is on.
+   */
+  zoom?: MovementOptions;
+  /**
+   * Twist two fingers, drag with the right mouse button from side to side,
+   * and Shift with the left and right arrows.
+   */
+  rotate?: RotationOptions;
+  /**
+   * Drag two fingers up or down together, drag with the right mouse button up
+   * or down, and Shift with the up and down arrows.
+   */
+  pitch?: MovementOptions;
+  /**
+   * What the mouse wheel does: `WheelAction.zoom` at the pointer, the default,
+   * or `WheelAction.pan`. With Ctrl held, it does the other. A two-finger
+   * swipe on a touchpad pans, and zooms with Ctrl.
+   */
+  wheel?: WheelAction;
+  /**
+   * Whether the map leaves one-finger drags, the wheel, and touchpad swipes to
+   * a scrolling parent, so a map in a `Scroll` or `List` moves only with two
+   * fingers, or with Ctrl held, when the wheel and the touchpad do what they
+   * would otherwise. Off by default.
    */
   cooperative?: boolean;
+}
+
+/** Whether a camera movement is on, and what the app does as the user starts it. */
+export interface MovementOptions {
+  /** Whether the user's input makes this movement. On by default. */
+  enabled?: boolean;
+  /**
+   * The user started this movement, such as a pan: once in each gesture, as
+   * the gesture first moves the camera this way. It runs after `onGestureStart`.
+   */
+  onStart?: () => void;
+}
+
+/** Rotation's options: those of each movement, and where it settles and ticks. */
+export interface RotationOptions extends MovementOptions {
+  /**
+   * The bearings that a rotation eases to when it ends within 7° of one,
+   * after its momentum. `[0]`, north, by default; `[]` turns snapping off.
+   */
+  snapBearings?: number[];
+  /**
+   * The bearings where a soft tick plays as a twist or a right-button drag
+   * turns the map across one. `[0]`, north, by default; `[]` turns the ticks
+   * off. Ticks need the app to declare `ohos.permission.VIBRATE`, and play
+   * only when the system's touch feedback is on.
+   */
+  hapticBearings?: number[];
+}
+
+/** What the mouse wheel does to the camera. */
+export enum WheelAction {
+  /** Zoom at the pointer. */
+  zoom,
+  /** Pan up and down, or sideways with a wheel that tilts. */
+  pan,
 }
 
 /** A touch that is down, in the map's vp. */
@@ -49,10 +107,17 @@ export interface GestureTarget {
   applyCameraDelta(delta: CameraDelta): void;
   /** The user clicked at `point`: a tap, or a long press or right click if `long`. */
   clicked(point: ScreenPoint, long: boolean): void;
+  /** The camera's bearing, as the map last applied the changes. */
+  getBearing(): number;
   /** The user started to move the camera. */
   gestureStarted(): void;
-  /** The camera stopped moving from the user's input. */
-  gestureEnded(rotated: boolean): void;
+  /**
+   * The camera stopped moving from the user's input. It may ease to the
+   * nearest of `snapBearings` within 7°; they're empty unless it rotated.
+   */
+  gestureEnded(snapBearings: number[]): void;
+  /** A rotation by the user crossed a haptic notch. */
+  hapticTick(): void;
 }
 
 // Thresholds, after MapLibre Compose's GestureMath, which follows MapLibre
@@ -88,15 +153,51 @@ const FLING_MIN_SPEED = 250;
 const FLING_STEP = 16;
 const TRANSFORM_MOMENTUM_MS = 600;
 const MAX_ZOOM_MOMENTUM = 2.5;
-// A rotation that ends within this of north snaps to it.
+// A rotation that ends within this of a snap bearing snaps to it.
 const BEARING_SNAP = 7;
-// Taps, keys, and the snap animate this long.
+// After MapLibre Compose's BearingHapticDetector: a notch ticks as the bearing
+// comes within 1° of it or crosses it, and again only after the bearing has
+// gone 2° away. Ticks come at most once in 50 ms.
+const NOTCH_CAPTURE = 1;
+const NOTCH_REARM = 2;
+const NOTCH_MIN_MS = 50;
+// Taps, a key's step, and the snap take this long.
 export const GESTURE_ANIMATION_MS = 300;
-// Zoom levels per unit of the wheel's axis value, 15 to a notch.
+// Zoom levels and vp per unit of the wheel's axis value, 15 to a notch. A
+// touchpad's axis values are vp.
 const WHEEL_LEVELS_PER_UNIT = 1 / 60;
+const WHEEL_PAN_PER_UNIT = 4;
+// A held key moves one step each GESTURE_ANIMATION_MS.
 const KEY_PAN = 100;
 const KEY_ROTATE = 15;
 const KEY_PITCH = 10;
+// A right-button drag turns and tilts this much per vp, as in MapLibre GL JS.
+const MOUSE_BEARING_PER_VP = 0.8;
+const MOUSE_PITCH_PER_VP = -0.5;
+
+// The camera movements, as bits, for the options' onStart.
+const PAN = 1;
+const ZOOM = 2;
+const ROTATE = 4;
+const PITCH = 8;
+
+// A key that moves the camera while it's held: per step, the offset, zoom
+// levels, and degrees it moves. `progress` counts the steps it has moved. A
+// key starts moving at the frame after the one that sees it (`fresh`); a
+// released key finishes its first step; a dead key, which other input stopped,
+// moves no more but stays until it's released.
+class HeldKey {
+  x: number = 0;
+  y: number = 0;
+  zoom: number = 0;
+  bearing: number = 0;
+  pitch: number = 0;
+  movement: number = 0;
+  progress: number = 0;
+  fresh: boolean = true;
+  released: boolean = false;
+  dead: boolean = false;
+}
 
 /**
  * Turns a map's input into camera changes. `MapLibreMap` creates one and binds
@@ -104,21 +205,25 @@ const KEY_PITCH = 10;
  * from a `Pan`, `Pinch`, or `Rotation` gesture starting.
  */
 export class MapGestures {
-  private currentOptions: MapGestureOptions = {};
+  private currentOptions: MapInteractionOptions = {};
   /** The map's height, which a quick zoom measures its drag against. */
   height: number = 0;
   private readonly target: GestureTarget;
 
-  get options(): MapGestureOptions {
+  get options(): MapInteractionOptions {
     return this.currentOptions;
   }
 
-  // Momentum, running or waiting for the last finger, may be for a motion
-  // that's now off, so it goes.
-  set options(options: MapGestureOptions) {
+  // Momentum, running or waiting for the last finger, and held keys may be for
+  // a movement that's now off, so they go. Options that an app writes in
+  // `build()` are a new value each time, so the rest carries on.
+  set options(options: MapInteractionOptions) {
+    const before = this.currentOptions;
     this.currentOptions = options;
-    this.staged = undefined;
-    this.stop();
+    if ((enabled(before.pan) && !enabled(options.pan)) || (enabled(before.zoom) && !enabled(options.zoom)) ||
+      (enabled(before.rotate) && !enabled(options.rotate)) || (enabled(before.pitch) && !enabled(options.pitch))) {
+      this.stop();
+    }
   }
 
   // The touches that are down, in the order they went down, and those where
@@ -159,13 +264,14 @@ export class MapGestures {
   private pendingTap: TouchPoint | undefined = undefined;
   private pendingSince: number = -1;
   private secondTap: boolean = false;
-  // Where the right mouse button went down.
-  private rightDown: ScreenPoint | undefined = undefined;
   // The camera gesture: FFI's gesture phase is open, the app was told it
-  // started, and whether it rotated the map.
+  // started, whether it rotated the map, and the movements whose onStart ran.
   private phaseOpen: boolean = false;
   private moving: boolean = false;
   private rotated: boolean = false;
+  private started: number = 0;
+  // The haptic notches of the rotation by the pointer that's under way.
+  private notches: BearingNotches | undefined = undefined;
   // An animated step's number, so a step that something replaced doesn't end
   // the next one.
   private step: number = 0;
@@ -173,13 +279,34 @@ export class MapGestures {
   private staged: Momentum | undefined = undefined;
   private stagedTime: number = 0;
   private momentumStart: number = -1;
+  // Frames run while momentum or held keys move the camera.
   private frames: displaySync.DisplaySync | undefined = undefined;
+  private framesRunning: boolean = false;
   // Where the mouse or a touchpad pinch last was.
   private pointer: ScreenPoint | undefined = undefined;
   private pinchScale: number = 1;
-  // Whether the wheel or a touchpad pinch opened the gesture that's under way,
-  // so that their end doesn't end another input's gesture.
+  // Whether the wheel, the touchpad, or the keys opened the gesture that's
+  // under way, so that their end doesn't end another input's gesture.
   private axisOwned: boolean = false;
+  private keysOwned: boolean = false;
+  // Whether the axis events have said a touchpad made them. Until they do, a
+  // touchpad swipe pans through the pan gesture, which is under way while
+  // `touchpadPanning` is set, and the axis events that it makes are left out.
+  private axisReportsTouchpad: boolean = false;
+  private touchpadPanning: boolean = false;
+  private panOffset: ScreenPoint = { x: 0, y: 0 };
+  // A drag with the right mouse button: where it went down, where it last was,
+  // and whether it has gone far enough to move the camera.
+  private rightDown: ScreenPoint | undefined = undefined;
+  private rightLast: ScreenPoint = { x: 0, y: 0 };
+  private rightDragging: boolean = false;
+  // The keys that are held, or finishing their step, by key code, and the
+  // time of the last frame they moved in.
+  private readonly keys: Map<number, HeldKey> = new Map<number, HeldKey>();
+  private keyTime: number = -1;
+  // Released keys that finish their step after the key went down again with
+  // another movement take negative IDs from this count, apart from key codes.
+  private finishingKeys: number = 0;
 
   constructor(target: GestureTarget) {
     this.target = target;
@@ -293,41 +420,24 @@ export class MapGestures {
     this.target.clicked(this.touches[0], true);
   }
 
-  /** Takes a mouse event of the map: a right click is a long click. */
-  onMouse(event: MouseEvent): void {
-    if (event.button === MouseButton.Right) {
-      this.rightClick(event.action, { x: event.x, y: event.y });
-    }
-  }
-
-  /** Takes the right mouse button going down or up at `point`. */
-  rightClick(action: MouseAction, point: ScreenPoint): void {
-    const down = this.rightDown;
-    if (action === MouseAction.Press) {
-      this.rightDown = point;
-    } else if (action === MouseAction.Release && down !== undefined) {
-      this.rightDown = undefined;
-      if (distance(down, point) <= TAP_SLOP) {
-        this.target.clicked(point, true);
-      }
-    }
-  }
-
   /** Zooms in at a double tap. */
   doubleTap(x: number, y: number): void {
-    if (this.options.zoom !== false) {
-      this.animate({ scale: 2, anchor: { x: x, y: y } });
+    if (this.canZoom()) {
+      this.animate({ scale: 2, anchor: { x: x, y: y } }, ZOOM);
     }
   }
 
   /** Zooms out at a two-finger tap, about the point between the fingers. */
   twoFingerTap(x: number, y: number): void {
-    if (this.options.zoom !== false) {
-      this.animate({ scale: 0.5, anchor: { x: x, y: y } });
+    if (this.canZoom()) {
+      this.animate({ scale: 0.5, anchor: { x: x, y: y } }, ZOOM);
     }
   }
 
-  /** Takes an axis event of the map: the mouse wheel zooms at the pointer. */
+  /**
+   * Takes an axis event of the map, from the mouse wheel or a two-finger swipe
+   * on a touchpad.
+   */
   onAxis(event: AxisEvent): void {
     this.pointer = { x: event.x, y: event.y };
     if (event.action === AxisAction.CANCEL) {
@@ -339,20 +449,94 @@ export class MapGestures {
       return;
     }
     // The begin and end of a notch carry its value too, so only its updates
-    // zoom.
+    // move the camera.
     if (event.action === AxisAction.UPDATE) {
-      this.wheel(event.getVerticalAxisValue(), event.getModifierKeyState?.(['Ctrl']) ?? false);
+      this.axisUpdate(event.getHorizontalAxisValue(), event.getVerticalAxisValue(),
+        event.getModifierKeyState?.(['Ctrl']) ?? false, event.sourceTool === SourceTool.TOUCHPAD);
     }
   }
 
-  /** Zooms at the pointer by a wheel update of `value`, with Ctrl held or not. */
-  wheel(value: number, ctrl: boolean): void {
-    if (value === 0 || this.options.zoom === false || (this.options.cooperative === true && !ctrl)) {
+  /**
+   * Takes an axis update of `x` and `y`, with Ctrl held or not, from a
+   * touchpad or not. `onAxis` calls it; tests call it with made-up updates.
+   */
+  axisUpdate(x: number, y: number, ctrl: boolean, touchpad: boolean): void {
+    if (touchpad) {
+      this.axisReportsTouchpad = true;
+    } else if (this.touchpadPanning) {
+      // The pan gesture pans this swipe.
       return;
     }
-    this.stop();
-    this.move({ scale: Math.pow(2, -value * WHEEL_LEVELS_PER_UNIT), anchor: this.pointer });
+    this.scroll(x, y, ctrl, touchpad);
+  }
+
+  /**
+   * Moves the camera by an axis update of `x` and `y`, with Ctrl held or not:
+   * a wheel's, 15 to a notch, or a touchpad swipe's, in vp.
+   */
+  private scroll(x: number, y: number, ctrl: boolean, touchpad: boolean): void {
+    const options = this.options;
+    const cooperative = options.cooperative === true;
+    if (cooperative && !ctrl) {
+      return;
+    }
+    // Ctrl swaps panning and zooming, except in cooperative mode, where it's
+    // what lets the axis move the map.
+    const pans = (touchpad || options.wheel === WheelAction.pan) !== (ctrl && !cooperative);
+    if (pans) {
+      if ((x === 0 && y === 0) || !this.canPan()) {
+        return;
+      }
+      const perUnit = touchpad ? 1 : WHEEL_PAN_PER_UNIT;
+      this.stop();
+      this.move({ offset: { x: -x * perUnit, y: -y * perUnit } }, PAN);
+    } else {
+      if (y === 0 || !this.canZoom()) {
+        return;
+      }
+      this.stop();
+      this.move({ scale: Math.pow(2, -y * WHEEL_LEVELS_PER_UNIT), anchor: this.pointer }, ZOOM);
+    }
     this.axisOwned = true;
+  }
+
+  /**
+   * Takes the updates of the map's pan gesture. Touches pan through `onTouch`,
+   * so only a touchpad swipe moves the camera here, on a system whose axis
+   * events don't say that the touchpad made them.
+   */
+  onPan(event: GestureEvent): void {
+    if (event.sourceTool === SourceTool.TOUCHPAD) {
+      this.touchpadPan(event.offsetX, event.offsetY, event.getModifierKeyState?.(['Ctrl']) ?? false);
+    }
+  }
+
+  /**
+   * Takes a touchpad swipe that the pan gesture reports, which has moved by
+   * `offsetX`, `offsetY` since it started, with Ctrl held or not. `onPan`
+   * calls it; tests call it with made-up swipes.
+   */
+  touchpadPan(offsetX: number, offsetY: number, ctrl: boolean): void {
+    if (this.axisReportsTouchpad) {
+      return;
+    }
+    if (!this.touchpadPanning) {
+      this.touchpadPanning = true;
+      this.panOffset = { x: 0, y: 0 };
+    }
+    const dx = offsetX - this.panOffset.x;
+    const dy = offsetY - this.panOffset.y;
+    this.panOffset = { x: offsetX, y: offsetY };
+    // The fingers move the content, so they scroll the other way.
+    this.scroll(-dx, -dy, ctrl, true);
+  }
+
+  /** The map's pan gesture ended or was cancelled. */
+  onPanEnd(): void {
+    if (this.touchpadPanning) {
+      this.touchpadPanning = false;
+      this.axisEnded();
+    }
   }
 
   /**
@@ -367,7 +551,7 @@ export class MapGestures {
 
   /** Zooms by a touchpad pinch that has reached `scale` since it started. */
   touchpadPinch(scale: number): void {
-    if (this.options.zoom === false) {
+    if (!this.canZoom()) {
       return;
     }
     this.stop();
@@ -375,7 +559,7 @@ export class MapGestures {
     this.pinchScale = scale;
     // The event's pinch center is in window coordinates, and the axis events
     // of the pinch have the map's.
-    this.move({ scale: step, anchor: this.pointer });
+    this.move({ scale: step, anchor: this.pointer }, ZOOM);
     this.axisOwned = true;
   }
 
@@ -404,66 +588,157 @@ export class MapGestures {
   }
 
   /**
-   * Takes a key event of the map. Arrows pan, Shift and the arrows rotate and
-   * pitch, and plus and minus zoom. Returns whether it used the key.
+   * Takes a mouse event of the map: a drag with the right button rotates and
+   * pitches, and a right click is a long click.
    */
-  onKey(event: KeyEvent): boolean {
-    if (event.type !== KeyType.Down) {
-      return false;
-    }
-    const shift = event.getModifierKeyState?.(['Shift']) ?? false;
-    const options = this.options;
-    const delta: CameraDelta = {};
-    switch (event.keyCode) {
-      case KeyCode.KEYCODE_DPAD_LEFT:
-      case KeyCode.KEYCODE_DPAD_RIGHT: {
-        const sign = event.keyCode === KeyCode.KEYCODE_DPAD_LEFT ? 1 : -1;
-        if (shift && options.rotate !== false) {
-          delta.bearing = sign * KEY_ROTATE;
-        } else if (!shift && options.pan !== false) {
-          delta.offset = { x: sign * KEY_PAN, y: 0 };
-        }
-        break;
-      }
-      case KeyCode.KEYCODE_DPAD_UP:
-      case KeyCode.KEYCODE_DPAD_DOWN: {
-        const sign = event.keyCode === KeyCode.KEYCODE_DPAD_UP ? 1 : -1;
-        if (shift && options.pitch !== false) {
-          delta.pitch = sign * KEY_PITCH;
-        } else if (!shift && options.pan !== false) {
-          delta.offset = { x: 0, y: sign * KEY_PAN };
-        }
-        break;
-      }
-      case KeyCode.KEYCODE_PLUS:
-      case KeyCode.KEYCODE_EQUALS:
-      case KeyCode.KEYCODE_NUMPAD_ADD:
-      case KeyCode.KEYCODE_MINUS:
-      case KeyCode.KEYCODE_NUMPAD_SUBTRACT:
-        if (options.zoom !== false) {
-          const zoomIn = event.keyCode !== KeyCode.KEYCODE_MINUS &&
-            event.keyCode !== KeyCode.KEYCODE_NUMPAD_SUBTRACT;
-          delta.scale = zoomIn ? 2 : 0.5;
-        }
-        break;
-      default:
-        return false;
-    }
-    if (delta.offset === undefined && delta.bearing === undefined && delta.pitch === undefined &&
-      delta.scale === undefined) {
-      return false;
-    }
-    this.animate(delta);
-    return true;
+  onMouse(event: MouseEvent): void {
+    this.mouse(event.action, event.button, event.timestamp / 1e6, event.x, event.y);
   }
 
   /**
-   * Stops momentum, and ends the gesture it belongs to. Fingers that are down
-   * keep moving the camera.
+   * Takes a mouse event's action and button, at `time` and the point `x`,
+   * `y`. `onMouse` calls it; tests call it with made-up events. Side to side
+   * turns the map and up and down tilts it, once the pointer has moved past
+   * a click's slop, without momentum. A release within the slop clicks.
+   */
+  mouse(action: MouseAction, button: MouseButton, time: number, x: number, y: number): void {
+    const point: ScreenPoint = { x: x, y: y };
+    this.pointer = point;
+    if (action === MouseAction.Press && button === MouseButton.Right) {
+      this.stop();
+      this.finish();
+      this.rightDown = point;
+      this.rightLast = point;
+      this.rightDragging = false;
+      return;
+    }
+    const down = this.rightDown;
+    if (down === undefined) {
+      return;
+    }
+    if ((action === MouseAction.Release && button === MouseButton.Right) || action === MouseAction.CANCEL) {
+      this.rightDown = undefined;
+      this.finish();
+      if (action === MouseAction.Release && !this.rightDragging && distance(down, point) <= TAP_SLOP) {
+        this.target.clicked(point, true);
+      }
+      return;
+    }
+    if (action !== MouseAction.Move) {
+      return;
+    }
+    // The motion past the slop moves the camera from the next event, as a
+    // touch's does.
+    if (!this.rightDragging) {
+      this.rightDragging = distance(down, point) > TAP_SLOP;
+      this.rightLast = point;
+      return;
+    }
+    const dx = x - this.rightLast.x;
+    const dy = y - this.rightLast.y;
+    this.rightLast = point;
+    const delta: CameraDelta = {};
+    let movements = 0;
+    if (dx !== 0 && this.canRotate()) {
+      delta.bearing = dx * MOUSE_BEARING_PER_VP;
+      movements |= ROTATE;
+    }
+    if (dy !== 0 && this.canPitch()) {
+      delta.pitch = dy * MOUSE_PITCH_PER_VP;
+      movements |= PITCH;
+    }
+    if (movements !== 0) {
+      this.moveTurning(delta, time, movements);
+    }
+  }
+
+  /**
+   * Takes a key event of the map. While they're held, the arrows pan, Shift
+   * and the arrows rotate and pitch, and plus and minus zoom. Returns whether
+   * it used the key.
+   */
+  onKey(event: KeyEvent): boolean {
+    if (event.type === KeyType.Down) {
+      return this.keyDown(event.keyCode, event.getModifierKeyState?.(['Shift']) ?? false);
+    }
+    return event.type === KeyType.Up ? this.keyUp(event.keyCode) : false;
+  }
+
+  /**
+   * A key went down, with Shift held or not, or the system repeated it while
+   * it's held. The key moves the camera a step each 300 ms, every frame,
+   * until it's released, and a key released before a step finishes the step.
+   * Keys add up, so opposite ones cancel. Repeats don't move the camera.
+   * Returns whether the map uses the key. `onKey` calls it; tests call it too.
+   */
+  keyDown(code: number, shift: boolean): boolean {
+    const held = this.keys.get(code);
+    if (held !== undefined && !held.released) {
+      return true;
+    }
+    const key = this.keyStep(code, shift);
+    if (held !== undefined) {
+      // Pressed again before its step finished: the same movement moves a step
+      // more, and another one, as Shift makes, moves once the step finishes.
+      if (key !== undefined && sameStep(held, key)) {
+        held.released = false;
+        held.progress -= 1;
+        return true;
+      }
+      this.keys.delete(code);
+      this.keys.set(-1 - this.finishingKeys++, held);
+    }
+    if (key === undefined) {
+      return false;
+    }
+    // The first key stops the input before it; more keys join it.
+    if (!this.keysMoving()) {
+      this.stop();
+      this.finish();
+      this.endStep();
+    }
+    this.keys.set(code, key);
+    this.syncFrames();
+    return true;
+  }
+
+  /** A key went up. Returns whether the map used it. */
+  keyUp(code: number): boolean {
+    const key = this.keys.get(code);
+    if (key === undefined) {
+      return false;
+    }
+    if (key.dead || key.progress >= 1) {
+      this.keys.delete(code);
+      this.keysStopped();
+    } else {
+      key.released = true;
+    }
+    return true;
+  }
+
+  /** The map lost focus, so it won't hear the keys that are held go up. */
+  blur(): void {
+    this.keys.clear();
+    this.keysStopped();
+  }
+
+  /**
+   * Stops momentum and held keys, and ends the gesture they belong to.
+   * Fingers that are down keep moving the camera.
    */
   stop(): void {
     // Momentum that waits for the last finger goes too.
     this.staged = undefined;
+    // Held keys stay until they go up, so their repeats don't start them again.
+    this.keys.forEach((key: HeldKey, code: number) => {
+      if (key.released) {
+        this.keys.delete(code);
+      } else {
+        key.dead = true;
+      }
+    });
+    this.keysStopped();
     if (this.momentum !== undefined) {
       this.stopMomentum();
       this.finish();
@@ -479,31 +754,34 @@ export class MapGestures {
     this.lastTap = undefined;
     this.pendingTap = undefined;
     this.rightDown = undefined;
-    this.idleFrames();
+    this.syncFrames();
     if (this.phaseOpen) {
       this.phaseOpen = false;
       this.moving = false;
       this.target.applyCameraDelta({ gesturePhase: GesturePhase.cancel });
-      this.target.gestureEnded(false);
+      this.target.gestureEnded([]);
     }
   }
 
   /** Stops input for good, as the map leaves, and ends what it started. */
   dispose(): void {
+    this.keys.clear();
+    this.keysStopped();
     this.cancel();
     this.endStep();
     this.frames?.off('frame');
+    this.frames?.stop();
     this.frames = undefined;
+    this.framesRunning = false;
   }
 
-  // The first touch of a sequence stops momentum. A press soon after a tap may
-  // start a quick zoom, and is a second tap: the tap before it doesn't click.
-  // Any other press lets that tap click at once.
+  // The first touch of a sequence stops momentum and keys. A press soon after
+  // a tap may start a quick zoom, and is a second tap: the tap before it
+  // doesn't click. Any other press lets that tap click at once.
   private press(time: number, point: TouchPoint): void {
-    this.stopMomentum();
+    this.stop();
     this.finish();
     this.claimed = false;
-    this.staged = undefined;
     this.down = point;
     this.tap = true;
     const lastTap = this.lastTap;
@@ -511,7 +789,7 @@ export class MapGestures {
       distance(lastTap, point) < QUICK_ZOOM_SLOP;
     const pending = this.pendingTap;
     this.pendingTap = undefined;
-    this.idleFrames();
+    this.syncFrames();
     this.secondTap = pending !== undefined && this.quickZoomReady;
     if (pending !== undefined && !this.secondTap) {
       this.target.clicked(pending, false);
@@ -533,13 +811,14 @@ export class MapGestures {
     this.panY.clear();
     this.zoom.clear();
     this.turn.clear();
+    this.notches = undefined;
     if (touches.length >= 2) {
       this.zoomBase = distance(touches[0], touches[1]);
       this.minSpan = this.zoomBase;
     } else if (claimed && this.down !== undefined) {
       const dx = Math.abs(touches[0].x - this.down.x);
       const dy = Math.abs(touches[0].y - this.down.y);
-      this.quickZooming = this.quickZoomReady && this.options.zoom !== false && dy > dx;
+      this.quickZooming = this.quickZoomReady && this.canZoom() && dy > dx;
       this.panning = !this.quickZooming;
       this.quickZoom = 0;
     }
@@ -547,12 +826,12 @@ export class MapGestures {
 
   private moveOne(time: number, before: TouchPoint, after: TouchPoint): void {
     if (this.quickZooming) {
-      if (this.options.zoom !== false && this.height > 0) {
+      if (this.canZoom() && this.height > 0) {
         const levels = (after.y - before.y) / this.height * QUICK_ZOOM_LEVELS;
         this.quickZoom += levels;
         this.zoom.add(time, this.quickZoom);
         this.anchor = undefined;
-        this.move({ scale: Math.pow(2, levels) });
+        this.move({ scale: Math.pow(2, levels) }, ZOOM);
       }
       return;
     }
@@ -566,10 +845,10 @@ export class MapGestures {
     }
     // In cooperative mode, one finger never pans, even the one left after a
     // pair.
-    if (this.options.pan !== false && this.options.cooperative !== true) {
+    if (this.canPan() && this.options.cooperative !== true) {
       this.panX.add(time, after.x);
       this.panY.add(time, after.y);
-      this.move({ offset: { x: after.x - before.x, y: after.y - before.y } });
+      this.move({ offset: { x: after.x - before.x, y: after.y - before.y } }, PAN);
     }
   }
 
@@ -577,7 +856,6 @@ export class MapGestures {
   // the origin passes a threshold, and moves the camera from the next event,
   // so the threshold's motion doesn't jump the camera.
   private moveTwo(time: number, a0: TouchPoint, b0: TouchPoint, a: TouchPoint, b: TouchPoint): void {
-    const options = this.options;
     const o1 = this.origin[0];
     const o2 = this.origin[1];
     const span0 = distance(a0, b0);
@@ -588,40 +866,45 @@ export class MapGestures {
 
     // Options can change mid-gesture, so each motion checks its option too.
     const delta: CameraDelta = {};
-    if (this.panning && options.pan !== false) {
+    let movements = 0;
+    if (this.panning && this.canPan()) {
       const center0 = midpoint(a0, b0);
       delta.offset = { x: center.x - center0.x, y: center.y - center0.y };
       this.panX.add(time, center.x);
       this.panY.add(time, center.y);
+      movements |= PAN;
     }
-    if (this.zooming && stable && options.zoom !== false) {
+    if (this.zooming && stable && this.canZoom()) {
       delta.scale = span / span0;
       delta.anchor = center;
       this.zoom.add(time, Math.log2(span));
+      movements |= ZOOM;
     }
-    if (this.rotating && stable && options.rotate !== false) {
+    if (this.rotating && stable && this.canRotate()) {
       const turn = wrap(angle(a, b) - angle(a0, b0));
       this.turned -= turn;
       delta.bearing = -turn;
       delta.anchor = center;
       this.turn.add(time, this.turned);
+      movements |= ROTATE;
     }
-    if (this.pitching && options.pitch !== false) {
+    if (this.pitching && this.canPitch()) {
       delta.pitch = ((a.y - a0.y) + (b.y - b0.y)) / 2 * PITCH_PER_VP;
+      movements |= PITCH;
     }
     if (delta.anchor !== undefined) {
       this.anchor = delta.anchor;
       // ArkUI reports one finger at a time, so the midpoint moves by half that
       // finger's step even when the pair doesn't pan. Moving with it keeps the
       // content under both fingers; scaling or turning about it alone drifts.
-      if (delta.offset === undefined && options.pan !== false) {
+      if (delta.offset === undefined && this.canPan()) {
         const center0 = midpoint(a0, b0);
         delta.offset = { x: center.x - center0.x, y: center.y - center0.y };
       }
     }
     if (delta.offset !== undefined || delta.scale !== undefined || delta.bearing !== undefined ||
       delta.pitch !== undefined) {
-      this.move(delta);
+      this.moveTurning(delta, time, movements);
     }
 
     if (this.pitching) {
@@ -629,7 +912,7 @@ export class MapGestures {
     }
     // Pitch wins when it starts with the others, but can't interrupt a pinch
     // or rotation, and it owns the fingers alone.
-    if (!this.zooming && !this.rotating && options.pitch !== false && isShove(o1, o2, a, b)) {
+    if (!this.zooming && !this.rotating && this.canPitch() && isShove(o1, o2, a, b)) {
       this.pitching = true;
       this.panning = false;
       return;
@@ -641,7 +924,7 @@ export class MapGestures {
     const elapsed = known ? time - this.earlierTime : 0;
     const e1 = known ? earlier[0] : a;
     const e2 = known ? earlier[1] : b;
-    if (!this.zooming && options.zoom !== false) {
+    if (!this.zooming && this.canZoom()) {
       const slop = this.rotating ? ZOOM_SLOP_WHILE_ROTATING : ZOOM_SLOP;
       if (startsZoom(span - this.zoomBase, span - distance(e1, e2), elapsed, wrap(angle(a, b) - angle(e1, e2)),
         slop)) {
@@ -649,7 +932,7 @@ export class MapGestures {
         this.zoom.clear();
       }
     }
-    if (!this.rotating && options.rotate !== false) {
+    if (!this.rotating && this.canRotate()) {
       const slop = this.zooming ?
         Math.max(ROTATE_SLOP, ROTATE_ARC_WHILE_ZOOMING * 360 / (Math.PI * this.minSpan)) : ROTATE_SLOP;
       if (startsRotation(wrap(angle(a, b) - angle(o1, o2)), wrap(angle(a, b) - angle(e1, e2)), elapsed, slop)) {
@@ -658,7 +941,7 @@ export class MapGestures {
         this.turn.clear();
       }
     }
-    if (!this.panning && options.pan !== false &&
+    if (!this.panning && this.canPan() &&
       distance(midpoint(o1, o2), center) >= PAIR_PAN_SLOP) {
       this.panning = true;
       this.panX.clear();
@@ -676,12 +959,12 @@ export class MapGestures {
       this.lastTapTime = time;
       if (this.secondTap) {
         // A double tap, which zooms if anything.
-      } else if (this.options.zoom === false) {
+      } else if (!this.canZoom()) {
         this.target.clicked(previous[0], false);
       } else {
         this.pendingTap = previous[0];
         this.pendingSince = -1;
-        this.runFrames();
+        this.syncFrames();
       }
     } else {
       this.lastTap = undefined;
@@ -701,47 +984,14 @@ export class MapGestures {
     }
     this.momentum = momentum;
     this.momentumStart = -1;
-    this.runFrames();
-  }
-
-  // Frames drive momentum and the wait for a second tap.
-  private runFrames(): void {
-    if (this.frames === undefined) {
-      const frames = displaySync.create();
-      frames.on('frame', (info: displaySync.IntervalInfo) => this.frame(info.timestamp / 1e6));
-      this.frames = frames;
-    }
-    this.frames.start();
-  }
-
-  private idleFrames(): void {
-    if (this.momentum === undefined && this.pendingTap === undefined) {
-      this.frames?.stop();
-    }
-  }
-
-  private frame(time: number): void {
-    this.coast(time);
-    const pending = this.pendingTap;
-    if (pending === undefined) {
-      return;
-    }
-    if (this.pendingSince < 0) {
-      this.pendingSince = time;
-    }
-    if (time - this.pendingSince >= QUICK_ZOOM_MS) {
-      this.pendingTap = undefined;
-      this.idleFrames();
-      this.target.clicked(pending, false);
-    }
+    this.syncFrames();
   }
 
   // The momentum of the motion so far, if the last finger lifted at `time`.
   private plan(time: number): Momentum | undefined {
-    const options = this.options;
-    const pan = this.panning && options.pan !== false;
-    const zoom = (this.zooming || this.quickZooming) && options.zoom !== false;
-    const rotate = this.rotating && options.rotate !== false;
+    const pan = this.panning && this.canPan();
+    const zoom = (this.zooming || this.quickZooming) && this.canZoom();
+    const rotate = this.rotating && this.canRotate();
     return Momentum.plan(
       pan ? this.panX.perSecond(time) : 0,
       pan ? this.panY.perSecond(time) : 0,
@@ -759,7 +1009,7 @@ export class MapGestures {
       this.momentumStart = time;
     }
     for (const delta of momentum.advance(time - this.momentumStart)) {
-      this.move(delta);
+      this.move(delta, 0);
     }
     if (momentum.done) {
       this.stopMomentum();
@@ -770,17 +1020,192 @@ export class MapGestures {
   private stopMomentum(): void {
     if (this.momentum !== undefined) {
       this.momentum = undefined;
-      this.idleFrames();
+      this.syncFrames();
+    }
+  }
+
+  // The key's step, if it's one that moves the camera in a way that's on.
+  private keyStep(code: number, shift: boolean): HeldKey | undefined {
+    const key = new HeldKey();
+    switch (code) {
+      case KeyCode.KEYCODE_DPAD_LEFT:
+      case KeyCode.KEYCODE_DPAD_RIGHT: {
+        const sign = code === KeyCode.KEYCODE_DPAD_LEFT ? 1 : -1;
+        if (shift && this.canRotate()) {
+          key.bearing = sign * KEY_ROTATE;
+          key.movement = ROTATE;
+        } else if (!shift && this.canPan()) {
+          key.x = sign * KEY_PAN;
+          key.movement = PAN;
+        }
+        break;
+      }
+      case KeyCode.KEYCODE_DPAD_UP:
+      case KeyCode.KEYCODE_DPAD_DOWN: {
+        const sign = code === KeyCode.KEYCODE_DPAD_UP ? 1 : -1;
+        if (shift && this.canPitch()) {
+          key.pitch = sign * KEY_PITCH;
+          key.movement = PITCH;
+        } else if (!shift && this.canPan()) {
+          key.y = sign * KEY_PAN;
+          key.movement = PAN;
+        }
+        break;
+      }
+      case KeyCode.KEYCODE_PLUS:
+      case KeyCode.KEYCODE_EQUALS:
+      case KeyCode.KEYCODE_NUMPAD_ADD:
+      case KeyCode.KEYCODE_MINUS:
+      case KeyCode.KEYCODE_NUMPAD_SUBTRACT:
+        if (this.canZoom()) {
+          key.zoom = code === KeyCode.KEYCODE_MINUS || code === KeyCode.KEYCODE_NUMPAD_SUBTRACT ? -1 : 1;
+          key.movement = ZOOM;
+        }
+        break;
+      default:
+        break;
+    }
+    return key.movement === 0 ? undefined : key;
+  }
+
+  private keysMoving(): boolean {
+    let moving = false;
+    this.keys.forEach((key: HeldKey) => {
+      moving = moving || !key.dead;
+    });
+    return moving;
+  }
+
+  // Moves the camera by the keys that are held for the time since the last
+  // frame. A key moves from the frame after the one that first sees it, as
+  // the time before that frame isn't known.
+  private holdKeys(time: number): void {
+    const fraction = this.keyTime < 0 ? 0 : Math.max(0, time - this.keyTime) / GESTURE_ANIMATION_MS;
+    this.keyTime = time;
+    let x = 0;
+    let y = 0;
+    let zoom = 0;
+    let bearing = 0;
+    let pitch = 0;
+    let movements = 0;
+    this.keys.forEach((key: HeldKey, code: number) => {
+      if (key.dead) {
+        return;
+      }
+      if (key.fresh) {
+        key.fresh = false;
+        return;
+      }
+      const part = key.released ? Math.min(fraction, 1 - key.progress) : fraction;
+      key.progress += part;
+      x += key.x * part;
+      y += key.y * part;
+      zoom += key.zoom * part;
+      bearing += key.bearing * part;
+      pitch += key.pitch * part;
+      movements |= key.movement;
+      if (key.released && key.progress >= 1 - 1e-9) {
+        this.keys.delete(code);
+      }
+    });
+    if (x !== 0 || y !== 0 || zoom !== 0 || bearing !== 0 || pitch !== 0) {
+      const delta: CameraDelta = {};
+      if (x !== 0 || y !== 0) {
+        delta.offset = { x: x, y: y };
+      }
+      if (zoom !== 0) {
+        delta.scale = Math.pow(2, zoom);
+      }
+      if (bearing !== 0) {
+        delta.bearing = bearing;
+      }
+      if (pitch !== 0) {
+        delta.pitch = pitch;
+      }
+      this.move(delta, movements);
+      this.keysOwned = true;
+    }
+    this.keysStopped();
+  }
+
+  // Once no key moves the camera, the gesture that they opened ends.
+  private keysStopped(): void {
+    if (this.keysMoving()) {
+      return;
+    }
+    this.keyTime = -1;
+    if (this.keysOwned) {
+      this.finish();
+    }
+    this.syncFrames();
+  }
+
+  // Frames run while momentum or keys move the camera, and while a tap waits
+  // for a second one.
+  private syncFrames(): void {
+    const run = this.momentum !== undefined || this.keysMoving() || this.pendingTap !== undefined;
+    if (run === this.framesRunning) {
+      return;
+    }
+    this.framesRunning = run;
+    if (!run) {
+      this.frames?.stop();
+      return;
+    }
+    let frames = this.frames;
+    if (frames === undefined) {
+      frames = displaySync.create();
+      frames.on('frame', (info: displaySync.IntervalInfo) => this.frame(info.timestamp / 1e6));
+      this.frames = frames;
+    }
+    frames.start();
+  }
+
+  private frame(time: number): void {
+    this.coast(time);
+    this.holdKeys(time);
+    const pending = this.pendingTap;
+    if (pending === undefined) {
+      return;
+    }
+    if (this.pendingSince < 0) {
+      this.pendingSince = time;
+    }
+    if (time - this.pendingSince >= QUICK_ZOOM_MS) {
+      this.pendingTap = undefined;
+      this.syncFrames();
+      this.target.clicked(pending, false);
+    }
+  }
+
+  // Moves the camera by a twist or a right-button drag, which tick as they
+  // cross a haptic notch. The notches measure from the bearing before the
+  // rotation's first change.
+  private moveTurning(delta: CameraDelta, time: number, movements: number): void {
+    let tick = false;
+    if (delta.bearing !== undefined) {
+      let notches = this.notches;
+      if (notches === undefined) {
+        notches = new BearingNotches(this.options.rotate?.hapticBearings ?? [0], this.target.getBearing());
+        this.notches = notches;
+      }
+      tick = notches.turn(delta.bearing, time);
+    }
+    this.move(delta, movements);
+    if (tick) {
+      this.target.hapticTick();
     }
   }
 
   // Moves the camera as part of the gesture, which starts with the first move.
-  private move(delta: CameraDelta): void {
+  // The movements that the user started with it run their onStart.
+  private move(delta: CameraDelta, movements: number): void {
     if (!this.phaseOpen) {
       this.endStep();
       this.phaseOpen = true;
       this.moving = true;
       this.rotated = false;
+      this.started = 0;
       delta.gesturePhase = GesturePhase.begin;
     } else {
       delta.gesturePhase = GesturePhase.update;
@@ -794,22 +1219,76 @@ export class MapGestures {
     if (delta.gesturePhase === GesturePhase.begin) {
       this.target.gestureStarted();
     }
+    this.began(delta, movements);
   }
 
-  // Ends the gesture. A rotation that ends near north snaps to it.
+  // Runs the onStart of the movements that haven't started in this gesture,
+  // once `delta` moves the camera their way: a pinch that pans for a moment
+  // hasn't zoomed yet, and keys that cancel don't move.
+  private began(delta: CameraDelta, movements: number): void {
+    const offset = delta.offset;
+    if (offset === undefined || (offset.x === 0 && offset.y === 0)) {
+      movements &= ~PAN;
+    }
+    if ((delta.scale ?? 1) === 1) {
+      movements &= ~ZOOM;
+    }
+    if ((delta.bearing ?? 0) === 0) {
+      movements &= ~ROTATE;
+    }
+    if ((delta.pitch ?? 0) === 0) {
+      movements &= ~PITCH;
+    }
+    const fresh = movements & ~this.started;
+    this.started |= movements;
+    const options = this.options;
+    if ((fresh & PAN) !== 0) {
+      options.pan?.onStart?.();
+    }
+    if ((fresh & ZOOM) !== 0) {
+      options.zoom?.onStart?.();
+    }
+    if ((fresh & ROTATE) !== 0) {
+      options.rotate?.onStart?.();
+    }
+    if ((fresh & PITCH) !== 0) {
+      options.pitch?.onStart?.();
+    }
+  }
+
+  // Ends the gesture. A rotation may snap to a bearing near where it ends.
   private finish(): void {
     this.axisOwned = false;
+    this.keysOwned = false;
+    this.notches = undefined;
     if (this.phaseOpen) {
       this.phaseOpen = false;
       this.moving = false;
       this.target.applyCameraDelta({ gesturePhase: GesturePhase.end });
-      this.target.gestureEnded(this.rotated && this.options.rotate !== false);
+      const snaps = this.rotated && this.canRotate();
+      this.target.gestureEnded(snaps ? this.options.rotate?.snapBearings ?? [0] : []);
     }
+  }
+
+  private canPan(): boolean {
+    return enabled(this.options.pan);
+  }
+
+  private canZoom(): boolean {
+    return enabled(this.options.zoom);
+  }
+
+  private canRotate(): boolean {
+    return enabled(this.options.rotate);
+  }
+
+  private canPitch(): boolean {
+    return enabled(this.options.pitch);
   }
 
   // A step that animates on its own, such as a double tap's zoom. It ends when
   // the animation does, unless other input replaced it.
-  private animate(delta: CameraDelta): void {
+  private animate(delta: CameraDelta, movements: number): void {
     this.stopMomentum();
     this.finish();
     this.endStep();
@@ -827,24 +1306,85 @@ export class MapGestures {
     };
     this.target.applyCameraDelta(delta);
     this.target.gestureStarted();
+    this.started = 0;
+    this.began(delta, movements);
   }
 
   private endStep(): void {
     if (this.moving && !this.phaseOpen) {
       this.moving = false;
-      this.target.gestureEnded(false);
+      this.target.gestureEnded([]);
     }
     this.step++;
   }
 }
 
 /**
- * The bearing that a rotation ending at `bearing` snaps to, or undefined when
- * it's too far from north.
+ * The bearing that a rotation ending at `bearing` snaps to: the nearest of
+ * `targets` within 7°, as many turns around as `bearing`, or undefined when
+ * there's none or it's there already.
  */
-export function snapBearing(bearing: number): number | undefined {
-  const fromNorth = wrap(bearing);
-  return fromNorth !== 0 && Math.abs(fromNorth) <= BEARING_SNAP ? bearing - fromNorth : undefined;
+export function snapBearing(bearing: number, targets: number[]): number | undefined {
+  let nearest: number | undefined = undefined;
+  for (const target of targets) {
+    const offset = wrap(bearing - target);
+    if (Math.abs(offset) <= BEARING_SNAP && (nearest === undefined || Math.abs(offset) < Math.abs(nearest))) {
+      nearest = offset;
+    }
+  }
+  return nearest === undefined || nearest === 0 ? undefined : bearing - nearest;
+}
+
+function sameStep(a: HeldKey, b: HeldKey): boolean {
+  return a.x === b.x && a.y === b.y && a.zoom === b.zoom && a.bearing === b.bearing && a.pitch === b.pitch;
+}
+
+function enabled(movement: MovementOptions | undefined): boolean {
+  return movement?.enabled !== false;
+}
+
+// The haptic notches of one rotation by the pointer, after MapLibre Compose's
+// BearingHapticDetector. A notch that the rotation starts at is silent until
+// the bearing leaves it.
+class BearingNotches {
+  private readonly bearings: number[];
+  private readonly armed: boolean[];
+  private bearing: number;
+  private lastTick: number = -Infinity;
+
+  constructor(bearings: number[], bearing: number) {
+    this.bearings = bearings;
+    this.bearing = bearing;
+    this.armed = bearings.map((notch: number) => Math.abs(wrap(notch - bearing)) > NOTCH_CAPTURE);
+  }
+
+  // Turns by `degrees` at `time`, and returns whether that reached a notch. A
+  // tick too soon after the last one is dropped, not delayed.
+  turn(degrees: number, time: number): boolean {
+    const from = this.bearing;
+    const to = from + degrees;
+    this.bearing = to;
+    if (degrees === 0) {
+      return false;
+    }
+    let reached = false;
+    for (let i = 0; i < this.bearings.length; i++) {
+      const ahead = wrap(this.bearings[i] - from);
+      if (this.armed[i] && ahead >= Math.min(0, degrees) - NOTCH_CAPTURE &&
+        ahead <= Math.max(0, degrees) + NOTCH_CAPTURE) {
+        reached = true;
+        this.armed[i] = false;
+      }
+      if (Math.abs(wrap(this.bearings[i] - to)) > NOTCH_REARM) {
+        this.armed[i] = true;
+      }
+    }
+    if (!reached || time - this.lastTick < NOTCH_MIN_MS) {
+      return false;
+    }
+    this.lastTick = time;
+    return true;
+  }
 }
 
 /**

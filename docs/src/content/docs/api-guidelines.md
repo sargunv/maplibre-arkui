@@ -20,18 +20,24 @@ as ArkTS.
   `TextController`, and `XComponentController` are: `MapController`.
 - Settings are interfaces named `<Thing>Options`, after what they configure,
   with optional fields only, and taken as object literals:
-  `MapControllerOptions`, `MapGestureOptions`, `FollowUserLocationOptions`,
-  `FitCameraOptions`, `SnapshotOptions`. Data that describes something is a
-  plain noun with the fields it needs: `MapContent`, `MapSource`, `MapLayer`,
-  `MapImage`.
+  `MapControllerOptions`, `MapInteractionOptions`, `FollowUserLocationOptions`,
+  `FitCameraOptions`, `SnapshotOptions`. Settings of one part nest as their own
+  options (`MapInteractionOptions.rotate` is a `RotationOptions`), and a name
+  that ArkUI reserves (`RotateOptions`) takes another word. Data that describes
+  something is a plain noun with the fields it needs: `MapContent`, `MapSource`,
+  `MapLayer`, `MapImage`.
 - Events are `@Event` params named `on` and what happened: `onStyleLoaded`,
   `onCameraIdle`, `onMapError`, and `onGestureStart` / `onGestureEnd`, as
   ArkUI's `onScrollStart` / `onScrollStop` pair. A handler that can keep an
   event from the handlers after it returns `true` to consume it, as ArkUI's
-  `onKeyEvent` does: `onMapClick` and `MapLayer.onClick`.
-- A flag that shows an ornament ends in `Enabled` (`compassEnabled`), and other
-  flags are adjectives or the names of what they turn on (`alwaysShown`,
-  `cooperative`, `rotate`).
+  `onKeyEvent` does: `onMapClick` and `MapLayer.onClick`. An event of one part
+  of the settings is a function-typed field of its options, named the same way
+  (`MovementOptions.onStart`).
+- A flag that shows an ornament ends in `Enabled` (`compassEnabled`), as does a
+  part's on switch in its options (`MovementOptions.enabled`); other flags are
+  adjectives or the names of what they turn on (`alwaysShown`, `cooperative`). A
+  choice among a few behaviors is an enum named for what it picks
+  (`WheelAction`).
 - Functions are verbs or the noun they make: `snapshot()`, `readPixelMap()`,
   `getDefaultRuntime()`, `addRuntimeEventListener()`. Expression functions take
   their operator's name in camelCase (`featureState`), with words for symbols
@@ -75,8 +81,10 @@ as ArkTS.
   which describe the layout, add to it on the FFI map and never show in a camera
   that the app reads or saves. A fit's `fitPadding` lasts for that fit only.
 - Data passed to a component is a value, not observed inside: `MapContent`,
-  `MapGestureOptions`, `userLocation`. A new value is a change; the component
-  compares it with the last one (content by ID, then by JSON or reference).
+  `MapInteractionOptions`, `userLocation`. A new value is a change; the
+  component compares it with the last one (content by ID, then by JSON or
+  reference), so a literal that `build()` writes anew changes nothing that
+  stayed the same.
 
 ## FFI: wrap or re-export
 
@@ -189,6 +197,12 @@ These don't:
 - Options: Compose uses data classes with private constructors and builders, so
   adding an option can't break a constructor. Here options are interfaces of
   optional fields, where a new optional field breaks nothing.
+- Input: Compose's `MapInteractions` has presets, and its `MapUiOptions` binds
+  each input to an action, so one API fits engines whose input differs. Here the
+  input of one platform maps to fixed actions, and `MapInteractionOptions` keeps
+  Compose's semantics for what apps choose: a switch and an `onStart` for each
+  movement, what the wheel does, and the bearings that rotation snaps and ticks
+  at.
 - Compose's composable rules (`Modifier` first, `remember*`, `XState` holders,
   `CompositionLocal`, `@Stable`) map to ArkUI's own idioms above: attributes on
   the component, a controller the app creates, `@Param` / `@Event`, and

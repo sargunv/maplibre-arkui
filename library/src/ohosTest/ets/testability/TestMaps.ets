@@ -10,7 +10,7 @@ import {
   MapClickEvent,
   MapContent,
   MapController,
-  MapGestureOptions,
+  MapInteractionOptions,
   RuntimeHandle,
   ScaleBarUnits,
 } from '@maplibre/arkui';
@@ -72,7 +72,7 @@ export class TestMap {
   @Trace zoomButtons: boolean = false;
   @Trace attribution: boolean = true;
   @Trace viewportInsets: EdgeInsets = NO_INSETS;
-  @Trace gestures: MapGestureOptions = {};
+  @Trace interactions: MapInteractionOptions = {};
   @Trace userLocation: geoLocationManager.Location | undefined = undefined;
   @Trace userHeading: number | undefined = undefined;
   // The map is 300 vp tall at the top of a Scroll while this is true, and fills
@@ -147,7 +147,7 @@ export class TestMap {
     this.zoomButtons = false;
     this.attribution = true;
     this.viewportInsets = NO_INSETS;
-    this.gestures = {};
+    this.interactions = {};
     this.userLocation = undefined;
     this.userHeading = undefined;
     this.content = undefined;

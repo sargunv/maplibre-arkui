@@ -57,6 +57,7 @@ import {
   snapshot,
   StyleLayerInfo,
   UrlMatchFlag,
+  WheelAction,
   zoom,
 } from '@maplibre/arkui';
 
@@ -288,7 +289,7 @@ struct CameraExample {
       MapLibreMap({
         controller: this.controller,
         style: STYLE,
-        gestures: { rotate: false },
+        interactions: { rotate: { enabled: false }, pitch: { enabled: false } },
         onGestureStart: () => {
           this.moving = true;
         },
@@ -415,6 +416,33 @@ struct SavedCameraExample {
   }
 }
 // #endregion save-camera
+
+@ComponentV2
+struct InteractionExample {
+  @Local following: boolean = true;
+  private controller: MapController = new MapController();
+
+  build() {
+    // #region interactions
+    MapLibreMap({
+      controller: this.controller,
+      style: STYLE,
+      interactions: {
+        // The user takes over from the app's camera as they start to pan.
+        pan: {
+          onStart: () => {
+            this.following = false;
+          },
+        },
+        // The wheel pans, and zooms with Ctrl.
+        wheel: WheelAction.pan,
+        // A rotation settles on, and ticks at, north, east, south, and west.
+        rotate: { snapBearings: [0, 90, 180, 270], hapticBearings: [0, 90, 180, 270] },
+      },
+    })
+    // #endregion interactions
+  }
+}
 
 // The user's location
 
@@ -695,6 +723,9 @@ export struct DocExamples {
         TabContent() {
           SavedCameraExample()
         }.tabBar('Saved camera')
+        TabContent() {
+          InteractionExample()
+        }.tabBar('Interactions')
         TabContent() {
           LocationExample()
         }.tabBar('Location')

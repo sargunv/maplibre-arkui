@@ -2,7 +2,7 @@
 // in GestureInput.test.ets.
 
 import { describe, expect, it } from '@ohos/hypium';
-import { CameraDelta, GesturePhase, ScreenPoint } from '@maplibre/arkui';
+import { CameraDelta, GesturePhase, MapInteractionOptions, ScreenPoint, WheelAction } from '@maplibre/arkui';
 import {
   GestureTarget,
   MapGestures,
@@ -10,6 +10,8 @@ import {
   snapBearing,
   TouchPoint,
 } from '@maplibre/arkui/src/main/ets/gestures';
+import { playTick } from '@maplibre/arkui/src/main/ets/haptics';
+import { KeyCode } from '@ohos.multimodalInput.keyCode';
 
 import { expectNear, frames, until } from './helpers';
 
@@ -18,7 +20,13 @@ class Recorder implements GestureTarget {
   deltas: CameraDelta[] = [];
   starts: number = 0;
   ends: number = 0;
+  // The bearings that the last gesture's end could snap to, and whether it
+  // rotated, so it had some.
+  snapBearings: number[] = [];
   rotated: boolean = false;
+  ticks: number = 0;
+  // The camera's bearing before the deltas.
+  initialBearing: number = 0;
 
   // Where each click was, and whether it was long.
   clicks: ScreenPoint[] = [];
@@ -33,13 +41,22 @@ class Recorder implements GestureTarget {
     this.long.push(long);
   }
 
+  getBearing(): number {
+    return this.initialBearing + this.bearing();
+  }
+
   gestureStarted(): void {
     this.starts++;
   }
 
-  gestureEnded(rotated: boolean): void {
+  gestureEnded(snapBearings: number[]): void {
     this.ends++;
-    this.rotated = rotated;
+    this.snapBearings = snapBearings;
+    this.rotated = snapBearings.length > 0;
+  }
+
+  hapticTick(): void {
+    this.ticks++;
   }
 
   offsetX(from: number = 0): number {
@@ -111,15 +128,16 @@ function moveX(delta: CameraDelta, x: number): number {
   return anchor + (moved - anchor) * (delta.scale ?? 1);
 }
 
-function twist(gestures: MapGestures, radius: number, degrees: number, steps: number): number {
-  gestures.touch(0, onCircle(radius, 0));
+// Twists from `start`, and returns the time of the last move.
+function twist(gestures: MapGestures, radius: number, degrees: number, steps: number, start: number = 0): number {
+  gestures.touch(start, onCircle(radius, 0));
   for (let i = 1; i <= steps; i++) {
-    gestures.touch(i * 16, onCircle(radius, degrees * i / steps));
+    gestures.touch(start + i * 16, onCircle(radius, degrees * i / steps));
     if (i === 1) {
       gestures.claim();
     }
   }
-  return steps * 16;
+  return start + steps * 16;
 }
 
 export default function gesturesTest(): void {
@@ -183,7 +201,7 @@ export default function gesturesTest(): void {
         const end = drag(gestures, 0, [touch(1, 100, 100)], [touch(1, 100, 300)], 10, 10);
         gestures.touch(end + 5, []);
         if (wheel) {
-          gestures.wheel(-1, false);
+          gestures.axisUpdate(0, -1, false, false);
         } else {
           gestures.touchpadPinch(1.5);
         }
@@ -201,10 +219,10 @@ export default function gesturesTest(): void {
     it('leaves a fling alone when the wheel it ignores ends', 0, async () => {
       const camera = new Recorder();
       const gestures = new MapGestures(camera);
-      gestures.options = { zoom: false };
+      gestures.options = { zoom: { enabled: false } };
       const end = drag(gestures, 0, [touch(1, 100, 100)], [touch(1, 100, 300)], 10, 10);
       gestures.touch(end + 5, []);
-      gestures.wheel(-1, false);
+      gestures.axisUpdate(0, -1, false, false);
       gestures.axisEnded();
       expect(camera.ends).assertEqual(0);
       await until('the fling ends', () => camera.ends === 1);
@@ -216,7 +234,7 @@ export default function gesturesTest(): void {
       const gestures = new MapGestures(camera);
       const end = drag(gestures, 0, [touch(1, 100, 100)], [touch(1, 100, 300)], 10, 10);
       gestures.touch(end + 5, []);
-      gestures.options = { pan: false };
+      gestures.options = { pan: { enabled: false } };
       expect(camera.ends).assertEqual(1);
       const count = camera.deltas.length;
       await frames(5);
@@ -248,7 +266,7 @@ export default function gesturesTest(): void {
       const camera = new Recorder();
       const gestures = new MapGestures(camera);
       const end = drag(gestures, 0, [touch(1, 100, 100)], [touch(1, 100, 300)], 10, 10);
-      gestures.options = { pan: false };
+      gestures.options = { pan: { enabled: false } };
       gestures.touch(end + 5, []);
       expect(camera.ends).assertEqual(1);
 
@@ -258,7 +276,7 @@ export default function gesturesTest(): void {
       const last = drag(pinching, 0, [touch(1, 150, 300), touch(2, 250, 300)],
         [touch(1, 50, 300), touch(2, 350, 300)], 20, 16);
       pinching.touch(last + 5, [touch(2, 350, 300)]);
-      pinching.options = { zoom: false };
+      pinching.options = { zoom: { enabled: false } };
       pinching.touch(last + 10, []);
       expect(pinch.ends).assertEqual(1);
     });
@@ -395,7 +413,7 @@ export default function gesturesTest(): void {
     it('moves only as the options allow', 0, () => {
       const camera = new Recorder();
       const gestures = new MapGestures(camera);
-      gestures.options = { rotate: false, zoom: false };
+      gestures.options = { rotate: { enabled: false }, zoom: { enabled: false } };
       let end = twist(gestures, 100, 60, 20);
       gestures.touch(end + 100, []);
       end = drag(gestures, 1000, [touch(1, 150, 300), touch(2, 250, 300)],
@@ -411,7 +429,7 @@ export default function gesturesTest(): void {
       const camera = new Recorder();
       const gestures = new MapGestures(camera);
       gestures.height = 600;
-      gestures.options = { zoom: false };
+      gestures.options = { zoom: { enabled: false } };
       gestures.touch(0, [touch(1, 200, 300)]);
       gestures.touch(80, []);
       const end = drag(gestures, 200, [touch(2, 200, 300)], [touch(2, 200, 450)], 10, 50);
@@ -428,7 +446,7 @@ export default function gesturesTest(): void {
       gestures.touch(0, from);
       for (let i = 1; i <= 20; i++) {
         if (i === 11) {
-          gestures.options = { pan: false };
+          gestures.options = { pan: { enabled: false } };
         }
         gestures.touch(i * 40, lerp(from, to, i / 20));
         if (i === 1) {
@@ -494,7 +512,7 @@ export default function gesturesTest(): void {
     it('clicks at once while zoom is off, and long at a long press or a right click', 0, () => {
       const camera = new Recorder();
       const gestures = new MapGestures(camera);
-      gestures.options = { zoom: false };
+      gestures.options = { zoom: { enabled: false } };
       gestures.touch(0, [touch(1, 200, 300)]);
       gestures.touch(80, []);
       expect(JSON.stringify(camera.long)).assertEqual('[false]');
@@ -505,8 +523,9 @@ export default function gesturesTest(): void {
       expect(JSON.stringify(camera.long)).assertEqual('[false,true]');
       expect(camera.clicks[1].x).assertEqual(100);
 
-      gestures.rightClick(MouseAction.Press, { x: 50, y: 60 });
-      gestures.rightClick(MouseAction.Release, { x: 52, y: 60 });
+      gestures.mouse(MouseAction.Press, MouseButton.Right, 1700, 50, 60);
+      gestures.mouse(MouseAction.Move, MouseButton.None, 1710, 52, 60);
+      gestures.mouse(MouseAction.Release, MouseButton.Right, 1720, 52, 60);
       expect(JSON.stringify(camera.long)).assertEqual('[false,true,true]');
       // A long press after a drag isn't a click.
       drag(gestures, 2000, [touch(3, 200, 300)], [touch(3, 300, 300)], 5, 20);
@@ -514,12 +533,413 @@ export default function gesturesTest(): void {
       expect(camera.long.length).assertEqual(3);
     });
 
-    it('snaps a bearing near north', 0, () => {
-      expect(snapBearing(5)).assertEqual(0);
-      expect(snapBearing(-6)).assertEqual(0);
-      expect(snapBearing(355)).assertEqual(360);
-      expect(snapBearing(20)).assertUndefined();
-      expect(snapBearing(0)).assertUndefined();
+    it('snaps a bearing to the nearest snap bearing within 7 degrees', 0, () => {
+      expect(snapBearing(5, [0])).assertEqual(0);
+      expect(snapBearing(-6, [0])).assertEqual(0);
+      expect(snapBearing(355, [0])).assertEqual(360);
+      expect(snapBearing(20, [0])).assertUndefined();
+      expect(snapBearing(0, [0])).assertUndefined();
+      expect(snapBearing(5, [])).assertUndefined();
+      expect(snapBearing(95, [0, 90, 180, 270])).assertEqual(90);
+      expect(snapBearing(-84, [0, 90, 180, 270])).assertEqual(-90);
+      expect(snapBearing(46, [45, 50])).assertEqual(45);
+    });
+
+    it("hands the end of a rotation the options' snap bearings", 0, () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      let end = twist(gestures, 100, 60, 20);
+      gestures.touch(end + 100, []);
+      expect(camera.snapBearings).assertDeepEquals([0]);
+
+      gestures.options = { rotate: { snapBearings: [90, 270] } };
+      end = twist(gestures, 100, 60, 20, 1000);
+      gestures.touch(end + 100, []);
+      expect(camera.snapBearings).assertDeepEquals([90, 270]);
+
+      // A pan doesn't snap.
+      end = drag(gestures, 2000, [touch(1, 100, 100)], [touch(1, 100, 200)], 10, 50);
+      gestures.touch(end + 10, []);
+      expect(camera.snapBearings).assertDeepEquals([]);
+    });
+
+    it("runs each movement's onStart once a gesture, as it starts", 0, () => {
+      const counts: number[] = [0, 0, 0, 0];
+      const options: MapInteractionOptions = {
+        pan: {
+          onStart: () => {
+            counts[0]++;
+          },
+        },
+        zoom: {
+          onStart: () => {
+            counts[1]++;
+          },
+        },
+        rotate: {
+          onStart: () => {
+            counts[2]++;
+          },
+        },
+        pitch: {
+          onStart: () => {
+            counts[3]++;
+          },
+        },
+      };
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      gestures.options = options;
+      let end = drag(gestures, 0, [touch(1, 100, 100)], [touch(1, 100, 200)], 10, 50);
+      gestures.touch(end + 10, []);
+      expect(counts).assertDeepEquals([1, 0, 0, 0]);
+      // A pinch zooms, and its midpoint's drift isn't a pan.
+      end = drag(gestures, 1000, [touch(1, 150, 300), touch(2, 250, 300)],
+        [touch(1, 50, 300), touch(2, 350, 300)], 20, 16);
+      gestures.touch(end + 100, []);
+      expect(counts).assertDeepEquals([1, 1, 0, 0]);
+      end = twist(gestures, 100, 60, 20, 2000);
+      gestures.touch(end + 100, []);
+      expect(counts).assertDeepEquals([1, 1, 1, 0]);
+      end = drag(gestures, 3000, [touch(1, 150, 400), touch(2, 250, 400)],
+        [touch(1, 150, 250), touch(2, 250, 250)], 15, 40);
+      gestures.touch(end + 100, []);
+      expect(counts[3]).assertEqual(1);
+      // Each wheel update of one gesture, and a double tap.
+      const zooms = counts[1];
+      gestures.axisUpdate(0, 15, false, false);
+      gestures.axisUpdate(0, 15, false, false);
+      gestures.axisEnded();
+      gestures.doubleTap(10, 10);
+      expect(counts[1]).assertEqual(zooms + 2);
+      // A movement that's off doesn't start.
+      gestures.options = { zoom: options.zoom, pan: { enabled: false, onStart: options.pan?.onStart } };
+      const pans = counts[0];
+      end = drag(gestures, 5000, [touch(1, 100, 100)], [touch(1, 100, 200)], 10, 50);
+      gestures.touch(end + 10, []);
+      expect(counts[0]).assertEqual(pans);
+    });
+
+    it("doesn't start a movement until it moves the camera", 0, async () => {
+      let pans = 0;
+      let zooms = 0;
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      gestures.options = {
+        pan: {
+          onStart: () => {
+            pans++;
+          },
+        },
+        zoom: {
+          onStart: () => {
+            zooms++;
+          },
+        },
+      };
+      // A pinch starts, then the fingers move together without changing their
+      // span, so the zoom that was recognized doesn't scale.
+      gestures.touch(0, [touch(1, 150, 300), touch(2, 250, 300)]);
+      gestures.touch(16, [touch(1, 149, 300), touch(2, 251, 300)]);
+      gestures.claim();
+      gestures.touch(32, [touch(1, 139, 300), touch(2, 261, 300)]);
+      gestures.touch(48, [touch(1, 149, 300), touch(2, 271, 300)]);
+      gestures.touch(200, []);
+      expect(zooms).assertEqual(0);
+
+      // Opposite keys cancel, so only the zoom key starts a movement.
+      gestures.keyDown(KeyCode.KEYCODE_DPAD_LEFT, false);
+      gestures.keyDown(KeyCode.KEYCODE_DPAD_RIGHT, false);
+      gestures.keyDown(KeyCode.KEYCODE_EQUALS, false);
+      gestures.keyUp(KeyCode.KEYCODE_DPAD_LEFT);
+      gestures.keyUp(KeyCode.KEYCODE_DPAD_RIGHT);
+      gestures.keyUp(KeyCode.KEYCODE_EQUALS);
+      await until('the keys finish their steps', () => camera.ends === 2);
+      expect(zooms).assertEqual(1);
+      expect(pans).assertEqual(0);
+    });
+
+    it('keeps momentum when the options change but the movements stay on', 0, async () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      const end = drag(gestures, 0, [touch(1, 100, 100)], [touch(1, 100, 300)], 10, 10);
+      gestures.touch(end + 5, []);
+      gestures.options = { wheel: WheelAction.pan };
+      expect(camera.ends).assertEqual(0);
+      await until('the fling ends', () => camera.ends === 1);
+    });
+
+    it('zooms with the wheel, and pans with Ctrl', 0, () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      // One notch down zooms out a quarter level.
+      gestures.axisUpdate(0, 15, false, false);
+      expectNear(camera.zoom(), -0.25, 1e-9);
+      expect(camera.offsetY()).assertEqual(0);
+      gestures.axisUpdate(5, 15, true, false);
+      expectNear(camera.offsetY(), -60, 1e-9);
+      expectNear(camera.offsetX(), -20, 1e-9);
+      expectNear(camera.zoom(), -0.25, 1e-9);
+    });
+
+    it('pans with the wheel in pan mode, and zooms with Ctrl', 0, () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      gestures.options = { wheel: WheelAction.pan };
+      // A notch down shows what's below: the content moves up.
+      gestures.axisUpdate(0, 15, false, false);
+      expectNear(camera.offsetY(), -60, 1e-9);
+      expect(camera.zoom()).assertEqual(0);
+      gestures.axisUpdate(0, -15, true, false);
+      expectNear(camera.zoom(), 0.25, 1e-9);
+      expectNear(camera.offsetY(), -60, 1e-9);
+    });
+
+    it('pans with a touchpad swipe, by its vp, and zooms with Ctrl', 0, () => {
+      for (const wheel of [WheelAction.zoom, WheelAction.pan]) {
+        const camera = new Recorder();
+        const gestures = new MapGestures(camera);
+        gestures.options = { wheel: wheel };
+        gestures.axisUpdate(10, 20, false, true);
+        expectNear(camera.offsetX(), -10, 1e-9);
+        expectNear(camera.offsetY(), -20, 1e-9);
+        expect(camera.zoom()).assertEqual(0);
+        gestures.axisUpdate(0, -60, true, true);
+        expectNear(camera.zoom(), 1, 1e-9);
+        gestures.axisEnded();
+        expect(camera.ends).assertEqual(1);
+      }
+    });
+
+    it('pans with the touchpad through the pan gesture when its axis events are like the wheel', 0, () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      gestures.touchpadPan(10, -20, false);
+      gestures.touchpadPan(30, -50, false);
+      // The axis events of the swipe don't zoom.
+      gestures.axisUpdate(0, 15, false, false);
+      expectNear(camera.offsetX(), 30, 1e-9);
+      expectNear(camera.offsetY(), -50, 1e-9);
+      expect(camera.zoom()).assertEqual(0);
+      gestures.onPanEnd();
+      expect(camera.ends).assertEqual(1);
+      // After it, the wheel zooms again.
+      gestures.axisUpdate(0, 15, false, false);
+      expectNear(camera.zoom(), -0.25, 1e-9);
+
+      // Once axis events say they're from the touchpad, they pan alone.
+      const other = new Recorder();
+      const reporting = new MapGestures(other);
+      reporting.axisUpdate(0, 20, false, true);
+      reporting.touchpadPan(0, -20, false);
+      expectNear(other.offsetY(), -20, 1e-9);
+    });
+
+    it('leaves the wheel and touchpad to a parent in cooperative mode, unless Ctrl is held', 0, () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      gestures.options = { cooperative: true };
+      gestures.axisUpdate(0, 15, false, false);
+      gestures.axisUpdate(0, 15, false, true);
+      expect(camera.deltas.length).assertEqual(0);
+      // With Ctrl, the wheel zooms and the touchpad pans, as they do otherwise.
+      gestures.axisUpdate(0, 15, true, false);
+      expectNear(camera.zoom(), -0.25, 1e-9);
+      gestures.axisUpdate(0, 15, true, true);
+      expectNear(camera.offsetY(), -15, 1e-9);
+    });
+
+    it('moves a held key every frame, a step each 300 ms, and ignores its repeats', 0, async () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      const down = Date.now();
+      expect(gestures.keyDown(KeyCode.KEYCODE_DPAD_LEFT, false)).assertTrue();
+      for (let i = 0; i < 5; i++) {
+        await frames(2);
+        // The system's repeats.
+        expect(gestures.keyDown(KeyCode.KEYCODE_DPAD_LEFT, false)).assertTrue();
+      }
+      await until('the key moves two steps', () => camera.offsetX() >= 200);
+      const moves = camera.deltas.length;
+      expect(gestures.keyUp(KeyCode.KEYCODE_DPAD_LEFT)).assertTrue();
+      const held = Date.now() - down;
+      const panned = camera.offsetX();
+      // Many small moves, at 100 vp each 300 ms, less the first frame.
+      expect(moves).assertLarger(10);
+      expect(panned).assertLessOrEqual(held / 300 * 100 + 1);
+      expect(panned).assertLarger((held - 100) / 300 * 100);
+      // Past its first step, the key stops as it's released.
+      await frames(5);
+      expect(camera.offsetX()).assertEqual(panned);
+      expect(camera.starts).assertEqual(1);
+      expect(camera.ends).assertEqual(1);
+      expect(camera.lastPhase()).assertEqual(GesturePhase.end);
+    });
+
+    it('finishes the step of a key released early', 0, async () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      gestures.keyDown(KeyCode.KEYCODE_EQUALS, false);
+      gestures.keyUp(KeyCode.KEYCODE_EQUALS);
+      await until('the step ends', () => camera.ends === 1);
+      expectNear(camera.zoom(), 1, 1e-9);
+      // Two taps make two steps.
+      gestures.keyDown(KeyCode.KEYCODE_DPAD_UP, false);
+      gestures.keyUp(KeyCode.KEYCODE_DPAD_UP);
+      await frames(3);
+      gestures.keyDown(KeyCode.KEYCODE_DPAD_UP, false);
+      gestures.keyUp(KeyCode.KEYCODE_DPAD_UP);
+      await until('the steps end', () => camera.ends === 2);
+      expectNear(camera.offsetY(), 200, 1e-6);
+    });
+
+    it('finishes a step before the same key moves another way with Shift', 0, async () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      gestures.keyDown(KeyCode.KEYCODE_DPAD_LEFT, false);
+      gestures.keyUp(KeyCode.KEYCODE_DPAD_LEFT);
+      gestures.keyDown(KeyCode.KEYCODE_DPAD_LEFT, true);
+      gestures.keyUp(KeyCode.KEYCODE_DPAD_LEFT);
+      await until('the steps end', () => camera.ends === 1);
+      expectNear(camera.offsetX(), 100, 1e-6);
+      expectNear(camera.bearing(), 15, 1e-6);
+    });
+
+    it('adds the keys that are held, so opposite ones cancel', 0, async () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      gestures.keyDown(KeyCode.KEYCODE_DPAD_LEFT, false);
+      gestures.keyDown(KeyCode.KEYCODE_DPAD_RIGHT, false);
+      gestures.keyDown(KeyCode.KEYCODE_DPAD_UP, false);
+      await until('the keys move a step', () => camera.offsetY() >= 100);
+      expect(camera.offsetX()).assertEqual(0);
+      gestures.keyUp(KeyCode.KEYCODE_DPAD_LEFT);
+      gestures.keyUp(KeyCode.KEYCODE_DPAD_RIGHT);
+      gestures.keyUp(KeyCode.KEYCODE_DPAD_UP);
+      expect(camera.ends).assertEqual(1);
+      // Shift and the arrows rotate and pitch.
+      gestures.keyDown(KeyCode.KEYCODE_DPAD_LEFT, true);
+      gestures.keyUp(KeyCode.KEYCODE_DPAD_LEFT);
+      gestures.keyDown(KeyCode.KEYCODE_DPAD_DOWN, true);
+      gestures.keyUp(KeyCode.KEYCODE_DPAD_DOWN);
+      await until('the steps end', () => camera.ends === 2);
+      expectNear(camera.bearing(), 15, 1e-6);
+      expectNear(camera.pitch(), -10, 1e-6);
+      // Turning with keys doesn't tick.
+      expect(camera.ticks).assertEqual(0);
+    });
+
+    it('stops held keys when other input takes over, until they go up', 0, async () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      gestures.keyDown(KeyCode.KEYCODE_DPAD_LEFT, false);
+      await until('the key moves', () => camera.offsetX() > 0);
+      gestures.touch(0, [touch(1, 100, 100)]);
+      expect(camera.ends).assertEqual(1);
+      const panned = camera.offsetX();
+      // Its repeats don't start it again.
+      expect(gestures.keyDown(KeyCode.KEYCODE_DPAD_LEFT, false)).assertTrue();
+      await frames(5);
+      expect(camera.offsetX()).assertEqual(panned);
+      expect(gestures.keyUp(KeyCode.KEYCODE_DPAD_LEFT)).assertTrue();
+      gestures.touch(10, []);
+
+      // Losing focus stops them too.
+      gestures.keyDown(KeyCode.KEYCODE_DPAD_RIGHT, false);
+      await until('the key moves', () => camera.ends === 1 && camera.offsetX() < panned);
+      gestures.blur();
+      expect(camera.ends).assertEqual(2);
+      expect(gestures.keyUp(KeyCode.KEYCODE_DPAD_RIGHT)).assertFalse();
+    });
+
+    it("doesn't take the keys of a movement that's off", 0, () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      gestures.options = { pan: { enabled: false }, rotate: { enabled: false } };
+      expect(gestures.keyDown(KeyCode.KEYCODE_DPAD_LEFT, false)).assertFalse();
+      expect(gestures.keyDown(KeyCode.KEYCODE_DPAD_LEFT, true)).assertFalse();
+      expect(gestures.keyDown(KeyCode.KEYCODE_A, false)).assertFalse();
+      expect(gestures.keyDown(KeyCode.KEYCODE_DPAD_UP, true)).assertTrue();
+      gestures.dispose();
+    });
+
+    it('rotates and pitches with a right-button drag past the slop, without momentum', 0, async () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      gestures.mouse(MouseAction.Press, MouseButton.Right, 0, 100, 100);
+      gestures.mouse(MouseAction.Move, MouseButton.Right, 10, 108, 100);
+      expect(camera.deltas.length).assertEqual(0);
+      // Past the slop; it moves from the next event.
+      gestures.mouse(MouseAction.Move, MouseButton.Right, 20, 120, 100);
+      expect(camera.deltas.length).assertEqual(0);
+      gestures.mouse(MouseAction.Move, MouseButton.Right, 30, 170, 100);
+      gestures.mouse(MouseAction.Move, MouseButton.Right, 40, 170, 80);
+      expectNear(camera.bearing(), 40, 1e-9);
+      expectNear(camera.pitch(), 10, 1e-9);
+      gestures.mouse(MouseAction.Release, MouseButton.Right, 50, 170, 80);
+      expect(camera.ends).assertEqual(1);
+      expect(camera.snapBearings).assertDeepEquals([0]);
+      const count = camera.deltas.length;
+      await frames(5);
+      expect(camera.deltas.length).assertEqual(count);
+
+      // The left button drags through touches, and pitch alone needs no rotate.
+      gestures.mouse(MouseAction.Press, MouseButton.Left, 100, 100, 100);
+      gestures.mouse(MouseAction.Move, MouseButton.Left, 110, 200, 200);
+      gestures.mouse(MouseAction.Move, MouseButton.Left, 120, 300, 300);
+      expect(camera.deltas.length).assertEqual(count);
+      gestures.mouse(MouseAction.Release, MouseButton.Left, 130, 300, 300);
+      gestures.options = { rotate: { enabled: false } };
+      gestures.mouse(MouseAction.Press, MouseButton.Right, 200, 100, 100);
+      gestures.mouse(MouseAction.Move, MouseButton.Right, 210, 150, 50);
+      gestures.mouse(MouseAction.Move, MouseButton.Right, 220, 200, 0);
+      gestures.mouse(MouseAction.Release, MouseButton.Right, 230, 200, 0);
+      expectNear(camera.bearing(), 40, 1e-9);
+      expectNear(camera.pitch(), 35, 1e-9);
+      expect(camera.snapBearings).assertDeepEquals([]);
+    });
+
+    it('ticks as a twist or a right-button drag crosses a haptic bearing', 0, () => {
+      // A twist from 30 degrees turns the map 48 degrees back, across north.
+      const camera = new Recorder();
+      camera.initialBearing = 30;
+      const gestures = new MapGestures(camera);
+      let end = twist(gestures, 100, 60, 20);
+      gestures.touch(end + 100, []);
+      expect(camera.ticks).assertEqual(1);
+
+      // Without haptic bearings, it doesn't.
+      const silent = new Recorder();
+      silent.initialBearing = 30;
+      const quiet = new MapGestures(silent);
+      quiet.options = { rotate: { hapticBearings: [] } };
+      end = twist(quiet, 100, 60, 20);
+      quiet.touch(end + 100, []);
+      expect(silent.ticks).assertEqual(0);
+
+      // Starting at north is silent, and each crossing of 0 and 30 ticks.
+      const dragged = new Recorder();
+      const dragging = new MapGestures(dragged);
+      dragging.options = { rotate: { hapticBearings: [0, 30] } };
+      dragging.mouse(MouseAction.Press, MouseButton.Right, 0, 100, 100);
+      dragging.mouse(MouseAction.Move, MouseButton.Right, 100, 120, 100);
+      // 0.8 degrees per vp: to 20, 40, then back to -8.
+      dragging.mouse(MouseAction.Move, MouseButton.Right, 200, 145, 100);
+      expect(dragged.ticks).assertEqual(0);
+      dragging.mouse(MouseAction.Move, MouseButton.Right, 300, 170, 100);
+      expect(dragged.ticks).assertEqual(1);
+      dragging.mouse(MouseAction.Move, MouseButton.Right, 400, 110, 100);
+      expect(dragged.ticks).assertEqual(2);
+      // A tick too soon after the last is dropped.
+      dragging.mouse(MouseAction.Move, MouseButton.Right, 410, 150, 100);
+      expect(dragged.ticks).assertEqual(2);
+    });
+
+    it('plays its tick silently without the VIBRATE permission', 0, async () => {
+      // The test app doesn't declare ohos.permission.VIBRATE, so the vibrator
+      // refuses with 201, and the tick resolves with the refusal.
+      const error = await playTick();
+      expect(error?.code).assertEqual(201);
     });
 
     it("plans momentum as MapLibre Compose's GestureMath does", 0, () => {

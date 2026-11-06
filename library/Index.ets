@@ -3,7 +3,8 @@
 export { MapLibreMap } from './src/main/ets/MapLibreMap';
 export { MapController } from './src/main/ets/MapController';
 export type { FitCameraOptions, MapControllerOptions } from './src/main/ets/MapController';
-export type { MapGestureOptions } from './src/main/ets/gestures';
+export { WheelAction } from './src/main/ets/gestures';
+export type { MapInteractionOptions, MovementOptions, RotationOptions } from './src/main/ets/gestures';
 export { FollowBearing } from './src/main/ets/location';
 export type { FollowUserLocationOptions } from './src/main/ets/location';
 export { addRuntimeEventListener, getDefaultRuntime, removeRuntimeEventListener } from './src/main/ets/runtime';
