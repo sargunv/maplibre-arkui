@@ -54,6 +54,15 @@ them with complex code.
   not as an absolute tolerance.
 - A HAR's `requestPermissions` merge into every app that uses it, so the library
   declares none; apps pass in what needs a permission.
+- The library's resources merge into every app's, as its permissions would, so
+  name each `maplibre_…`. `scripts/build-hap.sh` compiles the merged table with
+  restool before ets-loader runs, since ets-loader resolves `$r('app.…')` from
+  it; a name missing from it fails the build as an unknown resource.
+- ArkUI's `@Consumer` doesn't reach content in another component's trailing
+  closure, which the closure's author owns. The overlay's controls find their
+  map by walking up the frame nodes (`scope.ets`).
+- A custom component can't declare a member that ArkUI's universal attributes
+  name, such as `size`, `key`, `overlay`, or `onClick`.
 
 ## Tests
 

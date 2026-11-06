@@ -4,8 +4,10 @@ import {
   LatLng,
   LatLngBounds,
   MapController,
+  MapFullOverlay,
   MapLibreMap,
-  MapMarker,
+  MapPlacedAt,
+  MapPointerPinButton,
 } from '@maplibre/arkui';
 
 import { DocExamples } from '../docs/Examples';
@@ -15,6 +17,8 @@ import { RuntimeDemo } from './RuntimeDemo';
 import { ScrollingMap } from './ScrollingMap';
 import { StyleDemo } from './StyleDemo';
 import { TwoMaps } from './TwoMaps';
+
+const EIFFEL_TOWER: LatLng = { latitude: 48.8584, longitude: 2.2945 };
 
 const SWITZERLAND: LatLngBounds = {
   southwest: { latitude: 45.82, longitude: 5.96 },
@@ -40,12 +44,12 @@ struct Index {
   @Local stack: NavPathStack = new NavPathStack();
   @Local showMap: boolean = true;
   @Local message: string = '';
-  // The panel's height, which the map keeps its ornaments and the camera's
+  // The panel's height, which the map keeps its controls and the camera's
   // center above.
   @Local panelHeight: number = 0;
   @Local gesturing: boolean = false;
   private map: MapController = new MapController({
-    camera: { center: { latitude: 48.8584, longitude: 2.2945 }, zoom: 14 },
+    camera: { center: EIFFEL_TOWER, zoom: 14 },
   });
 
   build() {
@@ -55,8 +59,6 @@ struct Index {
           MapLibreMap({
             controller: this.map,
             style: LIBERTY,
-            scaleBarEnabled: true,
-            zoomButtonsEnabled: true,
             viewportInsets: { top: 0, left: 0, bottom: this.panelHeight, right: 0 },
             onMapError: (error: Error) => {
               this.message = error.message;
@@ -71,8 +73,24 @@ struct Index {
             // The webpack build rejects components written in a ForEach item,
             // so the item calls a builder.
             ForEach(CITIES, (city: City) => {
-              this.cityMarker(city)
+              this.cityLabel(city)
             }, (city: City) => city.name)
+            // The controls stay clear of the viewport insets.
+            MapFullOverlay()
+            // A pin that points home once the Eiffel Tower is off the screen,
+            // on an oval above the panel.
+            Stack() {
+              MapPointerPinButton({
+                coordinate: EIFFEL_TOWER,
+                onTap: () => this.goHome(),
+              }) {
+                Image($r('sys.media.ohos_ic_public_location'))
+                  .width(24)
+                  .height(24)
+                  .fillColor($r('sys.color.icon_primary'))
+              }
+            }
+            .padding({ bottom: this.panelHeight })
           }
         } else {
           Text('The map is hidden')
@@ -138,14 +156,14 @@ struct Index {
 
   // A label with the city's name, whose bottom tip is on the city.
   @Builder
-  cityMarker(city: City) {
-    MapMarker({ controller: this.map, coordinate: city.coordinate }) {
-      this.cityLabel(city.name)
+  cityLabel(city: City) {
+    MapPlacedAt({ coordinate: city.coordinate, alignment: Alignment.Bottom }) {
+      this.label(city.name)
     }
   }
 
   @Builder
-  cityLabel(name: string) {
+  label(name: string) {
     Column() {
       Text(name)
         .fontSize(13)
@@ -186,6 +204,13 @@ struct Index {
     }
     return `${camera.center.latitude.toFixed(4)}, ${camera.center.longitude.toFixed(4)} ` +
       `at zoom ${camera.zoom.toFixed(2)}`;
+  }
+
+  private goHome(): void {
+    this.report(this.map.updateCamera({
+      mode: CameraUpdateMode.fly,
+      camera: { center: EIFFEL_TOWER, zoom: 14 },
+    }));
   }
 
   private jump(): void {

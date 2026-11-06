@@ -1,0 +1,9 @@
+{
+  "string": [
+    { "name": "maplibre_attribution", "value": "Map Attribution" },
+    { "name": "maplibre_compass", "value": "Compass" },
+    { "name": "maplibre_logo", "value": "MapLibre" },
+    { "name": "maplibre_zoom_in", "value": "Zoom in" },
+    { "name": "maplibre_zoom_out", "value": "Zoom out" }
+  ]
+}

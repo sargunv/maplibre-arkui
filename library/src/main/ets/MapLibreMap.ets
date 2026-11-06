@@ -4,30 +4,10 @@ import geoLocationManager from '@ohos.geoLocationManager';
 import { MapInteractionOptions, TAP_SLOP } from './gestures';
 import { MapClickEvent, MapContent } from './Content';
 import { MapController } from './MapController';
-import { noContent } from './MapMarker';
 import { MapView } from './MapView';
-import { MapAttribution, MapCompass, MapScaleBar, MapZoomButtons } from './Ornaments';
+import { defaultOverlay } from './Overlay';
 import { NO_INSETS } from './padding';
-
-// Where the ornaments go in the map. ets-loader rejects `layoutGravity`, so
-// they align in a RelativeContainer.
-const CONTAINER = '__container__';
-const TOP_START: LocalizedAlignRuleOptions = {
-  top: { anchor: CONTAINER, align: VerticalAlign.Top },
-  start: { anchor: CONTAINER, align: HorizontalAlign.Start },
-};
-const TOP_END: LocalizedAlignRuleOptions = {
-  top: { anchor: CONTAINER, align: VerticalAlign.Top },
-  end: { anchor: CONTAINER, align: HorizontalAlign.End },
-};
-const CENTER_END: LocalizedAlignRuleOptions = {
-  center: { anchor: CONTAINER, align: VerticalAlign.Center },
-  end: { anchor: CONTAINER, align: HorizontalAlign.End },
-};
-const BOTTOM_END: LocalizedAlignRuleOptions = {
-  bottom: { anchor: CONTAINER, align: VerticalAlign.Bottom },
-  end: { anchor: CONTAINER, align: HorizontalAlign.End },
-};
+import { closeScope, MapScope, openScope } from './scope';
 
 /**
  * A MapLibre map, which fills the size that its parent gives it.
@@ -54,7 +34,8 @@ const BOTTOM_END: LocalizedAlignRuleOptions = {
  *     style: 'https://tiles.openfreemap.org/styles/liberty',
  *     onMapError: (error: Error) => console.error(error.message),
  *   }) {
- *     MapMarker({ controller: this.map, coordinate: { latitude: 48.8584, longitude: 2.2945 } }) {
+ *     MapDefaultOverlay()
+ *     MapPlacedAt({ coordinate: { latitude: 48.8584, longitude: 2.2945 } }) {
  *       Text('Eiffel Tower')
  *     }
  *   }
@@ -62,8 +43,10 @@ const BOTTOM_END: LocalizedAlignRuleOptions = {
  * ```
  *
  * Its `overlays`, the ArkUI content in the trailing closure, lie over the map
- * in a `Stack` of the map's size, under the map's ornaments. Pin them to
- * coordinates with `MapMarker`. What the map itself draws, such as GeoJSON in
+ * in a `Stack` of the map's size. Without a trailing closure, the map draws
+ * `MapDefaultOverlay`; an empty one draws nothing. The library's controls and
+ * placements, such as `MapCompassButton` and `MapPlacedAt`, find the map
+ * anywhere in the overlay. What the map itself draws, such as GeoJSON in
  * layers, is its `content`.
  */
 @ComponentV2
@@ -96,26 +79,12 @@ export struct MapLibreMap {
    */
   @Param interactions: MapInteractionOptions = {};
   /**
-   * Whether the map shows a `MapCompass` at its top end, which shows while the
-   * map is rotated or tilted.
-   */
-  @Param compassEnabled: boolean = true;
-  /** Whether the map shows a `MapScaleBar` at its top start. */
-  @Param scaleBarEnabled: boolean = false;
-  /** Whether the map shows `MapZoomButtons` in the middle of its end edge. */
-  @Param zoomButtonsEnabled: boolean = false;
-  /**
-   * Whether the map shows a `MapAttribution` at its bottom end. Most sources'
-   * terms require their attribution, so show it elsewhere without one.
-   */
-  @Param attributionEnabled: boolean = true;
-  /**
    * The edges of the map, in vp, that the app's own UI covers, such as a
-   * bottom sheet. The map's ornaments stay clear of them, and they add to the
-   * camera's padding, so a camera move centers its target in the part of the
-   * map that the user sees. They never show in the camera that `controller`
-   * reports. When they change, the camera's center moves to the middle of
-   * what they leave.
+   * bottom sheet. The overlay presets keep their controls clear of them, and
+   * they add to the camera's padding, so a camera move centers its target in
+   * the part of the map that the user sees. They never show in the camera
+   * that `controller` reports. When they change, the camera's center moves to
+   * the middle of what they leave.
    *
    * ```ets
    * MapLibreMap({
@@ -128,9 +97,10 @@ export struct MapLibreMap {
   @Param viewportInsets: EdgeInsets = NO_INSETS;
   /**
    * ArkUI content over the map, in a `Stack` of its size, from the trailing
-   * closure. `content` is what the map draws itself.
+   * closure: by default, `MapDefaultOverlay`. `content` is what the map draws
+   * itself.
    */
-  @BuilderParam overlays: () => void = noContent;
+  @BuilderParam overlays: () => void = defaultOverlay;
   /**
    * The user's location, which the map shows as a dot in a circle of its
    * `accuracy`, with an arrow for `userHeading`, or for the course while it
@@ -188,18 +158,29 @@ export struct MapLibreMap {
   @Event onUnhandledClick: (event: MapClickEvent) => void = (event: MapClickEvent) => {
   };
 
+  // What the controls and placements in the overlay find the map by.
+  private scope: MapScope = openScope();
+
   private view: MapView = new MapView(this.getUIContext(), {
     onStyleLoaded: () => this.onStyleLoaded(),
     onCameraIdle: (camera: CameraPosition) => this.onCameraIdle(camera),
     onMapError: (error: Error) => this.onMapError(error),
-    onGestureStart: () => this.onGestureStart(),
-    onGestureEnd: () => this.onGestureEnd(),
+    onGestureStart: () => {
+      this.scope.gesturing = true;
+      this.onGestureStart();
+    },
+    onGestureEnd: () => {
+      this.scope.gesturing = false;
+      this.onGestureEnd();
+    },
     onMapClick: (event: MapClickEvent): boolean => this.onMapClick(event),
     onMapLongClick: (event: MapClickEvent): boolean => this.onMapLongClick(event),
     onUnhandledClick: (event: MapClickEvent) => this.onUnhandledClick(event),
   });
 
   aboutToAppear(): void {
+    this.scope.controller = this.controller;
+    this.scope.insets = this.viewportInsets;
     this.view.gestures.options = this.interactions;
     this.view.setUserLocation(this.userLocation);
     this.view.setUserHeading(this.userHeading);
@@ -208,6 +189,7 @@ export struct MapLibreMap {
   }
 
   aboutToDisappear(): void {
+    closeScope(this.scope);
     this.view.dispose();
   }
 
@@ -233,6 +215,7 @@ export struct MapLibreMap {
 
   @Monitor('viewportInsets')
   viewportInsetsChanged(): void {
+    this.scope.insets = this.viewportInsets;
     this.view.setViewportInsets(this.viewportInsets);
   }
 
@@ -295,41 +278,14 @@ export struct MapLibreMap {
               this.view.gestures.twoFingerTap(x / fingers.length, y / fingers.length);
             })))
       this.overlays()
-      RelativeContainer() {
-        if (this.scaleBarEnabled) {
-          MapScaleBar({ controller: this.controller })
-            .margin(8)
-            .alignRules(TOP_START)
-        }
-        if (this.compassEnabled) {
-          MapCompass({ controller: this.controller })
-            .margin(8)
-            .alignRules(TOP_END)
-        }
-        if (this.zoomButtonsEnabled) {
-          MapZoomButtons({ controller: this.controller })
-            .margin(8)
-            .alignRules(CENTER_END)
-        }
-        if (this.attributionEnabled) {
-          MapAttribution({ controller: this.controller })
-            .margin(8)
-            .alignRules(BOTTOM_END)
-        }
-      }
-      .width('100%')
-      .height('100%')
-      .padding({
-        top: this.viewportInsets.top,
-        left: this.viewportInsets.left,
-        bottom: this.viewportInsets.bottom,
-        right: this.viewportInsets.right,
-      })
-      .hitTestBehavior(HitTestMode.Transparent)
     }
     .width('100%')
     .height('100%')
     .clip(true)
+    .id(this.scope.key)
+    .onAreaChange((old: Area, area: Area) => {
+      this.scope.origin = { x: area.globalPosition.x as number, y: area.globalPosition.y as number };
+    })
   }
 
   private panFingers(): number {

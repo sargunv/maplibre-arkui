@@ -21,7 +21,8 @@
 #   webpack build compiles a package in oh_modules as a CommonJS module, which
 #   breaks ArkTS, so the HAR's sources join the module's own under
 #   ets/<package name>, and the module's imports of the package name become
-#   relative imports of them.
+#   relative imports of them. Its resources merge into the module's, as hvigor
+#   merges them, and the module's win where both name one.
 # - A JavaScript package, whose main is a .js file, such as FFI's facade or
 #   hypium, stays external to the webpack build, which imports it by its record
 #   name. es2abc compiles its files into records beside the module's.
@@ -40,7 +41,8 @@ case "$(uname -s)" in
   Darwin) es2abc="$loader/bin/ark/build-mac/bin/es2abc" ;;
   *) es2abc="$loader/bin/ark/build/bin/es2abc" ;;
 esac
-for tool in "$loader/webpack.config.js" "$es2abc"; do
+restool="$sdk/toolchains/restool"
+for tool in "$loader/webpack.config.js" "$es2abc" "$restool"; do
   if [[ ! -e "$tool" ]]; then
     echo "error: the OpenHarmony SDK has no $tool; reinstall it with mise install --force ohos-sdk" >&2
     exit 1
@@ -81,6 +83,7 @@ add_js_records() {
 
 ohm_map='{}'
 source_hars=()
+resource_inputs=()
 api=0
 for package in "$@"; do
   if [[ ! -e $package ]]; then
@@ -105,6 +108,9 @@ for package in "$@"; do
       cp "$package/$main" "$src/ets/$name/"
       cp -R "$package/src/main/ets" "$src/ets/$name/src/main/"
       source_hars+=("$name/${main%.ets}")
+      if [[ -d "$package/src/main/resources" ]]; then
+        resource_inputs+=(-i "$modules/$name/src/main")
+      fi
       ;;
     *.js)
       ohm_map=$(jq --arg name "$name" --arg record "@bundle:$bundle/$module/oh_modules/$name/${main%.js}" \
@@ -144,6 +150,13 @@ fi
 jq --argjson api "$api" '.app.minAPIVersion = $api | .app.targetAPIVersion = $api' \
   "$source_dir/module.json" >"$src/module.json"
 
+# restool compiles the resources of the module and its source HARs into one
+# table before ets-loader runs, because ets-loader resolves each `$r('app.…')`
+# to an ID from the table's ResourceTable.txt.
+mkdir -p "$work/resources"
+"$restool" ${resource_inputs[@]+"${resource_inputs[@]}"} -i "$src" -j "$src/module.json" \
+  -o "$work/resources" -p "$bundle" -r "$work/resources/ResourceTable.txt" -f >/dev/null
+
 # ets-loader reads the project from the environment and a build file, and
 # compiles the pages, the abilities, and any test runner into records named
 # <bundle>/<module>/ets/<path>. It deletes nodeModulesPath, which is its own
@@ -169,6 +182,7 @@ jq -n --arg root "$root" --arg module "$module" --arg work "$work" \
   aceModuleRoot="$src/ets" aceModuleBuild="$work/ets" \
     aceModuleJsonPath="$src/module.json" \
     aceProfilePath="$src/resources/base/profile" \
+    appResource="$work/resources/ResourceTable.txt" \
     aceBuildJson="$work/build.json" cachePath="$work/cache" \
     node --require "$scripts/ets-loader-patches.cjs" \
     "$loader/node_modules/webpack/bin/webpack.js" \
@@ -190,5 +204,5 @@ fi
 
 cat "$work/cache/filesInfo.txt" "$records" >"$work/all-records.txt"
 "$es2abc" --merge-abc --module --output "$work/modules.abc" "@$work/all-records.txt"
-"$scripts/pack-hap.sh" "$src" "$work/modules.abc" "$work/libs" "$work/$module.hap"
+"$scripts/pack-hap.sh" "$work/resources" "$work/modules.abc" "$work/libs" "$work/$module.hap"
 echo "Signed $work/$module.hap for $abi."

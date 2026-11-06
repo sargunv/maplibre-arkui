@@ -92,7 +92,8 @@ export class MapController {
   /**
    * The attribution of the style's sources, as HTML, without repeats, in the
    * order the style lists them. Empty until the style loads. Show it, or a
-   * `MapLibreMap` with `attributionEnabled`, as the sources' terms require.
+   * `MapAttributionButton` in the map's overlay, as the sources' terms
+   * require.
    */
   @Trace attributions: string[] = [];
   /**

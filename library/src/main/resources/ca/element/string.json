@@ -1,0 +1,12 @@
+{
+  "string": [
+    {
+      "name": "maplibre_attribution",
+      "value": "Atribució del mapa"
+    },
+    {
+      "name": "maplibre_compass",
+      "value": "Brúixola"
+    }
+  ]
+}

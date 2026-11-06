@@ -1,0 +1,12 @@
+{
+  "string": [
+    {
+      "name": "maplibre_attribution",
+      "value": "Vir kart"
+    },
+    {
+      "name": "maplibre_compass",
+      "value": "Kompas"
+    }
+  ]
+}

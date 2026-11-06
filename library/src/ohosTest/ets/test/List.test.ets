@@ -7,7 +7,7 @@ import gesturesTest from './Gestures.test';
 import lifecycleTest from './Lifecycle.test';
 import locationTest from './Location.test';
 import mapControllerTest from './MapController.test';
-import ornamentsTest from './Ornaments.test';
+import overlayTest from './Overlay.test';
 import runtimeTest from './Runtime.test';
 import styleTest from './Style.test';
 
@@ -21,7 +21,7 @@ export default function testsuite(): void {
   mapControllerTest();
   lifecycleTest();
   styleTest();
-  ornamentsTest();
+  overlayTest();
   gestureInputTest();
   clicksTest();
   contentTest();

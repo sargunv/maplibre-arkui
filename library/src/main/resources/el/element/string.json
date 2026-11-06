@@ -1,0 +1,12 @@
+{
+  "string": [
+    {
+      "name": "maplibre_attribution",
+      "value": "Απόδοση χάρτη"
+    },
+    {
+      "name": "maplibre_compass",
+      "value": "Πυξίδα"
+    }
+  ]
+}

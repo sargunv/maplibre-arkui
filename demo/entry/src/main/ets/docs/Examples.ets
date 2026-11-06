@@ -35,13 +35,20 @@ import {
   LogEvent,
   LogSeverity,
   LogSeverityFlag,
+  LatLng,
+  MapAttributionOnlyOverlay,
   MapClickEvent,
-  MapCompass,
+  MapCompassButton,
   MapContent,
   MapController,
+  MapDefaultOverlay,
+  MapFullOverlay,
   MapHandle,
   MapLibreMap,
-  MapMarker,
+  MapPlacedAt,
+  MapPointerPinButton,
+  MapScaleBar,
+  MapZoomButtons,
   match,
   OfflineRegionDefinition,
   OfflineRegionDownloadState,
@@ -232,41 +239,113 @@ struct QueryExample {
   // #endregion query
 }
 
-// Ornaments, markers, the camera, and gestures
+// Controls, placement, the camera, and gestures
+
+const PARIS_CENTER: LatLng = { latitude: 48.8566, longitude: 2.3522 };
 
 @ComponentV2
-struct MarkerExample {
-  private controller: MapController = new MapController({
-    camera: { center: { latitude: 48.8566, longitude: 2.3522 }, zoom: 11 },
-  });
+struct PresetExample {
+  private controller: MapController = new MapController({ camera: { center: PARIS_CENTER, zoom: 11 } });
 
   build() {
-    // #region marker
-    MapLibreMap({ controller: this.controller, style: STYLE, scaleBarEnabled: true }) {
-      MapMarker({ controller: this.controller, coordinate: { latitude: 48.8566, longitude: 2.3522 } }) {
-        Text('Paris')
-          .padding(6)
-          .backgroundColor(Color.White)
-      }
+    // #region overlay-preset
+    MapLibreMap({ controller: this.controller, style: STYLE }) {
+      MapFullOverlay()
     }
-    // #endregion marker
+    // #endregion overlay-preset
   }
 }
 
 @ComponentV2
-struct CompassExample {
+struct NoOverlayExample {
+  private controller: MapController = new MapController({ camera: { center: PARIS_CENTER, zoom: 11 } });
+
+  build() {
+    // #region overlay-none
+    Column() {
+      Stack() {
+        MapLibreMap({ controller: this.controller, style: STYLE }) {
+        }
+      }
+      .layoutWeight(1)
+      // The sources' terms require their attribution, so the app shows it.
+      Text(this.controller.attributions.join(' '))
+        .fontSize(12)
+    }
+    // #endregion overlay-none
+  }
+}
+
+@ComponentV2
+struct CustomControlsExample {
   private controller: MapController = new MapController({
-    camera: { center: { latitude: 48.8566, longitude: 2.3522 }, zoom: 11, bearing: 30 },
+    camera: { center: PARIS_CENTER, zoom: 11, bearing: 30 },
   });
 
   build() {
-    // #region compass
-    Stack({ alignContent: Alignment.TopStart }) {
-      MapLibreMap({ controller: this.controller, style: STYLE, compassEnabled: false })
-      MapCompass({ controller: this.controller, alwaysShown: true })
-        .margin(16)
+    // #region overlay-custom
+    MapLibreMap({ controller: this.controller, style: STYLE }) {
+      MapAttributionOnlyOverlay()
+      Column({ space: 8 }) {
+        MapCompassButton()
+        MapZoomButtons()
+        MapScaleBar()
+      }
+      .width('100%')
+      .padding(16)
+      .alignItems(HorizontalAlign.End)
+      .hitTestBehavior(HitTestMode.Transparent)
     }
-    // #endregion compass
+    // #endregion overlay-custom
+  }
+}
+
+@ComponentV2
+struct PlacedAtExample {
+  private controller: MapController = new MapController({ camera: { center: PARIS_CENTER, zoom: 11 } });
+
+  build() {
+    // #region placed-at
+    MapLibreMap({ controller: this.controller, style: STYLE }) {
+      MapDefaultOverlay()
+      MapPlacedAt({ coordinate: PARIS_CENTER, alignment: Alignment.Bottom }) {
+        Text('Paris')
+          .padding(6)
+          .margin({ bottom: 4 })
+          .borderRadius(6)
+          .backgroundColor(Color.White)
+      }
+    }
+    // #endregion placed-at
+  }
+}
+
+@ComponentV2
+struct PlacedTowardsExample {
+  private controller: MapController = new MapController({
+    camera: { center: { latitude: 51.5072, longitude: -0.1276 }, zoom: 9 },
+  });
+
+  build() {
+    // #region placed-towards
+    MapLibreMap({ controller: this.controller, style: STYLE }) {
+      MapDefaultOverlay()
+      // The pin moves along an oval 48 vp in from the map's edges.
+      Stack() {
+        MapPointerPinButton({
+          coordinate: PARIS_CENTER,
+          onTap: () => {
+            this.controller.updateCamera({ mode: CameraUpdateMode.fly, camera: { center: PARIS_CENTER } })
+              .catch((error: Error) => console.error(error.message));
+          },
+        }) {
+          Text('P')
+            .fontWeight(FontWeight.Bold)
+        }
+      }
+      .padding(48)
+    }
+    // #endregion placed-towards
   }
 }
 
@@ -355,14 +434,14 @@ struct InsetsExample {
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      // The ornaments stay above the panel, and the camera centers there too.
+      // The controls stay above the panel, and the camera centers there too.
       MapLibreMap({
         controller: this.controller,
         style: STYLE,
-        scaleBarEnabled: true,
-        zoomButtonsEnabled: true,
         viewportInsets: { top: 0, left: 0, bottom: this.panelHeight, right: 0 },
-      })
+      }) {
+        MapFullOverlay()
+      }
       Column() {
         Text('A panel over the map')
       }
@@ -709,11 +788,20 @@ export struct DocExamples {
           QueryExample()
         }.tabBar('Query')
         TabContent() {
-          MarkerExample()
-        }.tabBar('Marker')
+          PresetExample()
+        }.tabBar('Preset')
         TabContent() {
-          CompassExample()
-        }.tabBar('Compass')
+          NoOverlayExample()
+        }.tabBar('No overlay')
+        TabContent() {
+          CustomControlsExample()
+        }.tabBar('Controls')
+        TabContent() {
+          PlacedAtExample()
+        }.tabBar('Placed at')
+        TabContent() {
+          PlacedTowardsExample()
+        }.tabBar('Placed towards')
         TabContent() {
           CameraExample()
         }.tabBar('Camera')

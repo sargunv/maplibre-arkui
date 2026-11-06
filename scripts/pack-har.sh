@@ -3,9 +3,10 @@
 #
 #   pack-har.sh <library dir> <out dir>
 #
-# A source HAR carries its ArkTS sources, which the app's build compiles. The
-# HAR is <out dir>/maplibre-arkui.har. Its module manifest gains the API floor
-# that oh-package.json5 declares, as the one hvigor generates does. The test
+# A source HAR carries its ArkTS sources and its resources, which the app's
+# build compiles. The HAR is <out dir>/maplibre-arkui.har. Its module manifest
+# gains the API floor that oh-package.json5 declares, as the one hvigor
+# generates does. The test
 # suite in src/ohosTest stays out. OHPM's review needs a README, a CHANGELOG
 # that names the version, and a LICENSE, which comes from the repository's
 # root. The changelog points to GitHub releases, and the pack adds the
@@ -28,6 +29,7 @@ printf '\n## %s\n\nSee the [release notes](%s/v%s).\n' "$version" \
   https://github.com/sargunv/maplibre-arkui/releases/tag "$version" \
   >>"$package/CHANGELOG.md"
 cp -R "$library/src/main/ets" "$package/src/main/ets"
+cp -R "$library/src/main/resources" "$package/src/main/resources"
 api=$(jq -er .compatibleSdkVersion "$manifest")
 jq --argjson api "$api" \
   '.app = {minAPIVersion: $api, targetAPIVersion: $api, apiReleaseType: "Release"}' \

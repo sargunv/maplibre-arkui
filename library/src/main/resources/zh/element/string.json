@@ -1,0 +1,20 @@
+{
+  "string": [
+    {
+      "name": "maplibre_attribution",
+      "value": "地图数据来源"
+    },
+    {
+      "name": "maplibre_compass",
+      "value": "指南针"
+    },
+    {
+      "name": "maplibre_zoom_in",
+      "value": "放大"
+    },
+    {
+      "name": "maplibre_zoom_out",
+      "value": "缩小"
+    }
+  ]
+}
