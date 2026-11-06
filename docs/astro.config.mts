@@ -8,7 +8,7 @@ import { publicDirectoryIndex } from "./src/integrations/public-directory-index"
 // the Pages settings give it. CI's deploy passes that origin from
 // actions/configure-pages, so the site follows a custom domain or a move to
 // another owner without a change here.
-const site = process.env.DOCS_SITE ?? "http://localhost:4321";
+const site = process.env.DOCS_SITE || "http://localhost:4321";
 const base = "/maplibre-arkui";
 const repository = "https://github.com/sargunv/maplibre-arkui";
 
