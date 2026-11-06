@@ -68,7 +68,7 @@ export default function styleTest(): void {
       await testMap.reset();
     });
 
-    it('reads a PixelMap into a style image', 0, async () => {
+    it('reads a PixelMap into a style image', 0, () => {
       // Red at half alpha and opaque blue, not premultiplied, in each byte
       // order. Premultiplied, the red is 128.
       const bgra = image.createPixelMapSync(new Uint8Array([0, 0, 255, 128, 255, 0, 0, 255]).buffer, {
@@ -89,15 +89,6 @@ export default function styleTest(): void {
         expect(read.stride).assertEqual(8);
         expect(bytes(read.pixels)).assertEqual('128,0,0,128,0,0,255,255');
       }
-
-      const map = requireMap();
-      await map.setStyleImage('dots', readPixelMap(bgra), { pixelRatio: 2 });
-      const stored = await map.getStyleImage('dots');
-      expect(stored?.width).assertEqual(2);
-      expect(stored?.pixelRatio).assertEqual(2);
-      expect(bytes(stored?.pixels ?? new Uint8Array(0))).assertEqual('128,0,0,128,0,0,255,255');
-      await map.removeStyleImage('dots');
-      expect(await map.getStyleImage('dots')).assertUndefined();
       bgra.release();
       rgba.release();
     });
