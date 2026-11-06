@@ -91,6 +91,7 @@ struct Index {
               }
             }
             .padding({ bottom: this.panelHeight })
+            .hitTestBehavior(HitTestMode.Transparent)
           }
         } else {
           Text('The map is hidden')

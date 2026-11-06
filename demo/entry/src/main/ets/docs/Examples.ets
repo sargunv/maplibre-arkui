@@ -344,6 +344,7 @@ struct PlacedTowardsExample {
         }
       }
       .padding(48)
+      .hitTestBehavior(HitTestMode.Transparent)
     }
     // #endregion placed-towards
   }
