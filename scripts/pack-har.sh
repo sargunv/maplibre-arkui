@@ -8,7 +8,8 @@
 # that oh-package.json5 declares, as the one hvigor generates does. The test
 # suite in src/ohosTest stays out. OHPM's review needs a README, a CHANGELOG
 # that names the version, and a LICENSE, which comes from the repository's
-# root.
+# root. The changelog points to GitHub releases, and the pack adds the
+# version's section.
 set -euo pipefail
 
 usage="usage: pack-har.sh <library dir> <out dir>"
@@ -16,16 +17,16 @@ library="$(cd "${1:?$usage}" && pwd)"
 out=${2:?$usage}
 manifest="$library/oh-package.json5"
 version=$(jq -er .version "$manifest")
-if ! grep -qxF "## $version" "$library/CHANGELOG.md"; then
-  echo "error: $library/CHANGELOG.md has no '## $version' section" >&2
-  exit 1
-fi
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 package="$work/package"
 mkdir -p "$package/src/main"
 cp "$manifest" "$library/Index.ets" "$library/README.md" "$library/CHANGELOG.md" "$package/"
+# OHPM's review rejects a package whose changelog doesn't name its version.
+printf '\n## %s\n\nSee the [release notes](%s/v%s).\n' "$version" \
+  https://github.com/sargunv/maplibre-arkui/releases/tag "$version" \
+  >>"$package/CHANGELOG.md"
 cp -R "$library/src/main/ets" "$package/src/main/ets"
 api=$(jq -er .compatibleSdkVersion "$manifest")
 jq --argjson api "$api" \
@@ -43,7 +44,7 @@ if ! jq -e '.license' "$manifest" >/dev/null; then
 fi
 local_dependencies=$(jq -r '.dependencies // {} | to_entries[] | select(.value | startswith("file:")) | .key' "$manifest")
 if [[ -n $local_dependencies ]]; then
-  echo "warning: ohpm rejects the local dependencies on $(paste -sd, - <<<"$local_dependencies"); see AGENTS.md, Releasing" >&2
+  echo "warning: ohpm rejects the local dependencies on $(paste -sd, - <<<"$local_dependencies"); see https://github.com/sargunv/maplibre-arkui/issues/26" >&2
 fi
 
 mkdir -p "$out"

@@ -14,7 +14,7 @@ and snapshots. It passes on FFI's style API, request handlers, offline regions,
 and logs as they are.
 
 It's a preview, and it isn't on [ohpm] yet: it waits for FFI to publish its
-packages there ([#26]). See [the changelog](library/CHANGELOG.md).
+packages there ([#26]).
 
 The [documentation] has the guides and the API reference.
 
