@@ -63,6 +63,11 @@ struct Index {
 
   build() {
     Column() {
+      if (testMap.bareSurfaceShown) {
+        XComponent({ type: XComponentType.SURFACE, controller: testMap.bareSurface })
+          .width('100%')
+          .height(300)
+      }
       if (testMap.shown) {
         if (testMap.inScroll) {
           Scroll(testMap.scroller) {

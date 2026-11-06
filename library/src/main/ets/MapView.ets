@@ -721,7 +721,19 @@ export class MapView extends XComponentController implements GestureTarget {
         });
         this.session = session;
         session.setFramePacer(getFramePacer());
-        await session.ready;
+        try {
+          await session.ready;
+        } catch (error) {
+          // A session that fails to attach takes no calls but its release,
+          // which the view makes unless the map went and took it along. The
+          // surface stays the target, so its changes don't attach again, and
+          // the next surface gets a new session.
+          if (this.session === session) {
+            this.session = undefined;
+            await session.release().catch((released: Error) => logError(released.message));
+          }
+          throw error as Error;
+        }
       } else {
         await this.session.setOhosSurfaceTarget({ logicalSize: size, surfaceId: surface });
       }

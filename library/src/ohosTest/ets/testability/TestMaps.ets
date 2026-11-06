@@ -34,6 +34,21 @@ export const NO_INSETS: EdgeInsets = { top: 0, left: 0, bottom: 0, right: 0 };
 function noop(): void {
 }
 
+// The XComponent surface that the page shows in place of the map, for the
+// cases that drive a map view of their own. Its ID is undefined until the
+// surface is created.
+export class BareSurface extends XComponentController {
+  surfaceId: string | undefined = undefined;
+
+  onSurfaceCreated(surfaceId: string): void {
+    this.surfaceId = surfaceId;
+  }
+
+  onSurfaceDestroyed(surfaceId: string): void {
+    this.surfaceId = undefined;
+  }
+}
+
 @ObservedV2
 export class TestMap {
   // The map is on the page while this is true. The suites that need no map
@@ -72,6 +87,9 @@ export class TestMap {
   @Trace content: MapContent | undefined = undefined;
   // The runtime that the map takes as it appears, or the default one.
   @Trace runtime: RuntimeHandle | undefined = undefined;
+  // The bare surface is on the page while this is true.
+  @Trace bareSurfaceShown: boolean = false;
+  readonly bareSurface: BareSurface = new BareSurface();
   // What the map's events reported.
   styleLoads: number = 0;
   errors: string[] = [];
