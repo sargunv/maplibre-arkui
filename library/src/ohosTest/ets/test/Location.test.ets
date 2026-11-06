@@ -1,9 +1,10 @@
 // The user's location: the indicator that the map draws, and a camera that
-// follows it until a gesture. The locations are made up, as an app's test or
-// its simulated walk makes them; the emulator's Location Kit has no fixes.
+// follows it until a gesture. The locations and headings are made up, as an
+// app's test or its simulated walk makes them; the emulator's Location Kit has
+// no fixes, and it has no compass.
 
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
-import { CameraUpdateMode, MapHandle } from '@maplibre/arkui';
+import { CameraUpdateMode, FollowBearing, MapHandle } from '@maplibre/arkui';
 import {
   BORDER_RADIUS,
   DOT_COLOR,
@@ -78,6 +79,19 @@ async function accuracyRadius(): Promise<number> {
   return await requireMap().getStyleLayerProperty(USER_LOCATION_LAYER, 'accuracy-radius') as number;
 }
 
+async function arrowBearing(): Promise<number> {
+  return await requireMap().getStyleLayerProperty(USER_LOCATION_LAYER, 'bearing') as number;
+}
+
+// How far the middle of the arrow is from the dot's center, in vp.
+const ARROW_DISTANCE = 13;
+
+// Whether the indicator's blue is on screen `dx`, `dy` vp from the map's
+// center, over the white background of the case's style.
+async function blueAt(dx: number, dy: number): Promise<boolean> {
+  return (await screenPixel(offset(await mapCenter(), dx, dy)))[0] < 120;
+}
+
 export default function locationTest(): void {
   describe('Location', () => {
     // The map's center is at the camera's.
@@ -143,7 +157,7 @@ export default function locationTest(): void {
       expect(Math.abs(camera().bearing)).assertLessOrEqual(0.001);
 
       // With the course, the map turns while the location moves.
-      map.followUserLocation({ course: true });
+      map.followUserLocation({ bearing: FollowBearing.course });
       testMap.userLocation = fix(5.7, 6.7, 10, 3, 90);
       await until('the camera turns to the course', () =>
         restsAt(5.7, 6.7) && near(camera().bearing, 90, 0.001));
@@ -153,6 +167,60 @@ export default function locationTest(): void {
       expectNear(camera().bearing, 90, 0.001);
       // The hidden arrow keeps its course, so the next one eases from it.
       expect(await requireMap().getStyleLayerProperty(USER_LOCATION_LAYER, 'bearing') as number).assertEqual(90);
+    });
+
+    it('points the arrow to the heading, or to the course while it moves', 0, async () => {
+      await setStyle(backgroundStyle('#ffffff'));
+      // At rest without a heading, there's no arrow.
+      testMap.userLocation = fix(0, 0);
+      await eventually('the dot draws', async () => await blueAt(0, 0) ? true : undefined);
+      expect(await blueAt(0, -ARROW_DISTANCE)).assertFalse();
+
+      // On screen, a heading to the east turns the arrow there, with north up.
+      testMap.userHeading = 90;
+      await eventually('the arrow points east', async () => await blueAt(ARROW_DISTANCE, 0) ? true : undefined);
+      expect(await blueAt(0, -ARROW_DISTANCE)).assertFalse();
+      expect(await blueAt(-ARROW_DISTANCE, 0)).assertFalse();
+
+      // The heading wins over the course of a moving location.
+      testMap.userLocation = fix(0.001, 0, 0, 3, 180);
+      await drawnAt(0.001, 0);
+      expect(await arrowBearing()).assertEqual(90);
+      // Without a heading, the arrow shows the course.
+      testMap.userHeading = undefined;
+      await eventually('the arrow turns to the course', async () =>
+        await arrowBearing() === 180 ? true : undefined);
+
+      // The arrow turns the short way across north: from 350 to 370, not
+      // back to 10.
+      testMap.userHeading = 350;
+      await eventually('the arrow turns to 350', async () => await arrowBearing() === 350 ? true : undefined);
+      testMap.userHeading = 10;
+      await eventually('the arrow turns past north', async () => await arrowBearing() === 370 ? true : undefined);
+
+      // At rest again without a heading, the arrow goes.
+      testMap.userHeading = undefined;
+      testMap.userLocation = fix(0, 0);
+      await drawnAt(0, 0);
+      await eventually('the arrow goes', async () => !(await blueAt(0, -ARROW_DISTANCE)) &&
+        !(await blueAt(ARROW_DISTANCE, 0)) ? true : undefined);
+    });
+
+    it('turns the camera with each heading while it follows the heading', 0, async () => {
+      const map = testMap.controller;
+      map.followUserLocation({ bearing: FollowBearing.heading });
+      // The course of a moving location doesn't turn it.
+      testMap.userLocation = fix(5, 6, 10, 3, 90);
+      testMap.userHeading = 30;
+      await until('the camera turns to the heading', () => restsAt(5, 6) && near(camera().bearing, 30, 0.001));
+      // A new heading turns the camera without a new location.
+      testMap.userHeading = 60;
+      await until('the camera turns to the next heading', () => restsAt(5, 6) && near(camera().bearing, 60, 0.001));
+      // Without a heading, the camera keeps its bearing.
+      testMap.userHeading = undefined;
+      testMap.userLocation = fix(5.1, 6.1, 10, 3, 90);
+      await until('the camera reaches the location', () => restsAt(5.1, 6.1));
+      expectNear(camera().bearing, 60, 0.001);
     });
 
     it('follows from the start a map that appears after the app asks', 0, async () => {

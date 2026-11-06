@@ -19,8 +19,9 @@ backend packages aren't on ohpm yet.
 - Ornaments that follow dark mode: `MapCompass`, `MapScaleBar`,
   `MapAttribution`, and `MapZoomButtons`, on the map or placed by the app.
   `MapMarker` pins ArkUI content to a coordinate.
-- The user's location from Location Kit, drawn with an accuracy circle and a
-  course arrow, and `followUserLocation()`.
+- The user's location from Location Kit, drawn with an accuracy circle and an
+  arrow for the heading that the app reads from the compass, or for the course;
+  and `followUserLocation()`, which can turn the map with either.
 - `MapContent`: sources, layers, and images as data, which the map applies to
   each style it loads, changing only what differs.
 - Style expressions as functions, GeoJSON types for ArkTS literals, and

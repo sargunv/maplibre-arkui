@@ -88,6 +88,7 @@ export class MapView extends XComponentController implements GestureTarget {
   // The limits a new map has, which apply again when the app removes its own.
   private defaultBounds: BoundOptions | undefined = undefined;
   private userLocation: geoLocationManager.Location | undefined = undefined;
+  private userHeading: number | undefined = undefined;
   private readonly locationLayer: UserLocationLayer;
 
   // The component's latest size, its latest surface, and the surface that the
@@ -168,9 +169,18 @@ export class MapView extends XComponentController implements GestureTarget {
 
   setUserLocation(location: geoLocationManager.Location | undefined): void {
     this.userLocation = location;
+    this.drawUserLocation();
+  }
+
+  setUserHeading(heading: number | undefined): void {
+    this.userHeading = heading;
+    this.drawUserLocation();
+  }
+
+  private drawUserLocation(): void {
     const map = this.map;
     if (map !== undefined) {
-      this.locationLayer.draw(map, location);
+      this.locationLayer.draw(map, this.userLocation, this.userHeading);
       this.followUserLocation();
     }
   }
@@ -183,7 +193,7 @@ export class MapView extends XComponentController implements GestureTarget {
     if (map === undefined || location === undefined || controller === undefined || controller.map !== map) {
       return;
     }
-    const camera = controller.followCamera(location);
+    const camera = controller.followCamera(location, this.userHeading);
     if (camera !== undefined) {
       map.discarding.updateCamera({
         mode: CameraUpdateMode.ease,
@@ -407,7 +417,7 @@ export class MapView extends XComponentController implements GestureTarget {
         }
         this.events.onStyleLoaded();
         // Above what the content and the app added as the style loaded.
-        this.locationLayer.styleLoaded(map, this.userLocation);
+        this.locationLayer.styleLoaded(map, this.userLocation, this.userHeading);
       }
     }, () => {
       // A style that fails to load reports mapLoadingFailed.

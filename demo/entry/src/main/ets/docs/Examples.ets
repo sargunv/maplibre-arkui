@@ -7,6 +7,7 @@ import abilityAccessCtrl, { Permissions } from '@ohos.abilityAccessCtrl';
 import common from '@ohos.app.ability.common';
 import geoLocationManager from '@ohos.geoLocationManager';
 import image from '@ohos.multimedia.image';
+import sensor from '@ohos.sensor';
 import util from '@ohos.util';
 
 import {
@@ -15,6 +16,7 @@ import {
   CameraTransitionOutcome,
   CameraUpdateMode,
   eq,
+  FollowBearing,
   GeoJsonFeature,
   GeoJsonFeatureCollection,
   get,
@@ -276,7 +278,7 @@ struct LocationExample {
       Button(this.controller.followingUserLocation ? 'Following' : 'Locate me')
         .margin(64)
         .onClick(() => {
-          this.controller.followUserLocation({ zoom: 16, course: true });
+          this.controller.followUserLocation({ zoom: 16, bearing: FollowBearing.course });
           this.startUpdates().catch((error: Error) => console.error(error.message));
         })
     }
@@ -323,6 +325,50 @@ struct LocationExample {
     this.controller.stopFollowingUserLocation();
   }
   // #endregion location-updates
+}
+
+@ComponentV2
+struct HeadingExample {
+  @Param location: geoLocationManager.Location | undefined = undefined;
+  // #region heading
+  @Local heading: number | undefined = undefined;
+  private controller: MapController = new MapController();
+  private onOrientation = (data: sensor.OrientationResponse): void => {
+    // Degrees clockwise from magnetic north.
+    this.heading = data.alpha;
+  };
+
+  aboutToAppear(): void {
+    try {
+      sensor.on(sensor.SensorId.ORIENTATION, this.onOrientation, { interval: 'ui' });
+    } catch (error) {
+      // Without a compass, the arrow shows the course.
+      console.error((error as Error).message);
+    }
+  }
+
+  aboutToDisappear(): void {
+    try {
+      sensor.off(sensor.SensorId.ORIENTATION, this.onOrientation);
+    } catch (error) {
+      // It throws if on() did.
+    }
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.Bottom }) {
+      MapLibreMap({
+        controller: this.controller,
+        style: STYLE,
+        userLocation: this.location,
+        userHeading: this.heading,
+      })
+      Button('Face up')
+        .margin(64)
+        .onClick(() => this.controller.followUserLocation({ zoom: 16, bearing: FollowBearing.heading }))
+    }
+  }
+  // #endregion heading
 }
 
 // Snapshots
@@ -477,6 +523,9 @@ export struct DocExamples {
         TabContent() {
           LocationExample()
         }.tabBar('Location')
+        TabContent() {
+          HeadingExample()
+        }.tabBar('Heading')
         TabContent() {
           SnapshotExample()
         }.tabBar('Snapshot')

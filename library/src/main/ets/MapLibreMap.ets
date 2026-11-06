@@ -111,12 +111,19 @@ export struct MapLibreMap {
   @BuilderParam overlays: () => void = noContent;
   /**
    * The user's location, which the map shows as a dot in a circle of its
-   * `accuracy`, with an arrow while it moves. Pass each location that Location
-   * Kit reports; the app requests the permission and the updates. The dot
-   * eases to each new location. `controller.followUserLocation()` moves the
-   * camera with it.
+   * `accuracy`, with an arrow for `userHeading`, or for the course while it
+   * moves. Pass each location that Location Kit reports; the app requests the
+   * permission and the updates. The dot eases to each new location.
+   * `controller.followUserLocation()` moves the camera with it.
    */
   @Param userLocation: geoLocationManager.Location | undefined = undefined;
+  /**
+   * The direction that the device faces, in degrees clockwise from north,
+   * which the arrow on `userLocation` points to while it's set, in place of
+   * the course. Pass each heading that the compass reports, as for
+   * `userLocation`. The arrow turns the short way to each new heading.
+   */
+  @Param userHeading: number | undefined = undefined;
   /**
    * The style has loaded, so its layers and sources exist, and the map has
    * added `content` to it. Each style starts from its own document, without
@@ -154,6 +161,7 @@ export struct MapLibreMap {
   aboutToAppear(): void {
     this.view.gestures.options = this.gestures;
     this.view.setUserLocation(this.userLocation);
+    this.view.setUserHeading(this.userHeading);
     this.view.start(this.controller, this.runtime, this.style, this.content, this.cameraBounds);
   }
 
@@ -184,6 +192,11 @@ export struct MapLibreMap {
   @Monitor('userLocation')
   userLocationChanged(): void {
     this.view.setUserLocation(this.userLocation);
+  }
+
+  @Monitor('userHeading')
+  userHeadingChanged(): void {
+    this.view.setUserHeading(this.userHeading);
   }
 
   // ArkUI's gestures decide whether the map owns a touch, against a scrolling

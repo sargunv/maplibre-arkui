@@ -109,6 +109,7 @@ struct Index {
       runtime: testMap.runtime,
       gestures: testMap.gestures,
       userLocation: testMap.userLocation,
+      userHeading: testMap.userHeading,
       compassEnabled: testMap.compass,
       scaleBarEnabled: testMap.scaleBarEnabled,
       zoomButtonsEnabled: testMap.zoomButtons,
