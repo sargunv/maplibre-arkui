@@ -1,59 +1,47 @@
 // Real input on the test page's map, injected through the system with
-// UiTest's Driver, and read back from the camera.
+// UiTest's Driver, and read back from the camera. Driver takes px, so the
+// cases aim in vp and convert, whatever the display's density.
 
-import { describe, expect, it } from '@ohos/hypium';
-import { CameraPosition, CameraUpdateMode, MapController } from '@maplibre/arkui';
+import { beforeEach, describe, expect, it } from '@ohos/hypium';
+import { CameraUpdateMode, LatLng, ScreenPoint } from '@maplibre/arkui';
 
-import { Driver, ON, Point, PointerMatrix, Rect as Bounds } from '@ohos.UiTest';
+import { Driver, Point, PointerMatrix } from '@ohos.UiTest';
 import { KeyCode } from '@ohos.multimodalInput.keyCode';
 
-import { testMap } from '../testability/TestMaps';
-import { until } from './until';
+import { STYLE, testMap } from '../testability/TestMaps';
+import {
+  camera,
+  expectNear,
+  frames,
+  inMap,
+  latLngAt,
+  mapBounds,
+  mapCenter,
+  offset,
+  pixelFor,
+  until,
+  vp2px,
+} from './helpers';
 
 const ZOOM = 3;
+const ORIGIN: LatLng = { latitude: 0, longitude: 0 };
 
-function camera(): CameraPosition {
-  const current = testMap.controller.getCamera();
-  if (current === undefined) {
-    throw new Error('The controller has no camera');
-  }
-  return current;
+// Shows the map alone or in a Scroll, with the camera at the origin at ZOOM.
+async function start(inScroll: boolean = false): Promise<void> {
+  await testMap.reset(STYLE, inScroll);
+  await testMap.controller.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: ZOOM } });
 }
 
-function vp2px(vp: number): number {
-  return testMap.context?.vp2px(vp) ?? vp;
+// How far the map has moved the origin from its center, in vp.
+function moved(): ScreenPoint {
+  const center = pixelFor(camera().center);
+  const origin = pixelFor(ORIGIN);
+  return { x: origin.x - center.x, y: origin.y - center.y };
 }
 
-// Degrees of longitude at the equator that one vp of the map spans.
-function degreesPerVp(zoom: number): number {
-  return 360 / (512 * Math.pow(2, zoom));
-}
-
-// The map's bounds on the display, in px.
-async function mapBounds(): Promise<Bounds> {
-  const map = await Driver.create().findComponent(ON.type('XComponent'));
-  return map.getBounds();
-}
-
-function center(bounds: Bounds): Point {
-  return { x: Math.round((bounds.left + bounds.right) / 2), y: Math.round((bounds.top + bounds.bottom) / 2) };
-}
-
-// Shows the map alone or in a Scroll, puts the camera at a known place, and
-// waits until the map shows the style.
-async function reset(inScroll: boolean = false): Promise<void> {
-  if (testMap.inScroll !== inScroll) {
-    const loads = testMap.styleLoads;
-    testMap.inScroll = inScroll;
-    await until('the map moves', () => testMap.styleLoads > loads);
-  }
-  testMap.scroller.scrollTo({ xOffset: 0, yOffset: 0 });
-  const map: MapController = testMap.controller;
-  await until('the style loads', () => map.styleLoaded);
-  await map.updateCamera({
-    mode: CameraUpdateMode.jump,
-    camera: { center: { latitude: 0, longitude: 0 }, zoom: ZOOM, bearing: 0, pitch: 0 },
-  });
+// A speed of `vp` vp a second, in the px a second that Driver takes.
+function speed(vp: number): number {
+  return Math.round(vp2px(vp));
 }
 
 // Waits until the input that `act` makes has moved the camera and stopped,
@@ -84,14 +72,14 @@ function twoFingers(from: Point[], to: Point[], steps: number): PointerMatrix {
   return pointers;
 }
 
-// Two fingers on a circle about `c`, `degrees` around it, in px. Then they
-// stay at that angle for `hold` steps, which take time only if the fingers
-// move, so they move 1 px in and out.
+// Two fingers on a circle of `radius` vp about `c`, `degrees` around it. Then
+// they stay at that angle for `hold` steps, which take time only if the
+// fingers move, so they move 1 vp in and out.
 function twist(c: Point, radius: number, degrees: number, steps: number, hold: number = 0): PointerMatrix {
   const pointers = PointerMatrix.create(2, steps + hold);
   for (let step = 0; step < steps + hold; step++) {
     const r = degrees * Math.min(1, step / (steps - 1)) * Math.PI / 180;
-    const length = radius + (step >= steps ? (step - steps) % 2 : 0);
+    const length = vp2px(radius + (step >= steps ? (step - steps) % 2 : 0));
     const dx = Math.round(length * Math.cos(r));
     const dy = Math.round(length * Math.sin(r));
     pointers.setPoint(0, step, { x: c.x - dx, y: c.y - dy });
@@ -100,92 +88,97 @@ function twist(c: Point, radius: number, degrees: number, steps: number, hold: n
   return pointers;
 }
 
+// Fingers that twist 10 degrees and hold still for 200 ms at 200 vp/s, longer
+// than the 100 ms that a release measures its speed over, so they leave no
+// momentum.
+const STILL_TWIST_HOLD = 40;
+
 function wrap(degrees: number): number {
   return (((degrees + 180) % 360) + 360) % 360 - 180;
-}
-
-// hypium's assertClose compares the difference to the actual value, not to a
-// tolerance.
-function near(actual: number, expected: number, tolerance: number): void {
-  expect(Math.abs(actual - expected)).assertLessOrEqual(tolerance);
 }
 
 export default function gestureInputTest(): void {
   describe('GestureInput', () => {
     const driver = Driver.create();
 
+    beforeEach(async () => {
+      await start();
+    });
+
     it('pans with a slow drag, without momentum', 0, async () => {
-      await reset();
-      const c = center(await mapBounds());
-      // 200 px/s, under the speed that flings.
-      await gesture(() => driver.swipe(c.x + vp2px(100), c.y, c.x - vp2px(100), c.y, vp2px(200)));
-      // The drag less the claim's few vp moves the center east.
-      const moved = camera().center.longitude / degreesPerVp(ZOOM);
-      expect(moved).assertLarger(170);
-      expect(moved).assertLessOrEqual(200);
-      near(camera().center.latitude, 0, 0.5);
+      const c = await mapCenter();
+      const from = offset(c, 100, 0);
+      const to = offset(c, -100, 0);
+      // Under the speed that flings.
+      await gesture(() => driver.swipe(from.x, from.y, to.x, to.y, speed(200)));
+      // The drag less the claim's few vp.
+      expect(moved().x).assertLess(-170);
+      expect(moved().x).assertLargerOrEqual(-200);
+      expectNear(moved().y, 0, 1);
       // The observable camera rests there too.
       await until('the controller\'s camera rests', () =>
         testMap.controller.camera?.center.longitude === camera().center.longitude);
     });
 
     it('keeps one gesture when the app moves the camera as it starts', 0, async () => {
-      await reset();
-      const c = center(await mapBounds());
+      const c = await mapCenter();
+      const from = offset(c, 100, 0);
+      const to = offset(c, -100, 0);
       const starts = testMap.gestureStarts;
       const ends = testMap.gestureEnds;
       // As an app that stops following a location does.
       testMap.onGestureStart = () => {
         testMap.controller.cancelCameraTransitions();
       };
-      try {
-        await gesture(() => driver.swipe(c.x + vp2px(100), c.y, c.x - vp2px(100), c.y, vp2px(200)));
-      } finally {
-        testMap.onGestureStart = () => {
-        };
-      }
+      await gesture(() => driver.swipe(from.x, from.y, to.x, to.y, speed(200)));
       expect(testMap.gestureStarts - starts).assertEqual(1);
       expect(testMap.gestureEnds - ends).assertEqual(1);
-      expect(camera().center.longitude / degreesPerVp(ZOOM)).assertLarger(170);
+      expect(moved().x).assertLess(-170);
     });
 
     it('coasts past the end of a fast drag', 0, async () => {
-      await reset();
-      const c = center(await mapBounds());
-      await gesture(() => driver.fling({ x: c.x + vp2px(100), y: c.y }, { x: c.x - vp2px(100), y: c.y },
-        vp2px(20), vp2px(2000)));
+      const c = await mapCenter();
+      await gesture(() => driver.fling(offset(c, 100, 0), offset(c, -100, 0), speed(20), speed(2000)));
       // Without momentum, the camera would move less than the 200 vp drag.
-      expect(camera().center.longitude / degreesPerVp(ZOOM)).assertLarger(220);
+      expect(moved().x).assertLess(-220);
     });
 
     it('zooms with a pinch, without rotating', 0, async () => {
-      await reset();
-      const c = center(await mapBounds());
-      const from: Point[] = [{ x: c.x - vp2px(50), y: c.y }, { x: c.x + vp2px(50), y: c.y }];
-      const to: Point[] = [{ x: c.x - vp2px(150), y: c.y }, { x: c.x + vp2px(150), y: c.y }];
+      const c = await mapCenter();
+      const from: Point[] = [offset(c, -50, 0), offset(c, 50, 0)];
+      const to: Point[] = [offset(c, -150, 0), offset(c, 150, 0)];
+      const steps = 20;
       await gesture(async () => {
-        await driver.injectMultiPointerAction(twoFingers(from, to, 20), vp2px(400));
+        await driver.injectMultiPointerAction(twoFingers(from, to, steps), speed(400));
       });
       // The span tripled, less the slop, and momentum adds a little.
-      expect(camera().zoom - ZOOM).assertLarger(1.2);
-      expect(camera().zoom - ZOOM).assertLess(3);
-      near(camera().bearing, 0, 0.01);
-      near(camera().center.longitude, 0, 1);
+      const zoomed = camera().zoom - ZOOM;
+      expect(zoomed).assertLarger(1.2);
+      expect(zoomed).assertLess(3);
+      expectNear(camera().bearing, 0, 0.01);
+      // About the fingers, which are at the center. The system reports one
+      // finger at a time, and the zoom starts from one finger's step, which
+      // can leave the content half a step from the fingers' midpoint. The
+      // map's center can be half a vp from the component's, since the map's
+      // size is in whole vp. The zoom scales both.
+      const slop = (100 / (steps - 1) / 2 + 1) * Math.pow(2, zoomed);
+      expectNear(moved().x, 0, slop);
+      expectNear(moved().y, 0, 1);
     });
 
     it('rotates with a twist, and snaps to north from near it', 0, async () => {
-      await reset();
-      const c = center(await mapBounds());
+      testMap.compass = true;
+      const c = await mapCenter();
       await gesture(async () => {
-        await driver.injectMultiPointerAction(twist(c, vp2px(100), 60, 20), vp2px(300));
+        await driver.injectMultiPointerAction(twist(c, 100, 60, 20), speed(300));
       });
       expect(Math.abs(wrap(camera().bearing))).assertLarger(40);
-      near(camera().zoom, ZOOM, 0.1);
+      expectNear(camera().zoom, ZOOM, 0.1);
 
-      // Fingers that stop before they lift leave no momentum.
-      await reset();
+      await start();
+      testMap.compass = true;
       await gesture(async () => {
-        await driver.injectMultiPointerAction(twist(c, vp2px(100), 10, 10, 20), vp2px(200));
+        await driver.injectMultiPointerAction(twist(c, 100, 10, 10, STILL_TWIST_HOLD), speed(200));
       });
       // The snap starts after the gesture ends, once the map reports the
       // bearing.
@@ -193,117 +186,115 @@ export default function gestureInputTest(): void {
     });
 
     it('keeps a camera jump that the app makes as the gesture ends', 0, async () => {
-      await reset();
-      const c = center(await mapBounds());
+      const c = await mapCenter();
       testMap.onGestureEnd = () => {
         testMap.controller.updateCamera({ mode: CameraUpdateMode.jump, camera: { bearing: 5 } });
       };
-      try {
-        await gesture(async () => {
-          await driver.injectMultiPointerAction(twist(c, vp2px(100), 10, 10, 20), vp2px(200));
-        });
-        // A snap would start once the map reports the bearing; give it time.
-        let frames = 0;
-        await until('a moment passes', () => ++frames > 30);
-        near(wrap(camera().bearing), 5, 0.001);
-      } finally {
-        testMap.onGestureEnd = () => {
-        };
-      }
+      await gesture(async () => {
+        await driver.injectMultiPointerAction(twist(c, 100, 10, 10, STILL_TWIST_HOLD), speed(200));
+      });
+      // A snap would start once the map reports the bearing; give it time.
+      await frames(30);
+      expectNear(wrap(camera().bearing), 5, 0.001);
     });
 
     it('pitches when two fingers move up together', 0, async () => {
-      await reset();
-      const c = center(await mapBounds());
-      const from: Point[] = [{ x: c.x - vp2px(50), y: c.y + vp2px(100) }, { x: c.x + vp2px(50), y: c.y + vp2px(100) }];
-      const to: Point[] = [{ x: c.x - vp2px(50), y: c.y - vp2px(50) }, { x: c.x + vp2px(50), y: c.y - vp2px(50) }];
+      testMap.compass = true;
+      const c = await mapCenter();
+      const from: Point[] = [offset(c, -50, 100), offset(c, 50, 100)];
+      const to: Point[] = [offset(c, -50, -50), offset(c, 50, -50)];
       await gesture(async () => {
-        await driver.injectMultiPointerAction(twoFingers(from, to, 20), vp2px(300));
+        await driver.injectMultiPointerAction(twoFingers(from, to, 20), speed(300));
       });
       expect(camera().pitch).assertLarger(20);
-      near(camera().zoom, ZOOM, 0.01);
+      expectNear(camera().zoom, ZOOM, 0.01);
     });
 
     it('zooms in one level with a double tap, and out with a two-finger tap', 0, async () => {
-      await reset();
-      const c = center(await mapBounds());
+      const c = await mapCenter();
       await gesture(() => driver.doubleClick(c.x, c.y));
-      near(camera().zoom, ZOOM + 1, 0.001);
+      expectNear(camera().zoom, ZOOM + 1, 0.001);
 
-      const fingers: Point[] = [{ x: c.x - vp2px(40), y: c.y }, { x: c.x + vp2px(40), y: c.y }];
+      const fingers: Point[] = [offset(c, -40, 0), offset(c, 40, 0)];
       await gesture(async () => {
         await driver.injectMultiPointerAction(twoFingers(fingers, fingers, 2));
       });
-      near(camera().zoom, ZOOM, 0.001);
+      expectNear(camera().zoom, ZOOM, 0.001);
     });
 
     it('zooms out at the pointer with the mouse wheel', 0, async () => {
-      await reset();
-      const c = center(await mapBounds());
-      await gesture(() => driver.mouseScroll(c, true, 3));
+      const bounds = await mapBounds();
+      const pointer = offset(await mapCenter(), 100, 100);
+      const at = inMap(bounds, pointer);
+      const under = latLngAt(at);
+      await gesture(() => driver.mouseScroll(pointer, true, 3));
       expect(camera().zoom).assertLess(ZOOM);
-      near(camera().center.longitude, 0, 0.001);
+      // The coordinate under the pointer stays there, to within the input's
+      // rounding to px. About the center, it would move 50 vp.
+      const now = pixelFor(under);
+      expectNear(now.x, at.x, 1);
+      expectNear(now.y, at.y, 1);
     });
 
     it('pans and zooms with keys once a touch focuses it', 0, async () => {
-      await reset();
-      const c = center(await mapBounds());
+      const c = await mapCenter();
       await driver.click(c.x, c.y);
       await gesture(() => driver.triggerKey(KeyCode.KEYCODE_DPAD_LEFT));
-      near(camera().center.longitude / degreesPerVp(ZOOM), -100, 0.5);
+      expectNear(moved().x, 100, 0.01);
       await gesture(() => driver.triggerKey(KeyCode.KEYCODE_EQUALS));
-      near(camera().zoom, ZOOM + 1, 0.001);
+      expectNear(camera().zoom, ZOOM + 1, 0.001);
     });
 
     it('takes the drags that start on it from a parent Scroll', 0, async () => {
-      await reset(true);
+      await start(true);
       const bounds = await mapBounds();
-      const c = center(bounds);
-      await gesture(() => driver.swipe(c.x, c.y + vp2px(80), c.x, c.y - vp2px(80), vp2px(200)));
+      const c = await mapCenter();
+      const from = offset(c, 0, 80);
+      const to = offset(c, 0, -80);
+      await gesture(() => driver.swipe(from.x, from.y, to.x, to.y, speed(200)));
       expect(testMap.scroller.currentOffset().yOffset).assertEqual(0);
-      expect(camera().center.latitude).assertLess(-5);
+      expect(moved().y).assertLess(-100);
 
       // A drag below the map scrolls the page.
-      const below = bounds.bottom + vp2px(250);
-      await driver.swipe(c.x, below, c.x, below - vp2px(150), vp2px(400));
+      const below = offset({ x: c.x, y: bounds.bottom }, 0, 250);
+      const above = offset(below, 0, -150);
+      await driver.swipe(below.x, below.y, above.x, above.y, speed(400));
       await until('the page scrolls', () => testMap.scroller.currentOffset().yOffset > 50);
     });
 
     it('leaves one-finger drags to a parent Scroll in cooperative mode', 0, async () => {
+      await start(true);
       testMap.gestures = { cooperative: true };
-      try {
-        await reset(true);
-        const c = center(await mapBounds());
-        const starts = testMap.gestureStarts;
-        await driver.swipe(c.x, c.y + vp2px(80), c.x, c.y - vp2px(40), vp2px(400));
-        await until('the page scrolls', () => testMap.scroller.currentOffset().yOffset > 50);
-        expect(testMap.gestureStarts).assertEqual(starts);
-        near(camera().center.latitude, 0, 0.001);
+      const c = await mapCenter();
+      const starts = testMap.gestureStarts;
+      const from = offset(c, 0, 80);
+      const to = offset(c, 0, -40);
+      await driver.swipe(from.x, from.y, to.x, to.y, speed(400));
+      await until('the page scrolls', () => testMap.scroller.currentOffset().yOffset > 50);
+      expect(testMap.gestureStarts).assertEqual(starts);
+      expectNear(camera().center.latitude, 0, 1e-9);
 
-        await reset(true);
-        await until('the page scrolls back', () => testMap.scroller.currentOffset().yOffset === 0);
-        const from: Point[] = [{ x: c.x - vp2px(50), y: c.y }, { x: c.x + vp2px(50), y: c.y }];
-        const to: Point[] = [{ x: c.x - vp2px(150), y: c.y }, { x: c.x - vp2px(50), y: c.y }];
-        await gesture(async () => {
-          await driver.injectMultiPointerAction(twoFingers(from, to, 20), vp2px(300));
-        });
-        expect(testMap.scroller.currentOffset().yOffset).assertEqual(0);
-        expect(camera().center.longitude).assertLarger(5);
+      testMap.scroller.scrollTo({ xOffset: 0, yOffset: 0 });
+      await until('the page scrolls back', () => testMap.scroller.currentOffset().yOffset === 0);
+      const pair: Point[] = [offset(c, -50, 0), offset(c, 50, 0)];
+      const left: Point[] = [offset(c, -150, 0), offset(c, -50, 0)];
+      await gesture(async () => {
+        await driver.injectMultiPointerAction(twoFingers(pair, left, 20), speed(300));
+      });
+      expect(testMap.scroller.currentOffset().yOffset).assertEqual(0);
+      expect(moved().x).assertLess(-50);
 
-        // The wheel scrolls the page, and zooms with Ctrl only.
-        const zoom = camera().zoom;
-        const wheelStarts = testMap.gestureStarts;
-        await driver.mouseScroll(c, true, 3);
-        await until('the wheel scrolls the page', () => testMap.scroller.currentOffset().yOffset > 0);
-        expect(testMap.gestureStarts).assertEqual(wheelStarts);
-        expect(camera().zoom).assertEqual(zoom);
-        testMap.scroller.scrollTo({ xOffset: 0, yOffset: 0 });
-        await until('the page scrolls back', () => testMap.scroller.currentOffset().yOffset === 0);
-        await gesture(() => driver.mouseScroll(c, false, 2, KeyCode.KEYCODE_CTRL_LEFT));
-        expect(camera().zoom).assertLarger(zoom);
-      } finally {
-        testMap.gestures = {};
-      }
+      // The wheel scrolls the page, and zooms with Ctrl only.
+      const zoom = camera().zoom;
+      const wheelStarts = testMap.gestureStarts;
+      await driver.mouseScroll(c, true, 3);
+      await until('the wheel scrolls the page', () => testMap.scroller.currentOffset().yOffset > 0);
+      expect(testMap.gestureStarts).assertEqual(wheelStarts);
+      expect(camera().zoom).assertEqual(zoom);
+      testMap.scroller.scrollTo({ xOffset: 0, yOffset: 0 });
+      await until('the page scrolls back', () => testMap.scroller.currentOffset().yOffset === 0);
+      await gesture(() => driver.mouseScroll(c, false, 2, KeyCode.KEYCODE_CTRL_LEFT));
+      expect(camera().zoom).assertLarger(zoom);
     });
   });
 }

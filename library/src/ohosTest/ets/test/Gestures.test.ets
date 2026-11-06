@@ -11,7 +11,7 @@ import {
   TouchPoint,
 } from '@maplibre/arkui/src/main/ets/gestures';
 
-import { until } from './until';
+import { expectNear, frames, until } from './helpers';
 
 // Records what the gestures do to the camera.
 class Recorder implements GestureTarget {
@@ -94,6 +94,14 @@ function onCircle(radius: number, degrees: number): TouchPoint[] {
   ];
 }
 
+// Where a delta moves the content at `x` on the fingers' line: by its offset,
+// then about its anchor.
+function moveX(delta: CameraDelta, x: number): number {
+  const moved = x + (delta.offset?.x ?? 0);
+  const anchor = delta.anchor?.x ?? 0;
+  return anchor + (moved - anchor) * (delta.scale ?? 1);
+}
+
 function twist(gestures: MapGestures, radius: number, degrees: number, steps: number): number {
   gestures.touch(0, onCircle(radius, 0));
   for (let i = 1; i <= steps; i++) {
@@ -121,7 +129,7 @@ export default function gesturesTest(): void {
       const gestures = new MapGestures(camera);
       const end = drag(gestures, 0, [touch(1, 100, 100)], [touch(1, 100, 200)], 10, 50);
       gestures.touch(end + 10, []);
-      expect(camera.offsetY()).assertClose(90, 0.001);
+      expectNear(camera.offsetY(), 90, 0.001);
       expect(camera.offsetX()).assertEqual(0);
       expect(camera.phases()[0]).assertEqual(GesturePhase.begin);
       expect(camera.lastPhase()).assertEqual(GesturePhase.end);
@@ -138,8 +146,9 @@ export default function gesturesTest(): void {
       expect(camera.ends).assertEqual(0);
       await until('the fling ends', () => camera.ends === 1);
       expect(camera.lastPhase()).assertEqual(GesturePhase.end);
-      // 2000 vp/s flings 2000 * 340 ms * 0.28 = 190 vp.
-      expect(camera.offsetY(released)).assertClose(190.4, 1);
+      // 2000 vp/s flings for 2000 / 10.5 + 150 ms, and 0.28 of the speed
+      // times that, 190.7 vp.
+      expectNear(camera.offsetY(released), 2000 * (2000 / 10.5 + 150) * 0.28 / 1000, 0.001);
       for (const delta of camera.deltas.slice(released)) {
         expect(Math.abs(delta.offset?.y ?? 0)).assertLessOrEqual(16);
       }
@@ -154,8 +163,7 @@ export default function gesturesTest(): void {
       expect(camera.ends).assertEqual(1);
       expect(camera.lastPhase()).assertEqual(GesturePhase.end);
       const count = camera.deltas.length;
-      let frames = 0;
-      await until('a few frames pass', () => ++frames > 5);
+      await frames(5);
       expect(camera.deltas.length).assertEqual(count);
     });
 
@@ -176,8 +184,7 @@ export default function gesturesTest(): void {
         expect(camera.lastPhase()).assertEqual(GesturePhase.begin);
         // No fling steps follow the new input.
         const count = camera.deltas.length;
-        let frames = 0;
-        await until('a few frames pass', () => ++frames > 5);
+        await frames(5);
         expect(camera.deltas.length).assertEqual(count);
       }
     });
@@ -203,8 +210,7 @@ export default function gesturesTest(): void {
       gestures.options = { pan: false };
       expect(camera.ends).assertEqual(1);
       const count = camera.deltas.length;
-      let frames = 0;
-      await until('a few frames pass', () => ++frames > 5);
+      await frames(5);
       expect(camera.deltas.length).assertEqual(count);
     });
 
@@ -216,7 +222,7 @@ export default function gesturesTest(): void {
       expect(camera.ends).assertEqual(1);
       const zoom = camera.zoom();
       gestures.touchpadPinch(1.1);
-      expect(camera.zoom() - zoom).assertClose(Math.log2(1.1), 0.0001);
+      expectNear(camera.zoom() - zoom, Math.log2(1.1), 0.0001);
     });
 
     it('ends without momentum when the system cancels the touches', 0, () => {
@@ -280,13 +286,38 @@ export default function gesturesTest(): void {
         [touch(1, 50, 300), touch(2, 350, 300)], 20, 16);
       gestures.touch(end + 100, []);
       // The span grew from 100 to 300 vp; the first two steps start the pinch.
-      expect(camera.zoom()).assertClose(Math.log2(300 / 120), 0.001);
+      expectNear(camera.zoom(), Math.log2(300 / 120), 0.001);
       expect(camera.offsetX()).assertEqual(0);
       expect(camera.bearing()).assertEqual(0);
       expect(camera.pitch()).assertEqual(0);
       const anchor = camera.deltas[1].anchor;
       expect(anchor?.x).assertEqual(200);
       expect(anchor?.y).assertEqual(300);
+    });
+
+    it('keeps the content under the fingers of a pinch that report one at a time', 0, () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      const fingers = [touch(1, 150, 300), touch(2, 250, 300)];
+      gestures.touch(0, fingers);
+      let zooms = 0;
+      for (let i = 1; i <= 40; i++) {
+        // As ArkUI reports them: each event moves one finger out, in turn.
+        const moving = (i - 1) % 2;
+        const still = fingers[1 - moving].x;
+        fingers[moving] = touch(moving + 1, fingers[moving].x + (moving === 0 ? -5 : 5), 300);
+        const count = camera.deltas.length;
+        gestures.touch(i * 8, fingers.slice());
+        if (i === 1) {
+          gestures.claim();
+        }
+        const delta = camera.deltas[count];
+        if (delta?.scale !== undefined) {
+          zooms++;
+          expectNear(moveX(delta, still), still, 1e-9);
+        }
+      }
+      expect(zooms).assertLarger(30);
     });
 
     it('twists to rotate without zooming', 0, () => {
@@ -296,7 +327,7 @@ export default function gesturesTest(): void {
       gestures.touch(end + 100, []);
       // The claim takes the first step, and a fast turn has to go 7 degrees,
       // three more steps, to start the rotation.
-      expect(camera.bearing()).assertClose(-48, 0.001);
+      expectNear(camera.bearing(), -48, 0.001);
       expect(camera.zoom()).assertEqual(0);
       expect(camera.ends).assertEqual(1);
       expect(camera.rotated).assertTrue();
@@ -334,8 +365,8 @@ export default function gesturesTest(): void {
       gestures.touch(end + 100, []);
       // 10 vp a step after the claim: the first starts a pan, the second moves
       // it and starts the pitch, and 12 more tilt 0.3 degrees a vp.
-      expect(camera.pitch()).assertClose(36, 0.001);
-      expect(camera.offsetY()).assertClose(-10, 0.001);
+      expectNear(camera.pitch(), 36, 0.001);
+      expectNear(camera.offsetY(), -10, 0.001);
       expect(camera.zoom()).assertEqual(0);
     });
 
@@ -377,7 +408,7 @@ export default function gesturesTest(): void {
       const end = drag(gestures, 200, [touch(2, 200, 300)], [touch(2, 200, 450)], 10, 50);
       gestures.touch(end + 100, []);
       expect(camera.zoom()).assertEqual(0);
-      expect(camera.offsetY()).assertClose(135, 0.001);
+      expectNear(camera.offsetY(), 135, 0.001);
     });
 
     it('stops a two-finger motion whose option turns off mid-gesture', 0, () => {
@@ -410,7 +441,7 @@ export default function gesturesTest(): void {
       const end = drag(gestures, 200, [touch(2, 200, 300)], [touch(2, 200, 450)], 10, 50);
       gestures.touch(end + 100, []);
       // The claim's 15 vp doesn't count: 135 vp of 600 is 0.9 levels.
-      expect(camera.zoom()).assertClose(0.9, 0.001);
+      expectNear(camera.zoom(), 0.9, 0.001);
       expect(camera.offsetY()).assertEqual(0);
       expect(camera.deltas[0].anchor).assertUndefined();
     });
@@ -440,20 +471,20 @@ export default function gesturesTest(): void {
     it("plans momentum as MapLibre Compose's GestureMath does", 0, () => {
       expect(Momentum.plan(200, 0, 0, 0, undefined)).assertUndefined();
       const fling = Momentum.plan(1000, 0, 0, 0, undefined);
-      expect(fling?.durationMs).assertClose(1000 / 10.5 + 150, 0.001);
-      expect(fling?.offsetX).assertClose(1000 * (1000 / 10.5 + 150) * 0.28 / 1000, 0.001);
+      expectNear(fling?.durationMs ?? NaN, 1000 / 10.5 + 150, 0.001);
+      expectNear(fling?.offsetX ?? NaN, 1000 * (1000 / 10.5 + 150) * 0.28 / 1000, 0.001);
       expect(fling?.power).assertEqual(2);
       // With zoom, the pan follows the zoom's quartic curve over 600 ms.
       const pinch = Momentum.plan(1000, 0, 4, 0, { x: 1, y: 2 });
       expect(pinch?.durationMs).assertEqual(600);
       expect(pinch?.power).assertEqual(4);
-      expect(pinch?.zoomLevels).assertClose(0.6, 0.001);
+      expectNear(pinch?.zoomLevels ?? NaN, 0.6, 0.001);
       expect(Momentum.plan(0, 0, 100, 0, undefined)?.zoomLevels).assertEqual(2.5);
       // Its steps add up to the whole.
       const deltas = pinch?.advance(300) ?? [];
       const rest = pinch?.advance(600) ?? [];
       const total = deltas.concat(rest).reduce((sum: number, d: CameraDelta) => sum + Math.log2(d.scale ?? 1), 0);
-      expect(total).assertClose(0.6, 0.0001);
+      expectNear(total, 0.6, 0.0001);
       expect(pinch?.done).assertTrue();
     });
   });

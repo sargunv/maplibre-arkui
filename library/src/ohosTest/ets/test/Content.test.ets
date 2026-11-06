@@ -1,24 +1,27 @@
-import { afterEach, beforeEach, describe, expect, it } from '@ohos/hypium';
+import { beforeEach, describe, expect, it } from '@ohos/hypium';
 import {
   CameraUpdateMode,
   get,
   GeoJsonFeatureCollection,
   GeoJsonGeometry,
   MapContent,
-  MapHandle,
   MapLayer,
   snapshot,
   StyleLayerInfo,
 } from '@maplibre/arkui';
 
-import { STYLE, testMap } from '../testability/TestMaps';
-import { eventually, until } from './until';
+import { backgroundStyle, testMap } from '../testability/TestMaps';
+import { eventually, frames, pixelAt, readPixels, requireMap, setStyle, until } from './helpers';
 
 // A base style with a layer to place content under, as an app places it under
 // labels.
-const BASE = '{"version":8,"sources":{"base":{"type":"geojson","data":{"type":"FeatureCollection",' +
-  '"features":[]}}},"layers":[{"id":"background","type":"background","paint":{"background-color":"#4a90d9"}},' +
-  '{"id":"labels","type":"symbol","source":"base"}]}';
+function baseStyle(color: string): string {
+  return '{"version":8,"sources":{"base":{"type":"geojson","data":{"type":"FeatureCollection","features":[]}}},' +
+    `"layers":[{"id":"background","type":"background","paint":{"background-color":"${color}"}},` +
+    '{"id":"labels","type":"symbol","source":"base"}]}';
+}
+
+const BASE = baseStyle('#4a90d9');
 
 const TWO: GeoJsonFeatureCollection = {
   type: 'FeatureCollection',
@@ -43,14 +46,6 @@ const WEST: GeoJsonGeometry = {
 // How the map reads back '#00ff00'.
 const GREEN = '["rgba",0,255,0,1]';
 
-function requireMap(): MapHandle {
-  const map = testMap.controller.map;
-  if (map === undefined) {
-    throw new Error('The test map is not ready');
-  }
-  return map;
-}
-
 function circles(id: string, color: string, below?: string | ((layer: StyleLayerInfo) => boolean)): MapLayer {
   return { id: id, type: 'circle', source: 'places', paint: { 'circle-color': color, 'circle-radius': 6 }, below: below };
 }
@@ -71,7 +66,7 @@ async function untilLayers(expected: string): Promise<void> {
     await eventually(`the layers are ${expected}`, async () => {
       last = await layerIds();
       return last === expected ? true : undefined;
-    }, 5000);
+    });
   } catch (error) {
     throw new Error(`${(error as Error).message}, not ${last}`);
   }
@@ -84,31 +79,16 @@ async function untilProperty(layer: string, name: string, expected: string): Pro
       // An unset property reads as undefined.
       last = `${JSON.stringify(await requireMap().getStyleLayerProperty(layer, name))}`;
       return last === expected ? true : undefined;
-    }, 5000);
+    });
   } catch (error) {
     throw new Error(`${(error as Error).message}, not ${last}`);
   }
 }
 
-function pixelAt(pixels: Uint8Array, width: number, x: number, y: number): number[] {
-  const offset = (y * width + x) * 4;
-  return [pixels[offset], pixels[offset + 1], pixels[offset + 2], pixels[offset + 3]];
-}
-
 export default function contentTest(): void {
   describe('Content', () => {
     beforeEach(async () => {
-      testMap.errors = [];
-      if (testMap.style !== BASE) {
-        const loads = testMap.styleLoads;
-        testMap.style = BASE;
-        await until('the base style loads', () => testMap.styleLoads > loads);
-      }
-    });
-
-    afterEach(async () => {
-      testMap.content = undefined;
-      await untilLayers('background,labels');
+      await testMap.reset(BASE);
     });
 
     it('adds sources, layers, and images, in order, under base layers', 0, async () => {
@@ -166,10 +146,7 @@ export default function contentTest(): void {
     });
 
     it('replaces GeoJSON data in place', 0, async () => {
-      await testMap.controller.updateCamera({
-        mode: CameraUpdateMode.jump,
-        camera: { center: { latitude: 0, longitude: 0 }, zoom: 0, bearing: 0, pitch: 0 },
-      });
+      await testMap.controller.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 0 } });
       testMap.content = content(TWO, [circles('dots', '#ff0000')]);
       await untilLayers('background,labels,dots');
       const map = requireMap();
@@ -190,9 +167,7 @@ export default function contentTest(): void {
     it('adds the content to each style', 0, async () => {
       testMap.content = content(TWO, [circles('dots', '#ff0000', 'labels')]);
       await untilLayers('background,dots,labels');
-      const loads = testMap.styleLoads;
-      testMap.style = BASE.replace('#4a90d9', '#4ad94a');
-      await until('the new style loads', () => testMap.styleLoads > loads);
+      await setStyle(baseStyle('#4ad94a'));
       // The content is on the style by the time the app hears that it loaded.
       expect(await layerIds()).assertEqual('background,dots,labels');
       expect((await requireMap().getStyleSource('places'))?.id).assertEqual('places');
@@ -249,10 +224,8 @@ export default function contentTest(): void {
       expect((await map.getStyleImage('dot'))?.width).assertEqual(2);
       const empty: MapContent = {};
       testMap.content = empty;
-      let frames = 0;
-      await until('a moment passes', () => ++frames > 10);
+      await frames(10);
       expect((await map.getStyleImage('dot'))?.width).assertEqual(2);
-      await map.removeStyleImage('dot');
     });
 
     it('leaves an image ID alone after the map rejects the content image', 0, async () => {
@@ -265,10 +238,8 @@ export default function contentTest(): void {
       await map.setStyleImage('dot', { width: 3, height: 1, stride: 12, pixels: new Uint8Array(12) });
       const empty: MapContent = {};
       testMap.content = empty;
-      let frames = 0;
-      await until('a moment passes', () => ++frames > 10);
+      await frames(10);
       expect((await map.getStyleImage('dot'))?.width).assertEqual(3);
-      await map.removeStyleImage('dot');
     });
 
     it('removes a source on a later pass once nothing else uses it', 0, async () => {
@@ -295,13 +266,11 @@ export default function contentTest(): void {
         layers: [{ id: 'west', type: 'fill', source: 'west',
           paint: { 'fill-color': '#ff0000', 'fill-antialias': false } }],
       };
-      const blue = STYLE.replace('#4a90d9', '#0000ff');
       const pixelMap = await snapshot({
-        style: blue, content: west, width: 64, height: 32, scaleFactor: 2, camera: { zoom: 0 },
+        style: backgroundStyle('#0000ff'), content: west, width: 64, height: 32, scaleFactor: 2, camera: { zoom: 0 },
       });
-      const buffer = new ArrayBuffer(pixelMap.getPixelBytesNumber());
-      await pixelMap.readPixelsToBuffer(buffer);
-      const pixels = new Uint8Array(buffer);
+      const pixels = await readPixels(pixelMap);
+      // The PixelMap's channels are in RGBA order.
       expect(pixelAt(pixels, 128, 32, 32).join()).assertEqual('255,0,0,255');
       expect(pixelAt(pixels, 128, 96, 32).join()).assertEqual('0,0,255,255');
       await pixelMap.release();

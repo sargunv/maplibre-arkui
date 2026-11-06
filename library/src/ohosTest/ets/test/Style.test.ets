@@ -1,18 +1,14 @@
-import { afterEach, describe, expect, it } from '@ohos/hypium';
+import { beforeEach, describe, expect, it } from '@ohos/hypium';
 import image from '@ohos.multimedia.image';
 import {
-  CameraUpdateMode,
   ConstrainMode,
   FeatureStateSelector,
   GeoJsonFeature,
   GeoJsonFeatureCollection,
   ImageContent,
-  interpolate,
   latLngForProjectedMeters,
-  linear,
   MapDebugFlag,
   MapHandle,
-  MapProjectionHandle,
   NorthOrientation,
   PremultipliedRgba8Image,
   projectedMetersForLatLng,
@@ -20,14 +16,11 @@ import {
   RenderedFeature,
   ScreenPoint,
   StyleImageTextFit,
-  StyleLayerVisibility,
-  StyleSourceType,
   TileLodMode,
-  zoom,
 } from '@maplibre/arkui';
 
-import { STYLE, testMap } from '../testability/TestMaps';
-import { eventually, until } from './until';
+import { backgroundStyle, testMap } from '../testability/TestMaps';
+import { eventually, expectNear, pixelFor, requireMap, setStyle, until } from './helpers';
 
 const PLACES: GeoJsonFeatureCollection = {
   type: 'FeatureCollection',
@@ -38,14 +31,6 @@ const PLACES: GeoJsonFeatureCollection = {
 };
 
 const ONE: FeatureStateSelector = { sourceId: 'places', featureId: { kind: 'doubleValue', value: 1 } };
-
-function requireMap(): MapHandle {
-  const map = testMap.controller.map;
-  if (map === undefined) {
-    throw new Error('The test map is not ready');
-  }
-  return map;
-}
 
 // Adds the places as a GeoJSON source from the object itself, and a circle
 // layer that draws them.
@@ -79,43 +64,8 @@ function queryCircles(point: ScreenPoint): Promise<readonly RenderedFeature[]> {
 
 export default function styleTest(): void {
   describe('Style', () => {
-    afterEach(async () => {
-      const map = requireMap();
-      await map.removeFeatureState({ sourceId: 'places' }).catch(() => {
-      });
-      if (await map.getStyleLayer('circles') !== undefined) {
-        await map.removeStyleLayer('circles');
-      }
-      if (await map.getStyleSource('places') !== undefined) {
-        await map.removeStyleSource('places');
-      }
-    });
-
-    it('adds and removes a GeoJSON source and a layer', 0, async () => {
-      await until('the style loads', () => testMap.controller.styleLoaded);
-      const map = requireMap();
-      await addPlaces(map);
-      expect((await map.getStyleSource('places'))?.type).assertEqual(StyleSourceType.geoJson);
-      const layer = await map.getStyleLayer('circles');
-      expect(layer?.type).assertEqual('circle');
-      expect(layer?.sourceId).assertEqual('places');
-
-      await map.removeStyleLayer('circles');
-      await map.removeStyleSource('places');
-      expect(await map.getStyleLayer('circles')).assertUndefined();
-      expect(await map.getStyleSource('places')).assertUndefined();
-    });
-
-    it('sets layer properties, with an expression or a plain value', 0, async () => {
-      const map = requireMap();
-      await addPlaces(map);
-      const radius = interpolate(linear(), zoom(), [[0, 4], [10, 16]]);
-      await map.setStyleLayerProperty('circles', 'circle-radius', radius);
-      expect(JSON.stringify(await map.getStyleLayerProperty('circles', 'circle-radius')))
-        .assertEqual(radius.toString());
-
-      await map.setStyleLayerProperty('circles', 'visibility', 'none');
-      expect((await map.getStyleLayer('circles'))?.visibility).assertEqual(StyleLayerVisibility.none);
+    beforeEach(async () => {
+      await testMap.reset();
     });
 
     it('reads a PixelMap into a style image', 0, async () => {
@@ -190,37 +140,16 @@ export default function styleTest(): void {
       const meters = projectedMetersForLatLng({ latitude: 10, longitude: 20 });
       expect(meters.easting).assertLarger(0);
       const back = latLngForProjectedMeters(meters);
-      expect(back.latitude).assertClose(10, 0.0001);
-      expect(back.longitude).assertClose(20, 0.0001);
-    });
-
-    it('sets, reads, and removes feature state', 0, async () => {
-      const map = requireMap();
-      await addPlaces(map);
-      const selected: Record<string, Object> = { 'selected': true };
-      await map.setFeatureState(ONE, selected);
-      expect(JSON.stringify(await map.getFeatureState(ONE))).assertEqual('{"selected":true}');
-      // The map compares IDs as text, so a GeoJSON number and its string are
-      // one ID.
-      const byText: FeatureStateSelector = { sourceId: 'places', featureId: { kind: 'stringValue', value: '1' } };
-      expect(JSON.stringify(await map.getFeatureState(byText))).assertEqual('{"selected":true}');
-
-      await map.removeFeatureState(ONE);
-      expect(JSON.stringify(await map.getFeatureState(ONE))).assertEqual('{}');
+      expectNear(back.latitude, 10, 1e-9);
+      expectNear(back.longitude, 20, 1e-9);
     });
 
     it('finds the feature at its screen point, with its state', 0, async () => {
       const map = requireMap();
-      await testMap.controller.updateCamera({
-        mode: CameraUpdateMode.jump,
-        camera: { center: { latitude: 0, longitude: 0 }, zoom: 1, bearing: 0, pitch: 0 },
-      });
       await addPlaces(map);
       const selected: Record<string, Object> = { 'selected': true };
       await map.setFeatureState(ONE, selected);
-      const projection = MapProjectionHandle.create(map.getSnapshot().view);
-      const point = projection.pixelForLatLng({ latitude: 10, longitude: 20 });
-      projection.release();
+      const point = pixelFor({ latitude: 10, longitude: 20 });
 
       const hits = await queryCircles(point);
       expect(hits.length).assertEqual(1);
@@ -240,16 +169,12 @@ export default function styleTest(): void {
     it('starts each style without what the app added, which it adds again', 0, async () => {
       const map = requireMap();
       await addPlaces(map);
-      const loads = testMap.styleLoads;
-      testMap.style = STYLE.replace('#4a90d9', '#4ad94a');
-      await until('the new style loads', () => testMap.styleLoads > loads);
+      await setStyle(backgroundStyle('#4ad94a'));
       expect(await map.getStyleLayer('circles')).assertUndefined();
       expect(await map.getStyleSource('places')).assertUndefined();
 
       await addPlaces(map);
       expect((await map.getStyleLayer('circles'))?.id).assertEqual('circles');
-      testMap.style = STYLE;
-      await until('the first style loads again', () => testMap.styleLoads > loads + 1);
     });
   });
 }

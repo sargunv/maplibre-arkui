@@ -224,8 +224,8 @@ Decided:
   crashes at random in Mesa's llvmpipe while maps render, with FFI's own example
   too, and more often the more maps render: the demo's two-map page over its
   first map has crashed within three pushes and has also survived fifteen. See
-  `docs/ffi-feedback.md`; telling an emulator bug from an FFI one needs a device
-  with a GPU.
+  `docs/ffi-feedback.md`. The test suite, with one map at a time, finishes on
+  DevEco Studio's emulator, which has a GPU (see Next).
 
 References:
 
@@ -371,7 +371,11 @@ Decided:
   the wheel zoom. No bindings DSL. `onGestureStart` and `onGestureEnd` events,
   such as to stop following a location.
 - ArkUI reports the fingers of one motion in separate touch events, sometimes at
-  one time, so the speed gates measure from the last earlier time.
+  one time, so the speed gates measure from the last earlier time. On HarmonyOS
+  6, an event's `touches` give the fingers that didn't move window coordinates
+  of 0, so the recognizer keeps each finger where its last `changedTouches` put
+  it. A pinch or twist moves with the fingers' midpoint, which jumps by half a
+  step with each finger's event, so the content stays under both fingers (#15).
 - Not yet: haptics, long press, mouse right-drag rotation, touchpad two-finger
   pan (the emulator can't inject it), a held key that moves every frame, a
   public handler for custom hosts like Compose's `Modifier.mapInput`, and
@@ -859,13 +863,19 @@ Decided:
   publishes it, and build CI against OHPM instead of FFI's CI artifacts; then
   `ohpm publish`. See `AGENTS.md`, Releasing.
 - **CI on the emulator.** Run the hypium suite on the Oniro emulator in CI, as
-  FFI's CI does, once the llvmpipe crash is fixed. Locally, during stage 11,
-  only 2 of 18 runs of the suite finished; the rest crashed. At that rate a CI
-  job fails most of the time, so it can't gate merges yet.
-- **The llvmpipe crash.** Mesa's llvmpipe crashes the app on the emulator while
-  maps render, and more often with ArkUI content moving over them. A device with
-  a GPU tells an emulator bug from an FFI race between render threads
-  ([maplibre-native-ffi#1692], `docs/ffi-feedback.md`).
+  FFI's CI does, once the llvmpipe crash is fixed or avoided. Locally, during
+  stage 11, only 2 of 18 runs of the suite finished there; the rest crashed. At
+  that rate a CI job fails most of the time, so it can't gate merges yet. The
+  suite finishes on DevEco Studio's emulator, but that emulator isn't part of
+  this repository's toolchain.
+- **The llvmpipe crash.** Mesa's llvmpipe crashes the app on the Oniro emulator
+  while maps render, and more often with ArkUI content moving over them. On
+  DevEco Studio's HarmonyOS 6.0.2 emulator (arm64, with a hardware GPU), the
+  whole suite finished in each of 8 runs during #15, so the crash is very likely
+  llvmpipe's rather than an FFI race between render threads. That's one
+  emulator, not a phone, and the suite shows one map at a time; several maps at
+  once on a GPU are still unproven ([maplibre-native-ffi#1692],
+  `docs/ffi-feedback.md`).
 - **Real devices.** Check gestures (thresholds, momentum, the feel of pinch and
   rotate), location from Location Kit, several maps at once, and Vulkan on a
   phone and a tablet.
