@@ -8,7 +8,8 @@
     "debug": true,
     "bundleType": "app",
     "icon": "$media:icon",
-    "label": "$string:label"
+    "label": "$string:label",
+    "configuration": "$profile:configuration"
   },
   "module": {
     "name": "entry",

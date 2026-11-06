@@ -36,7 +36,8 @@ as ArkTS.
   `getDefaultRuntime()`, `addRuntimeEventListener()`. Expression functions take
   their operator's name in camelCase (`featureState`), with words for symbols
   (`eq`, `add`) and `cases` for the reserved `case`; operators without arguments
-  are functions too (`zoom()`).
+  are functions too (`zoom()`). `fp()`, which scales a size by the font scale
+  that the map sets, takes the name of ArkUI's unit.
 - Enum members are lowerCamelCase (`ScaleBarUnits.metric`), as FFI's are
   (`CameraUpdateMode.fly`), so an app sees one style. Internal constants are
   UPPER_SNAKE_CASE (`TAP_SLOP`), as the ArkTS style guide says; there are no

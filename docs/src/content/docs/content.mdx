@@ -37,11 +37,18 @@ declares GeoJSON's types (<Api of="GeoJsonFeatureCollection" />,
 
 <Code code={region(examples, "geojson")} lang="ts" />
 
-Layers go on top, or under the base-style layer that `below` names or picks, in
-their order in `layers`, and their `onClick` and `onLongClick` handle
-[clicks](/maplibre-arkui/gestures/#clicks) on their features. A source or layer
-that the map rejects goes to `onMapError` and stays out until it changes. <Api of="readPixelMap" display="readPixelMap()" />
+Layers go on top, or under the layer that `below` names or picks, in their order
+in `layers`, and their `onClick` and `onLongClick` handle
+[clicks](/maplibre-arkui/gestures/#clicks) on their features. A string names a
+base-style layer or another content layer, and a predicate picks a base-style
+layer. Text sizes in <Api of="fp" display="fp()" /> follow the user's font size
+setting as ArkUI's `fp` sizes do, once the app opts in with
+`"fontSizeScale": "followSystem"` in its [configuration profile]; the base
+style's labels don't. A source or layer that the map rejects goes to
+`onMapError` and stays out until it changes. <Api of="readPixelMap" display="readPixelMap()" />
 turns a decoded `PixelMap` into a style image; the demo's [`readImage()`] reads
 one from `resources/rawfile`.
+
+[configuration profile]: https://gitee.com/openharmony/docs/blob/master/en/application-dev/quick-start/app-configuration-file.md
 
 [`readImage()`]: https://github.com/sargunv/maplibre-arkui/blob/main/demo/entry/src/main/ets/docs/Examples.ets

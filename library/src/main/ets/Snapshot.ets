@@ -43,6 +43,11 @@ export interface SnapshotOptions {
    */
   scaleFactor?: number;
   /**
+   * The scale of the sizes that `fp()` gives, such as `fp2px(1) / vp2px(1)`
+   * of a UI context, to match a `MapLibreMap` in it. Defaults to 1.
+   */
+  fontScale?: number;
+  /**
    * The runtime that loads the style and its resources, with that runtime's
    * cache, offline regions, and request handlers. Defaults to the default
    * runtime.
@@ -83,12 +88,11 @@ export async function snapshot(options: SnapshotOptions): Promise<image.PixelMap
     try {
       await session.ready;
       await loadStyle(map, options.style);
-      if (options.content !== undefined) {
-        const reconciler = new ContentReconciler(map,
-          (error: Error) => logError(`a snapshot left out content: ${error.message}`));
-        reconciler.setContent(options.content);
-        await reconciler.styleLoaded();
-      }
+      const reconciler = new ContentReconciler(map,
+        (error: Error) => logError(`a snapshot left out content: ${error.message}`));
+      reconciler.setContent(options.content);
+      reconciler.setFontScale(options.fontScale ?? 1);
+      await reconciler.styleLoaded();
       if (options.camera !== undefined) {
         map.discarding.updateCamera({ mode: CameraUpdateMode.jump, camera: options.camera });
       }

@@ -8,6 +8,8 @@
 // check nothing in ArkTS without a brand, or type assertions at every feature
 // property with one.
 
+import { FONT_SCALE_STATE } from './fontScale';
+
 /** A JSON value, as a style holds it. */
 export type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
 
@@ -362,6 +364,29 @@ export function mod(a: ExpressionInput, b: ExpressionInput): Expression {
 /** `base` to the power of `exponent`. */
 export function pow(base: ExpressionInput, exponent: ExpressionInput): Expression {
   return call('^', base, exponent);
+}
+
+/**
+ * `value`, a size in vp, scaled by the font scale, as ArkUI scales a size in
+ * fp: for `text-size`, so labels follow the user's font size setting as the
+ * app's text does.
+ *
+ * ```ts
+ * fp(14)
+ * interpolate(linear(), zoom(), [[10, fp(12)], [16, fp(18)]])
+ * ```
+ *
+ * It multiplies `value` by the global state property
+ * `maplibre-arkui:font-scale`, or by 1 where nothing sets it. `MapLibreMap`
+ * sets it on each style it loads, to `fp2px(1) / vp2px(1)` of its UI context,
+ * and again when that changes; `snapshot()` sets it to its `fontScale`. Like
+ * ArkUI's text, it follows the user's setting only in an app that opts in with
+ * `"fontSizeScale": "followSystem"` in its configuration profile. Since
+ * `zoom()` must be the input of a top-level `interpolate()` or `step()`, scale
+ * each stop's output rather than the ramp.
+ */
+export function fp(value: ExpressionInput): Expression {
+  return multiply(value, call('number', globalState(FONT_SCALE_STATE), 1));
 }
 
 /** The square root of `value`. */
