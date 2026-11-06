@@ -160,12 +160,10 @@ mean building MapLibre Native, which is far slower.
 
 CI (`.github/workflows/ci.yml`) runs `mise run check` and builds the HAR, the
 demo HAP, the test HAP, and the documentation site. On pushes to `main`, its
-`deploy-pages` job publishes the site to GitHub Pages, at
-`https://sargunv.github.io/maplibre-arkui/`. It doesn't run the hypium suite,
-which llvmpipe's crash makes fail most runs (ROADMAP.md, Next). CI hasn't run on
-GitHub yet; if `ffi:download` gets a 403 because the job's token can't read
-another repository's artifacts, give it a repository secret with a fine-grained
-token that reads public repositories.
+`deploy-pages` job publishes the site to GitHub Pages, built for the origin that
+the Pages settings give it (now `https://code.sargunv.dev/maplibre-arkui/`). It
+doesn't run the hypium suite, which llvmpipe's crash makes fail most runs
+(ROADMAP.md, Next).
 
 ## Releasing
 
