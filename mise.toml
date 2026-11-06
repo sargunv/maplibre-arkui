@@ -103,22 +103,28 @@ usage = '''
 flag "--abi <abi>" default="x86_64" help="The ABI of the native libraries: x86_64 for the Oniro emulator, arm64-v8a for most devices" {
   choices "x86_64" "arm64-v8a"
 }
+flag "--backend <backend>" default="opengl" help="The FFI backend whose HAR from build/ffi the build bundles" {
+  choices "opengl" "vulkan"
+}
 '''
 depends = ["pack"]
 run = '''
 scripts/build-hap.sh demo/entry/src/main "build/demo/$usage_abi" "$usage_abi" \
-  build/har/maplibre-arkui.har build/ffi/native-ffi.har build/ffi/native-ffi-opengl.har
+  build/har/maplibre-arkui.har build/ffi/native-ffi.har "build/ffi/native-ffi-$usage_backend.har"
 '''
 
 [tasks.demo]
 description = "Build the demo for the device's ABI, then install and start it on this worktree's emulator or the device that --device names."
 usage = '''
 flag "--device <key>" help="The hdc connect key of the device, which defaults to this worktree's emulator"
+flag "--backend <backend>" default="opengl" help="The FFI backend whose HAR from build/ffi the build bundles" {
+  choices "opengl" "vulkan"
+}
 '''
 run = '''
 device=${usage_device:-$(scripts/ohos-key.sh)}
 abi=$(scripts/device-abi.sh "$device")
-mise run demo:build --abi "$abi"
+mise run demo:build --abi "$abi" --backend "$usage_backend"
 hdc -t "$device" install -r "build/demo/$abi/entry.hap"
 hdc -t "$device" shell aa start -a EntryAbility -b org.maplibre.arkui.demo
 '''
@@ -129,11 +135,14 @@ usage = '''
 flag "--abi <abi>" default="x86_64" help="The ABI of the native libraries: x86_64 for the Oniro emulator, arm64-v8a for most devices" {
   choices "x86_64" "arm64-v8a"
 }
+flag "--backend <backend>" default="opengl" help="The FFI backend whose HAR from build/ffi the build bundles" {
+  choices "opengl" "vulkan"
+}
 '''
 depends = ["pack"]
 run = '''
 scripts/build-hap.sh library/src/ohosTest "build/test/$usage_abi" "$usage_abi" \
-  build/har/maplibre-arkui.har build/ffi/native-ffi.har build/ffi/native-ffi-opengl.har \
+  build/har/maplibre-arkui.har build/ffi/native-ffi.har "build/ffi/native-ffi-$usage_backend.har" \
   "$(mise where http:hypium)/package"
 '''
 
@@ -141,11 +150,14 @@ scripts/build-hap.sh library/src/ohosTest "build/test/$usage_abi" "$usage_abi" \
 description = "Build the library's hypium suite for the device's ABI and run it on this worktree's emulator or the device that --device names."
 usage = '''
 flag "--device <key>" help="The hdc connect key of the device, which defaults to this worktree's emulator"
+flag "--backend <backend>" default="opengl" help="The FFI backend whose HAR from build/ffi the build bundles" {
+  choices "opengl" "vulkan"
+}
 '''
 run = '''
 device=${usage_device:-$(scripts/ohos-key.sh)}
 abi=$(scripts/device-abi.sh "$device")
-mise run test:build --abi "$abi"
+mise run test:build --abi "$abi" --backend "$usage_backend"
 scripts/run-tests.sh "$device" "build/test/$abi/entry_test.hap"
 '''
 

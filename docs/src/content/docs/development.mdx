@@ -15,7 +15,9 @@ mise run check
 ```
 
 `mise run demo --device <key>` and `mise run test --device <key>` run on another
-device, such as DevEco Studio's emulator, with the HAP built for its ABI.
+device, such as DevEco Studio's emulator, with the HAP built for its ABI. Both
+bundle FFI's OpenGL backend; `--backend vulkan` bundles its Vulkan backend
+instead, which the Oniro emulator has no driver for.
 `mise run docs:dev` serves this site, with the API reference, and
 `mise run docs:build` builds it into `docs/dist`.
 

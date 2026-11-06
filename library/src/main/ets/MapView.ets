@@ -1,7 +1,8 @@
 // The map behind a MapLibreMap and the XComponent surface it renders to. It
 // creates the FFI map when the component appears, attaches a render session to
-// each surface the XComponent reports, and disposes everything when the
-// component disappears. From FFI's examples/arkui map/MapController.ets.
+// each surface the XComponent reports, makes a new map and session when the
+// display's density changes, and disposes everything when the component
+// disappears. From FFI's examples/arkui map/MapController.ets.
 
 import {
   BoundOptions,
@@ -13,6 +14,7 @@ import {
   CameraQueryResult,
   CameraTransitionOutcome,
   CameraUpdateMode,
+  cameraToOptions,
   CommandCompletion,
   EdgeInsets,
   LatLng,
@@ -33,6 +35,7 @@ import {
   ScreenPoint,
   StyleSourceInfo,
 } from '@maplibre/native-ffi';
+import observer from '@ohos.arkui.observer';
 import geoLocationManager from '@ohos.geoLocationManager';
 
 import { ContentReconciler, loadStyle, MapClickEvent, MapContent, MapLayer } from './Content';
@@ -85,14 +88,23 @@ export class MapView extends XComponentController implements GestureTarget {
       this.onEvent(event);
     }
   };
+  // FFI fixes a map's scale factor for its life, so a new density takes a new
+  // map.
+  private readonly densityListener = (info: observer.DensityInfo): void => {
+    if (this.created !== undefined && info.density !== this.scaleFactor) {
+      this.recreateMap();
+    }
+  };
   private controller: MapController | undefined = undefined;
   private disposed: boolean = false;
   // How many times the app has moved the camera, which ends a gesture's say.
   private cameraTakeovers: number = 0;
   // How many gestures the user has started, which end a fit's say.
   gestureStarts: number = 0;
-  // The map from when it's created, which the view disposes.
+  // The map from when it's created, which the view disposes, and its scale
+  // factor: the density it was created at.
   private created: MapHandle | undefined = undefined;
+  private scaleFactor: number = 1;
   private style: string = '';
   private content: MapContent | undefined = undefined;
   private reconciler: ContentReconciler | undefined = undefined;
@@ -103,14 +115,16 @@ export class MapView extends XComponentController implements GestureTarget {
   private defaultBounds: BoundOptions | undefined = undefined;
   private userLocation: geoLocationManager.Location | undefined = undefined;
   private userHeading: number | undefined = undefined;
-  private readonly locationLayer: UserLocationLayer;
+  // The location indicator, drawn at the map's scale factor.
+  private locationLayer: UserLocationLayer;
   // The component's viewportInsets, which the map's camera padding includes on
   // top of the app's.
   private insets: EdgeInsets = NO_INSETS;
 
-  // The component's latest size, its latest surface, and the surface that the
-  // session renders to. A surface ID is the one the component reports.
-  private size: LogicalSize | undefined = undefined;
+  // The component's latest size in px, its latest surface, and the surface
+  // that the session renders to. A surface ID is the one the component
+  // reports.
+  private surfaceSize: SurfaceRect | undefined = undefined;
   private surface: bigint | undefined = undefined;
   private target: bigint | undefined = undefined;
   // Target changes run one at a time, in the order the component reports them.
@@ -128,19 +142,16 @@ export class MapView extends XComponentController implements GestureTarget {
     this.locationLayer = new UserLocationLayer(context.vp2px(1));
   }
 
-  // The surface's size is in physical pixels, and the map's in virtual pixels.
   onSurfaceCreated(surfaceId: string): void {
     this.surface = BigInt(surfaceId);
     this.retarget();
   }
 
   onSurfaceChanged(surfaceId: string, rect: SurfaceRect): void {
-    this.size = {
-      width: Math.max(1, Math.round(this.context.px2vp(rect.surfaceWidth))),
-      height: Math.max(1, Math.round(this.context.px2vp(rect.surfaceHeight))),
-    };
-    if (this.session !== undefined && this.target !== undefined) {
-      this.session.discarding.resize(this.size);
+    this.surfaceSize = rect;
+    const size = this.logicalSize();
+    if (this.session !== undefined && this.target !== undefined && size !== undefined) {
+      this.session.discarding.resize(size);
     } else {
       this.retarget();
     }
@@ -167,8 +178,18 @@ export class MapView extends XComponentController implements GestureTarget {
     this.style = style;
     this.content = content;
     this.bounds = bounds;
+    this.context.getUIObserver().on('densityUpdate', this.densityListener);
     const runtimeReady = runtime === undefined ? getDefaultRuntime() : Promise.resolve(runtime);
-    runtimeReady.then((runtime: RuntimeHandle) => this.createMap(runtime)).catch((error: Error) => this.fail(error));
+    runtimeReady.then((runtime: RuntimeHandle) => {
+      if (this.disposed) {
+        return;
+      }
+      // The view's listener asks for the events it handles, so the map reports
+      // them with those the app's listeners ask for.
+      this.runtime = runtime;
+      addRuntimeEventListener(runtime, this.listener, HANDLED_EVENTS);
+      return this.createMap(true, undefined);
+    }).catch((error: Error) => this.fail(error));
   }
 
   setStyle(style: string): void {
@@ -453,26 +474,49 @@ export class MapView extends XComponentController implements GestureTarget {
 
   dispose(): void {
     this.disposed = true;
+    this.context.getUIObserver().off('densityUpdate', this.densityListener);
     this.gestures.dispose();
+    const runtime = this.runtime;
+    // The map goes first, so the mask change that the listener's removal makes
+    // skips the map being released.
+    this.releaseMap();
+    if (runtime !== undefined) {
+      removeRuntimeEventListener(runtime, this.listener);
+    }
+    this.runtime = undefined;
+  }
+
+  // Replaces the map and its session with new ones at the new density. The
+  // new map starts where the old one left the camera, shows the controller if
+  // the old one did, and loads the style and content again.
+  private recreateMap(): void {
+    const old = this.map;
+    const camera = old === undefined ? undefined : this.appCamera(old.getSnapshot().view.camera);
+    // A map that isn't ready yet hasn't taken the controller, and its
+    // replacement takes it as the map would have.
+    const attach = old === undefined || this.controller?.map === old;
+    this.releaseMap();
+    this.createMap(attach, camera).catch((error: Error) => this.fail(error));
+  }
+
+  // Releases the map and its session, with the controller keeping the map's
+  // camera.
+  private releaseMap(): void {
     const runtime = this.runtime;
     const map = this.created;
     const session = this.session;
-    if (runtime !== undefined) {
-      // The map goes first, so the mask change that the listener's removal
-      // makes skips the map being released.
-      if (map !== undefined) {
-        removeRuntimeMap(runtime, map);
-      }
-      removeRuntimeEventListener(runtime, this.listener);
+    if (runtime !== undefined && map !== undefined) {
+      removeRuntimeMap(runtime, map);
     }
     this.controller?.detach(this);
     this.reconciler?.styleUnloaded();
     this.reconciler = undefined;
-    this.runtime = undefined;
     this.created = undefined;
     this.map = undefined;
     this.session = undefined;
     this.target = undefined;
+    this.loading = undefined;
+    this.frameView = '';
     // After any target change in flight, release the session, and only then
     // the map it renders. The runtime outlives its maps.
     this.targets = this.targets.then(async () => {
@@ -481,27 +525,31 @@ export class MapView extends XComponentController implements GestureTarget {
     }).catch((error: Error) => logError(error.message));
   }
 
-  private async createMap(runtime: RuntimeHandle): Promise<void> {
+  // Creates the map at the current density. It takes the controller if
+  // `attach`, and its camera starts at `camera` or, without one, where the
+  // controller says.
+  private async createMap(attach: boolean, camera: CameraPosition | undefined): Promise<void> {
     const controller = this.controller;
-    if (this.disposed || controller === undefined) {
+    const runtime = this.runtime;
+    if (this.disposed || controller === undefined || runtime === undefined) {
       return;
     }
-    // The view's listener asks for the events it handles, so the map reports
-    // them with those the app's listeners ask for.
-    this.runtime = runtime;
-    addRuntimeEventListener(runtime, this.listener, HANDLED_EVENTS);
+    const scaleFactor = this.context.vp2px(1);
+    const size = this.logicalSize();
     const map = runtime.createMap({
       initialExtent: {
-        width: this.size?.width ?? 1,
-        height: this.size?.height ?? 1,
-        scaleFactor: this.context.vp2px(1),
+        width: size?.width ?? 1,
+        height: size?.height ?? 1,
+        scaleFactor: scaleFactor,
       },
       mapMode: MapMode.continuous,
       eventMask: runtimeEventMask(runtime),
     });
     this.created = map;
+    this.scaleFactor = scaleFactor;
+    this.locationLayer = new UserLocationLayer(scaleFactor);
     await map.ready;
-    if (this.disposed) {
+    if (this.disposed || this.created !== map) {
       return;
     }
     this.map = map;
@@ -513,7 +561,8 @@ export class MapView extends XComponentController implements GestureTarget {
     // commands in order, so they follow the starting camera.
     // The insets go around the start camera's padding, or the map's, which is
     // none.
-    const startCamera: CameraOptions = controller.attach(this) ?? {};
+    const attached = attach ? controller.attach(this) : undefined;
+    const startCamera: CameraOptions = (camera !== undefined ? cameraToOptions(camera) : attached) ?? {};
     map.discarding.updateCamera({
       mode: CameraUpdateMode.jump,
       camera: withPadding(startCamera, addInsets(this.insets, startCamera.padding ?? NO_INSETS)),
@@ -638,7 +687,7 @@ export class MapView extends XComponentController implements GestureTarget {
       // The component can report its surface before the map is ready, which
       // retargets once it is.
       const map = this.map;
-      const size = this.size;
+      const size = this.logicalSize();
       const surface = this.surface;
       if (map === undefined || size === undefined || surface === undefined ||
         surface === this.target) {
@@ -659,6 +708,18 @@ export class MapView extends XComponentController implements GestureTarget {
         await this.session.setOhosSurfaceTarget({ logicalSize: size, surfaceId: surface });
       }
     });
+  }
+
+  // The surface's size is in px, and the map's in vp at the current density.
+  private logicalSize(): LogicalSize | undefined {
+    const rect = this.surfaceSize;
+    if (rect === undefined) {
+      return undefined;
+    }
+    return {
+      width: Math.max(1, Math.round(this.context.px2vp(rect.surfaceWidth))),
+      height: Math.max(1, Math.round(this.context.px2vp(rect.surfaceHeight))),
+    };
   }
 
   private enqueue(change: () => Promise<void>): void {

@@ -134,7 +134,9 @@ export class MapController {
    * The FFI map on screen, for its style API (sources, layers, images, and
    * feature state) and what else this library doesn't wrap. A new style
    * starts without the sources, layers, and images the app added, so add them
-   * in `onStyleLoaded`. A feature state change draws only from the next frame,
+   * in `onStyleLoaded`. When the display's density changes, the map replaces
+   * this handle and its render session with new ones at the new density,
+   * keeping the camera, and loads the style again. A feature state change draws only from the next frame,
    * so request one on an idle map (see the style API guide). Don't release it; the
    * `MapLibreMap` that created it does. Change the style through the map's
    * `style` param, not this handle's style setters, so that the map adds its
