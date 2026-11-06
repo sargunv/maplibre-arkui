@@ -1,6 +1,6 @@
 ---
 title: Gestures
-description: Move the map with touch, the mouse, a touchpad, and keys.
+description: Move the map with touch, the mouse, a touchpad, and keys, and choose what each does.
 ---
 
 import { Code } from "@astrojs/starlight/components";
@@ -9,17 +9,65 @@ import { region } from "../../snippets";
 
 import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
 
-Drag, pinch, twist, and drag two fingers up or down to pan, zoom, rotate, and
-pitch; double tap to zoom in, double tap and drag to zoom, and tap with two
-fingers to zoom out. The mouse wheel, a touchpad pinch, and the arrow, plus, and
-minus keys work too. A drag that starts on the map moves the map, even in a
-`Scroll`. `gestures` turns some off, and `cooperative` leaves one-finger drags
-and the plain wheel to a scrolling parent (see <Api of="MapGestureOptions" />):
+Users pan, zoom, rotate, and pitch the map by default:
+
+- **Touch**: drag to pan, pinch to zoom, twist to rotate, and drag two fingers
+  up or down to pitch. Double tap to zoom in, double tap and drag to zoom, and
+  tap with two fingers to zoom out.
+- **Mouse**: drag to pan, and drag with the right button to rotate (side to
+  side) and pitch (up and down). The wheel zooms at the pointer.
+- **Touchpad**: swipe two fingers to pan, and pinch to zoom.
+- **Keys**, once a touch or a click focuses the map: hold the arrows to pan,
+  Shift and the arrows to rotate and pitch, and plus and minus to zoom.
+
+A drag that starts on the map moves the map, even in a `Scroll`. Content over
+the map that handles its own gestures, such as a button, keeps them.
+
+## Choose the camera's movements
+
+`interactions` turns movements off, one at a time. This map pans and zooms but
+stays north-up and flat, and tells the app while the user moves it:
 
 <Code code={region(examples, "gestures")} lang="ts" />
 
-Content over the map that handles its own gestures, such as a button, keeps
-them.
+`onGestureStart` and `onGestureEnd` bracket any input that moves the camera,
+with its momentum. To react to one movement, give it an `onStart`, which runs
+once in each gesture, as the gesture first moves the camera that way. An app
+that moves the camera itself, such as to follow a vehicle, stops as the user
+starts to pan. The same example changes what the wheel and rotation do too:
+
+<Code code={region(examples, "interactions")} lang="ts" />
+
+See <Api of="MapInteractionOptions" /> for every option.
+
+## Scroll the wheel and the touchpad
+
+The wheel zooms at the pointer, and pans with Ctrl held. With `wheel` set to
+`WheelAction.pan`, it pans, and zooms with Ctrl. A two-finger swipe on a
+touchpad pans either way, and zooms with Ctrl.
+
+A map in a `Scroll` or `List` can leave the page's gestures to it: with
+`cooperative`, one-finger drags, the wheel, and touchpad swipes scroll the page.
+The map moves with two fingers, or with Ctrl held, when the wheel and the
+touchpad do what they would otherwise.
+
+## Snap and tick rotation
+
+A rotation that ends within 7° of north eases to it. `snapBearings` chooses the
+bearings to snap to, and `[]` turns snapping off.
+
+As a twist or a right-button drag turns the map across north, the device plays
+a soft tick. `hapticBearings` chooses where it ticks, and `[]` turns the ticks
+off. Ticks follow the system's touch feedback setting, and they need the
+vibrator permission, which the library can't declare for its apps. An app that
+wants them declares it in its `module.json5`:
+
+```json5
+"requestPermissions": [{ "name": "ohos.permission.VIBRATE" }]
+```
+
+The system grants it at install, without asking the user. Without it, the map
+plays no ticks and reports nothing.
 
 ## Clicks
 
@@ -40,5 +88,5 @@ easier to tap:
 <Code code={region(examples, "layer-click")} lang="ts" />
 
 While zoom is on, a tap waits 300 ms for a second tap, so a double tap zooms
-without a click. Clicks reach the handlers whichever gestures `gestures` turns
-off.
+without a click. Clicks reach the handlers whichever movements `interactions`
+turns off.

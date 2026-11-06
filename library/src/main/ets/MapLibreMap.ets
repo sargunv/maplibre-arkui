@@ -1,7 +1,7 @@
 import { BoundOptions, Camera as CameraPosition, EdgeInsets, RuntimeHandle } from '@maplibre/native-ffi';
 import geoLocationManager from '@ohos.geoLocationManager';
 
-import { MapGestureOptions, TAP_SLOP } from './gestures';
+import { MapInteractionOptions, TAP_SLOP } from './gestures';
 import { MapClickEvent, MapContent } from './Content';
 import { MapController } from './MapController';
 import { noContent } from './MapMarker';
@@ -32,10 +32,10 @@ const BOTTOM_END: LocalizedAlignRuleOptions = {
 /**
  * A MapLibre map, which fills the size that its parent gives it.
  *
- * Touch, the mouse, a touchpad, and keys move the camera; `gestures` chooses
- * which. The map takes the drags that start on it from a scrolling parent,
- * unless `gestures.cooperative` leaves one-finger drags to the parent. Content
- * above the map that handles its own gestures keeps them.
+ * Touch, the mouse, a touchpad, and keys move the camera; `interactions`
+ * chooses how. The map takes the drags that start on it from a scrolling
+ * parent, unless `interactions.cooperative` leaves one-finger drags to the
+ * parent. Content above the map that handles its own gestures keeps them.
  *
  * A tap is a click, and a long press or a right click is a long click.
  * `onMapClick` gets a click first, then the layers of `content` that handle
@@ -90,8 +90,11 @@ export struct MapLibreMap {
    * listen with `addRuntimeEventListener()` instead of setting one.
    */
   @Param @Once runtime: RuntimeHandle | undefined = undefined;
-  /** Which gestures move the map. All of them do, by default. */
-  @Param gestures: MapGestureOptions = {};
+  /**
+   * How the user moves the map: which camera movements input makes, and what
+   * the app does as each starts. Every movement is on by default.
+   */
+  @Param interactions: MapInteractionOptions = {};
   /**
    * Whether the map shows a `MapCompass` at its top end, which shows while the
    * map is rotated or tilted.
@@ -197,7 +200,7 @@ export struct MapLibreMap {
   });
 
   aboutToAppear(): void {
-    this.view.gestures.options = this.gestures;
+    this.view.gestures.options = this.interactions;
     this.view.setUserLocation(this.userLocation);
     this.view.setUserHeading(this.userHeading);
     this.view.setViewportInsets(this.viewportInsets);
@@ -223,9 +226,9 @@ export struct MapLibreMap {
     this.view.setBounds(this.cameraBounds);
   }
 
-  @Monitor('gestures')
-  gesturesChanged(): void {
-    this.view.gestures.options = this.gestures;
+  @Monitor('interactions')
+  interactionsChanged(): void {
+    this.view.gestures.options = this.interactions;
   }
 
   @Monitor('viewportInsets')
@@ -247,7 +250,8 @@ export struct MapLibreMap {
   // parent and content above the map, and MapGestures moves the camera from the
   // raw touches once one of them starts. The pan needs two fingers when one
   // finger shouldn't move the map, so a parent scrolls instead. Taps zoom, and
-  // MapGestures decides which taps click.
+  // MapGestures decides which taps click. The mouse's right button, the wheel,
+  // the touchpad, and keys come through their own events.
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
       XComponent({ type: XComponentType.SURFACE, controller: this.view })
@@ -256,12 +260,19 @@ export struct MapLibreMap {
         .focusable(true)
         .focusOnTouch(true)
         .onTouch((event: TouchEvent) => this.view.gestures.onTouch(event))
-        .onMouse((event: MouseEvent) => this.view.gestures.onMouse(event))
         .onAxisEvent((event: AxisEvent) => this.view.gestures.onAxis(event))
+        .onMouse((event: MouseEvent) => this.view.gestures.onMouse(event))
         .onKeyEvent((event: KeyEvent): boolean => this.view.gestures.onKey(event))
+        .onBlur(() => this.view.gestures.blur())
         .gesture(GestureGroup(GestureMode.Parallel,
           PanGesture({ fingers: this.panFingers() })
-            .onActionStart(() => this.view.gestures.claim()),
+            .onActionStart((event: GestureEvent) => {
+              this.view.gestures.claim();
+              this.view.gestures.onPan(event);
+            })
+            .onActionUpdate((event: GestureEvent) => this.view.gestures.onPan(event))
+            .onActionEnd(() => this.view.gestures.onPanEnd())
+            .onActionCancel(() => this.view.gestures.onPanEnd()),
           PinchGesture()
             .onActionStart(() => this.view.gestures.claim())
             .onActionUpdate((event: GestureEvent) => this.view.gestures.onPinch(event))
@@ -322,6 +333,6 @@ export struct MapLibreMap {
   }
 
   private panFingers(): number {
-    return this.gestures.pan !== false && this.gestures.cooperative !== true ? 1 : 2;
+    return this.interactions.pan?.enabled !== false && this.interactions.cooperative !== true ? 1 : 2;
   }
 }

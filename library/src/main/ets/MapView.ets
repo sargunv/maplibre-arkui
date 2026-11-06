@@ -40,6 +40,7 @@ import geoLocationManager from '@ohos.geoLocationManager';
 
 import { ContentReconciler, loadStyle, MapClickEvent, MapContent, MapLayer } from './Content';
 import { GESTURE_ANIMATION_MS, GestureTarget, MapGestures, snapBearing } from './gestures';
+import { playTick } from './haptics';
 import { FOLLOW_MS, UserLocationLayer } from './location';
 import { logError } from './log';
 import { FitCameraOptions, MapController } from './MapController';
@@ -340,6 +341,14 @@ export class MapView extends XComponentController implements GestureTarget {
     this.cameraTakeovers++;
   }
 
+  getBearing(): number {
+    return this.map?.getSnapshot().view.camera.bearing ?? 0;
+  }
+
+  hapticTick(): void {
+    playTick();
+  }
+
   // The user takes the camera from the location it follows.
   gestureStarted(): void {
     this.gestureStarts++;
@@ -351,10 +360,10 @@ export class MapView extends XComponentController implements GestureTarget {
   }
 
   // FFI raises no event as a gesture ends, so the view reads where the camera
-  // came to rest, after the gesture's changes. A rotation that ends near north
-  // eases to it first, unless input or the app moves the camera again: then
-  // the camera rests when that ends.
-  gestureEnded(rotated: boolean): void {
+  // came to rest, after the gesture's changes. A rotation that ends near a
+  // snap bearing eases to it first, unless input or the app moves the camera
+  // again: then the camera rests when that ends.
+  gestureEnded(snapBearings: number[]): void {
     // The app may move the camera as the gesture ends; then that move reports
     // where the camera rests, and nothing snaps it.
     const takeovers = this.cameraTakeovers;
@@ -368,7 +377,7 @@ export class MapView extends XComponentController implements GestureTarget {
         map.getSnapshot().transitionInProgress) {
         return;
       }
-      const bearing = rotated ? snapBearing(result.camera.bearing) : undefined;
+      const bearing = snapBearing(result.camera.bearing, snapBearings);
       if (bearing !== undefined) {
         map.discarding.updateCamera({
           mode: CameraUpdateMode.ease,

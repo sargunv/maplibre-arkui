@@ -3,9 +3,9 @@
 // cases aim in vp and convert, whatever the display's density.
 
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
-import { CameraUpdateMode, LatLng, ScreenPoint } from '@maplibre/arkui';
+import { CameraUpdateMode, LatLng, ScreenPoint, WheelAction } from '@maplibre/arkui';
 
-import { Driver, Point, PointerMatrix } from '@ohos.UiTest';
+import { Driver, Point, PointerMatrix, UiDirection } from '@ohos.UiTest';
 import { KeyCode } from '@ohos.multimodalInput.keyCode';
 
 import { STYLE, testMap } from '../testability/TestMaps';
@@ -185,6 +185,53 @@ export default function gestureInputTest(): void {
       await until('the bearing snaps to north', () => Math.abs(wrap(camera().bearing)) < 0.001);
     });
 
+    it('snaps to the bearings that the options give, or not at all', 0, async () => {
+      const c = await mapCenter();
+      testMap.compass = true;
+      testMap.interactions = { rotate: { snapBearings: [90] } };
+      await testMap.controller.updateCamera({ mode: CameraUpdateMode.jump, camera: { bearing: 90 } });
+      await gesture(async () => {
+        await driver.injectMultiPointerAction(twist(c, 100, 10, 10, STILL_TWIST_HOLD), speed(200));
+      });
+      await until('the bearing snaps to east', () => Math.abs(wrap(camera().bearing - 90)) < 0.001);
+
+      await start();
+      testMap.compass = true;
+      testMap.interactions = { rotate: { snapBearings: [] } };
+      await gesture(async () => {
+        await driver.injectMultiPointerAction(twist(c, 100, 10, 10, STILL_TWIST_HOLD), speed(200));
+      });
+      // A snap would start once the map reports the bearing; give it time.
+      await frames(30);
+      expect(Math.abs(wrap(camera().bearing))).assertLarger(1);
+    });
+
+    it('runs the onStart of each movement as the user starts it', 0, async () => {
+      let pans = 0;
+      let zooms = 0;
+      testMap.interactions = {
+        pan: {
+          onStart: () => {
+            pans++;
+          },
+        },
+        zoom: {
+          onStart: () => {
+            zooms++;
+          },
+        },
+      };
+      const c = await mapCenter();
+      const from = offset(c, 100, 0);
+      const to = offset(c, -100, 0);
+      await gesture(() => driver.swipe(from.x, from.y, to.x, to.y, speed(200)));
+      expect(pans).assertEqual(1);
+      expect(zooms).assertEqual(0);
+      // A notch of the wheel is a gesture of its own.
+      await gesture(() => driver.mouseScroll(c, true, 1));
+      expect(zooms).assertEqual(1);
+    });
+
     it('keeps a camera jump that the app makes as the gesture ends', 0, async () => {
       const c = await mapCenter();
       testMap.onGestureEnd = () => {
@@ -240,6 +287,37 @@ export default function gestureInputTest(): void {
       expectNear(now.y, at.y, 1);
     });
 
+    it('pans with the mouse wheel in pan mode, and zooms with Ctrl', 0, async () => {
+      testMap.interactions = { wheel: WheelAction.pan };
+      const c = await mapCenter();
+      // Scrolling down shows what's below, as a page does.
+      await gesture(() => driver.mouseScroll(c, true, 3));
+      expect(moved().y).assertLess(-50);
+      expectNear(moved().x, 0, 1);
+      expectNear(camera().zoom, ZOOM, 1e-9);
+      await gesture(() => driver.mouseScroll(c, false, 2, KeyCode.KEYCODE_CTRL_LEFT));
+      expect(camera().zoom).assertLarger(ZOOM);
+    });
+
+    it('pans with a two-finger touchpad swipe the way a Scroll scrolls', 0, async () => {
+      await start(true);
+      const bounds = await mapBounds();
+      const c = await mapCenter();
+      // The page scrolls one way under a swipe below the map...
+      const below = offset({ x: c.x, y: bounds.bottom }, 0, 250);
+      await driver.touchPadTwoFingersScroll(below, UiDirection.UP, 2);
+      await until('the page scrolls', () => testMap.scroller.currentOffset().yOffset !== 0);
+      const scrolled = testMap.scroller.currentOffset().yOffset;
+      testMap.scroller.scrollTo({ xOffset: 0, yOffset: 0 });
+      await until('the page scrolls back', () => testMap.scroller.currentOffset().yOffset === 0);
+      // ...and the map's content moves the same way under one on the map.
+      await gesture(() => driver.touchPadTwoFingersScroll(c, UiDirection.UP, 2));
+      expectNear(camera().zoom, ZOOM, 1e-9);
+      expect(Math.abs(moved().y)).assertLarger(20);
+      expect(moved().y < 0).assertEqual(scrolled > 0);
+      expectNear(moved().x, 0, 1);
+    });
+
     it('pans and zooms with keys once a touch focuses it', 0, async () => {
       const c = await mapCenter();
       await driver.click(c.x, c.y);
@@ -247,6 +325,9 @@ export default function gestureInputTest(): void {
       expectNear(moved().x, 100, 0.01);
       await gesture(() => driver.triggerKey(KeyCode.KEYCODE_EQUALS));
       expectNear(camera().zoom, ZOOM + 1, 0.001);
+      // Shift and an arrow rotate a step.
+      await gesture(() => driver.triggerCombineKeys(KeyCode.KEYCODE_SHIFT_LEFT, KeyCode.KEYCODE_DPAD_LEFT));
+      expectNear(wrap(camera().bearing), 15, 0.001);
     });
 
     it('takes the drags that start on it from a parent Scroll', 0, async () => {
@@ -268,7 +349,7 @@ export default function gestureInputTest(): void {
 
     it('leaves one-finger drags to a parent Scroll in cooperative mode', 0, async () => {
       await start(true);
-      testMap.gestures = { cooperative: true };
+      testMap.interactions = { cooperative: true };
       const c = await mapCenter();
       const starts = testMap.gestureStarts;
       const from = offset(c, 0, 80);

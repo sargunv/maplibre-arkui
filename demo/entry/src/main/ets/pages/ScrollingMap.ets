@@ -31,7 +31,7 @@ export struct ScrollingMap {
           MapLibreMap({
             controller: this.map,
             style: LIBERTY,
-            gestures: { cooperative: this.cooperative },
+            interactions: { cooperative: this.cooperative },
           })
             .height(320)
           this.filler('More of the page')

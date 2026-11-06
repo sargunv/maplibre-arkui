@@ -108,7 +108,7 @@ struct Index {
       content: testMap.content,
       cameraBounds: testMap.cameraBounds,
       runtime: testMap.runtime,
-      gestures: testMap.gestures,
+      interactions: testMap.interactions,
       userLocation: testMap.userLocation,
       userHeading: testMap.userHeading,
       compassEnabled: testMap.compass,
