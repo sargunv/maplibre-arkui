@@ -29,19 +29,21 @@ release. Each entry names the FFI commit it was seen at.
   OpenHarmony targets, and publish the HARs with the nightly snapshots (as the
   `unstable-native-snapshot` release does for the native archives) so a pin
   doesn't expire.
-- **The OpenHarmony SDK mise plugin can't be shared.** Other repositories have
-  to copy `.mise/plugins/ohos-sdk`, as this one does, and
-  `mise plugins link --force` is global, so each repository's hook relinks the
+- **The OpenHarmony SDK mise plugin couldn't be shared.** Other repositories had
+  to copy FFI's `.mise/plugins/ohos-sdk`, as this one did, and
+  `mise plugins link --force` is global, so each repository's hook relinked the
   plugin to its own copy. In stage 2, a link to a worktree that had been removed
-  broke every SDK task here until it was relinked. Suggested fix: move it to a
-  repository of its own and reference it from `[plugins]`, as its `metadata.lua`
-  already anticipates.
-- **The SDK plugin puts a broken `diff` on PATH.** `env_keys.lua` adds the SDK's
-  `toolchains/` to PATH for `hdc`, and that directory also ships `diff`,
+  broke every SDK task here until it was relinked. The plugin now has a
+  repository of its own,
+  [mise-ohos-sdk](https://github.com/sargunv/mise-ohos-sdk), which this
+  repository references from `[plugins]`. Suggested fix: FFI references it too
+  and drops its copy.
+- **The SDK plugin puts a broken `diff` on PATH.** FFI's `env_keys.lua` adds the
+  SDK's `toolchains/` to PATH for `hdc`, and that directory also ships `diff`,
   `restool`, `idl`, and others. Its `diff` rejects `-r` and still exits 0, so
-  `diff -r a b && echo same` prints `same` in an FFI `ohos` shell. Suggested
-  fix, as this repository's copy does: link `hdc` into a `bin/` directory in
-  `post_install.lua` and put only that on PATH.
+  `diff -r a b && echo same` prints `same` in an FFI `ohos` shell. mise-ohos-sdk
+  links `hdc` into a `bin/` directory in `post_install.lua` and puts only that
+  on PATH, which switching to it fixes too.
 - **Packed HAR names differ between CI and local packs.** CI names them
   `native-ffi-0.202601.0-dev.0.har` and `pack-ohpm` names them
   `native-ffi-0.0.0.har`, so consumers glob or rename them (`ffi-download.sh`,

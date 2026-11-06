@@ -129,6 +129,13 @@ while IFS= read -r -d '' file; do
   done
 done < <(find "$src/ets" \( -name '*.ets' -o -name '*.ts' \) -type f -print0)
 
+# A package built for other ABIs, such as an FFI backend that ffi:pack packed
+# for the emulator, would leave the HAP without the libraries the app loads.
+if [[ -z $(find "$work/libs/$abi" -name '*.so' -print -quit) ]]; then
+  echo "error: no package supplies native libraries for $abi" >&2
+  exit 1
+fi
+
 # The app requires and targets the highest API floor of its packages.
 if ((api == 0)); then
   echo "error: no package declares compatibleSdkVersion" >&2

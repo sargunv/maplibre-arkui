@@ -43,7 +43,7 @@ if ! jq -e '.license' "$manifest" >/dev/null; then
 fi
 local_dependencies=$(jq -r '.dependencies // {} | to_entries[] | select(.value | startswith("file:")) | .key' "$manifest")
 if [[ -n $local_dependencies ]]; then
-  echo "warning: ohpm rejects the local dependencies on $(paste -sd, <<<"$local_dependencies"); see AGENTS.md, Releasing" >&2
+  echo "warning: ohpm rejects the local dependencies on $(paste -sd, - <<<"$local_dependencies"); see AGENTS.md, Releasing" >&2
 fi
 
 mkdir -p "$out"

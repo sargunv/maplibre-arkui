@@ -12,6 +12,8 @@ import {
 } from '@maplibre/native-ffi';
 import application from '@ohos.app.ability.application';
 
+import { logError } from './log';
+
 /** Takes one event of a runtime or of one of its maps. */
 export type RuntimeEventListener = (event: RuntimeEvent) => void;
 
@@ -188,7 +190,7 @@ function registrationsOf(runtime: RuntimeHandle): Registration[] {
             try {
               registration.listener(event);
             } catch (error) {
-              console.error(`MapLibre: a runtime event listener threw: ${(error as Error).message}`);
+              logError(`a runtime event listener threw: ${(error as Error).message}`);
             }
           }
         }

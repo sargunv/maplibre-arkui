@@ -1,6 +1,6 @@
 import { MapController, MapLibreMap } from '@maplibre/arkui';
 
-import { LIBERTY } from './TwoMaps';
+import { LIBERTY } from './common';
 
 // A map in a scrolling page. Drags that start on the map move it, and the page
 // scrolls from elsewhere. In cooperative mode, one finger scrolls the page

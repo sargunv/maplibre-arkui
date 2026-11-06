@@ -16,7 +16,7 @@ import {
 import image from '@ohos.multimedia.image';
 import util from '@ohos.util';
 
-import { LIBERTY } from './TwoMaps';
+import { LIBERTY } from './common';
 
 // A style URL on a host that doesn't exist, which the page's resource
 // transform rewrites to LIBERTY.
@@ -34,10 +34,10 @@ const PARIS: OfflineRegionDefinition = {
   },
 };
 
-// A snapshot of a style whose URL a resource transform rewrites, and the
-// download of an offline region, on the default runtime.
+// What the default runtime does besides maps: a snapshot of a style whose URL
+// a resource transform rewrites, and the download of an offline region.
 @ComponentV2
-export struct Engine {
+export struct RuntimeDemo {
   @Local preview: image.PixelMap | undefined = undefined;
   @Local requests: number = 0;
   @Local region: OfflineRegionInfo | undefined = undefined;
@@ -96,7 +96,7 @@ export struct Engine {
       .height('100%')
       .align(Alignment.Top)
     }
-    .title('Snapshots, requests, offline')
+    .title('Runtime')
   }
 
   private async start(): Promise<void> {

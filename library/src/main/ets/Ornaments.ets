@@ -6,6 +6,8 @@ import { CameraUpdateMode } from '@maplibre/native-ffi';
 import i18n from '@ohos.i18n';
 import { LengthMetrics } from '@ohos.arkui.node';
 
+import { GESTURE_ANIMATION_MS } from './gestures';
+import { logError } from './log';
 import { MapController } from './MapController';
 
 const ORNAMENT_SIZE = 40;
@@ -63,8 +65,8 @@ export struct MapCompass {
       this.controller.updateCamera({
         mode: CameraUpdateMode.ease,
         camera: { bearing: 0, pitch: 0 },
-        animation: { durationMs: 300 },
-      }).catch((error: Error) => console.error(`MapLibre: ${error.message}`));
+        animation: { durationMs: GESTURE_ANIMATION_MS },
+      }).catch((error: Error) => logError(error.message));
     })
   }
 }
@@ -109,8 +111,8 @@ export struct MapZoomButtons {
     this.controller.updateCamera({
       mode: CameraUpdateMode.ease,
       camera: { zoom: camera.zoom + delta },
-      animation: { durationMs: 300 },
-    }).catch((error: Error) => console.error(`MapLibre: ${error.message}`));
+      animation: { durationMs: GESTURE_ANIMATION_MS },
+    }).catch((error: Error) => logError(error.message));
   }
 }
 
@@ -213,6 +215,9 @@ export struct MapAttribution {
   @Local expanded: boolean = true;
   private text: TextController = new TextController();
 
+  // ets-loader's webpack build warns that this watches no state variable. Its
+  // checker types every member as `any` there, so it can't follow a path
+  // through the controller, but the monitor runs as each list replaces the last.
   @Monitor('controller.attributions')
   attributionsChanged(): void {
     this.showText();
@@ -281,6 +286,6 @@ export struct MapAttribution {
         });
       }
       this.text.setStyledString(text);
-    }).catch((error: Error) => console.error(`MapLibre: ${error.message}`));
+    }).catch((error: Error) => logError(error.message));
   }
 }

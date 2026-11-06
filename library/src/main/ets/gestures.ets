@@ -426,6 +426,19 @@ export class MapGestures {
     }
   }
 
+  /** The system took the touches back: end without momentum. */
+  cancel(): void {
+    this.stopMomentum();
+    this.touches = [];
+    this.claimed = false;
+    if (this.phaseOpen) {
+      this.phaseOpen = false;
+      this.moving = false;
+      this.target.applyCameraDelta({ gesturePhase: GesturePhase.cancel });
+      this.target.gestureEnded(false);
+    }
+  }
+
   /** Stops input for good, as the map leaves, and ends what it started. */
   dispose(): void {
     this.cancel();
@@ -697,19 +710,6 @@ export class MapGestures {
       this.moving = false;
       this.target.applyCameraDelta({ gesturePhase: GesturePhase.end });
       this.target.gestureEnded(this.rotated && this.options.rotate !== false);
-    }
-  }
-
-  /** The system took the touches back: end without momentum. */
-  cancel(): void {
-    this.stopMomentum();
-    this.touches = [];
-    this.claimed = false;
-    if (this.phaseOpen) {
-      this.phaseOpen = false;
-      this.moving = false;
-      this.target.applyCameraDelta({ gesturePhase: GesturePhase.cancel });
-      this.target.gestureEnded(false);
     }
   }
 

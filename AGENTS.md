@@ -17,8 +17,9 @@ library/                 @maplibre/arkui, a source HAR
     Expressions.ets      style expressions: functions that build style-spec JSON
     GeoJson.ets          GeoJSON types, so ArkTS can write GeoJSON literals
     StyleImage.ets       readPixelMap(): a PixelMap as FFI's style image
-    Content.ets          MapContent (sources, layers, images as data) and the
-                         reconciler that applies it to each style a map loads
+    Content.ets          MapContent (sources, layers, images as data), the
+                         reconciler that applies it to each style a map loads,
+                         and loadStyle()
     MapLibreMap.ets      the map component: params, events, lifecycle
     MapController.ets    the app's handle: observable camera, camera methods,
                          FFI handles
@@ -34,6 +35,8 @@ library/                 @maplibre/arkui, a source HAR
                          pacer, and per-runtime event dispatch to maps and app
                          listeners
     Snapshot.ets         snapshot(): a still image of a map, as a PixelMap
+    log.ets              logError(), which every library log message goes
+                         through, after a `MapLibre:` prefix
   src/main/module.json   the HAR's module manifest
   src/ohosTest/          the hypium suite, a test HAP in DevEco's layout
     ets/test/            the cases; List.test.ets registers them, helpers.ets
@@ -43,21 +46,22 @@ library/                 @maplibre/arkui, a source HAR
 demo/entry/src/main/     the demo app's only module (module.json holds the app's
                          fields too, as FFI's ArkUI example does): a map with
                          camera buttons, a page with two maps, a map in a
-                         Scroll, a page with a snapshot, a resource transform,
-                         and an offline region, a style page (StyleDemo.ets)
+                         Scroll, a runtime page (RuntimeDemo.ets) with a
+                         snapshot, a resource transform, and an offline region,
+                         a style page (StyleDemo.ets)
                          whose content comes from its state, with a snapshot
                          of it and queries on tap, and a location page
                          (LocationDemo.ets) with Location Kit and a simulated
                          walk
+  ets/pages/common.ets   the style URLs and the panel look the pages share
   ets/docs/              the READMEs' examples: QuickStart.ets (a page of its
                          own) and Examples.ets (a page of tabs)
 scripts/                 the build, pack, FFI, and device scripts the tasks run
-.mise/plugins/ohos-sdk/  mise plugin for the OpenHarmony SDK, identical to FFI's;
-                         linked by scripts/link-ohos-sdk-plugin.sh
 docs/api-guidelines.md   the public API's conventions
 docs/ffi-feedback.md     FFI gaps and bugs found here, for upstream
 README.md                the user guide
-build/                   outputs (gitignored): ffi/, har/, demo/, test/
+build/                   outputs (gitignored): ffi/, har/, and demo/<abi>/ and
+                         test/<abi>/
 .proof/                  screenshots and logs of runs (gitignored)
 ```
 
@@ -65,8 +69,9 @@ build/                   outputs (gitignored): ffi/, har/, demo/, test/
 
 Run `mise install` once. It installs the OpenHarmony SDK (about 4 GB) and the
 Oniro emulator image (1.4 GB), which no other command installs on its own. The
-SDK plugin unpacks with the host's `python3`, and the scripts use `perl` and
-`unzip`.
+SDK comes through the [mise-ohos-sdk](https://github.com/sargunv/mise-ohos-sdk)
+plugin that `[plugins]` in `mise.toml` pins, which unpacks it with the host's
+`python3` and puts only `hdc` on PATH. The scripts use `perl` and `unzip`.
 
 - `mise run check` / `mise run fix`: formatters and linters through hk, and
   `scripts/check-doc-examples.sh`, which checks that each `ets` block of the
@@ -74,17 +79,23 @@ SDK plugin unpacks with the host's `python3`, and the scripts use `perl` and
 - `mise run ffi:download`: fetch the FFI packages that FFI's CI packed at
   `vars.ffi_commit` into `build/ffi`. Needs `gh` signed in.
 - `FFI_DIR=<checkout> mise run ffi:pack [preset]`: pack them from an FFI
-  checkout instead (default preset `ohos-x64-egl`, for the emulator). Use it to
-  try FFI changes; it warns when the checkout isn't at the pin.
+  checkout instead (default preset `ohos-x64-egl`, for the Oniro emulator;
+  `ohos-arm64-egl` for arm64 devices). Use it to try FFI changes; it warns when
+  the checkout isn't at the pin.
 - `mise run pack`: pack the library into `build/har/maplibre-arkui.har`.
-- `mise run demo:build` / `mise run demo`: build the demo HAP, or build,
-  install, and start it on this worktree's emulator (`--device <key>` for
-  another device).
-- `mise run test:build` / `mise run test`: build the hypium suite, or build and
-  run it on the emulator. It fails unless hypium reports every case passed. A
-  run that ends without hypium's tally crashed, most likely in the Oniro
-  emulator's llvmpipe (see `docs/ffi-feedback.md`), which isn't a reason to
-  retry. The suite finishes on DevEco Studio's emulator, which has a GPU.
+- `mise run demo:build` / `mise run demo`: build the demo HAP into
+  `build/demo/<abi>`, or build, install, and start it on this worktree's
+  emulator (`--device <key>` for another device). The build takes `--abi x86_64`
+  (the default, for the Oniro emulator and CI) or `--abi arm64-v8a`; `demo`
+  reads the device's ABI with `scripts/device-abi.sh` and builds for it, so it
+  runs on arm64 devices and DevEco Studio's emulator too.
+- `mise run test:build` / `mise run test`: build the hypium suite into
+  `build/test/<abi>`, with the same `--abi`, or build it for the device's ABI
+  and run it on the emulator or `--device <key>`. It fails unless hypium reports
+  every case passed. A run that ends without hypium's tally crashed, most likely
+  in the Oniro emulator's llvmpipe (see `docs/ffi-feedback.md`), which isn't a
+  reason to retry. The suite finishes on DevEco Studio's emulator, which has a
+  GPU.
 - `scripts/ohos-key.sh`: print this worktree's emulator key, booting it if
   needed. `devices-cli release` stops it. It runs `scripts/wake-device.sh`,
   which turns the screen on, keeps it on for a day, and swipes the lock screen
@@ -156,6 +167,9 @@ ohpm. To publish:
 
 ## Project invariants
 
+- Nothing is published, so the public API has no users to keep working. When a
+  better name or shape appears, change it everywhere: no deprecations, aliases,
+  or compatibility shims until the first release.
 - State management V2 only (`@ComponentV2`, `@ObservedV2`/`@Trace`, `@Param`,
   `@Event`, `@Local`, `@Provider`/`@Consumer`, `@Monitor`, `@Computed`); no V1
   decorators. API floor 20, FFI's.

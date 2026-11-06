@@ -26,8 +26,8 @@ import {
   toBoolean,
 } from '@maplibre/arkui';
 
-const LIBERTY = 'https://tiles.openfreemap.org/styles/liberty';
-const DEMOTILES = 'https://demotiles.maplibre.org/style.json';
+import { DEMOTILES, LIBERTY, PANEL } from './common';
+
 
 // Places around the Champ de Mars in Paris, written as an ArkTS object. The
 // GeoJSON source takes it as is.
@@ -232,10 +232,7 @@ export struct StyleDemo {
             Button('Snapshot').margin(4).onClick(() => this.takeSnapshot())
           }
         }
-        .padding(12)
-        .margin({ left: 12, right: 12, bottom: 32 })
-        .borderRadius(16)
-        .backgroundColor('#e6ffffff')
+        .attributeModifier(PANEL)
       }
       .width('100%')
       .height('100%')

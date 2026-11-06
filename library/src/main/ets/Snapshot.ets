@@ -13,8 +13,8 @@ import {
 import display from '@ohos.display';
 import image from '@ohos.multimedia.image';
 
-import { ContentReconciler, MapContent } from './Content';
-import { loadStyle } from './MapView';
+import { ContentReconciler, loadStyle, MapContent } from './Content';
+import { logError } from './log';
 import { getDefaultRuntime } from './runtime';
 
 /** What `snapshot()` renders. */
@@ -83,7 +83,7 @@ export async function snapshot(options: SnapshotOptions): Promise<image.PixelMap
       await loadStyle(map, options.style);
       if (options.content !== undefined) {
         const reconciler = new ContentReconciler(map,
-          (error: Error) => console.warn(`MapLibre snapshot: ${error.message}`));
+          (error: Error) => logError(`a snapshot left out content: ${error.message}`));
         reconciler.setContent(options.content);
         await reconciler.styleLoaded();
       }

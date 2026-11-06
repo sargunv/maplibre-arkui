@@ -203,11 +203,15 @@ export default function gestureInputTest(): void {
       const c = await mapCenter();
       const from: Point[] = [offset(c, -50, 100), offset(c, 50, 100)];
       const to: Point[] = [offset(c, -50, -50), offset(c, 50, -50)];
+      // The system reports one finger at a time, and a finger a step ahead
+      // turns the pair. In steps of 2.5 vp, that stays under the rotation's
+      // slop, which would start a rotation instead.
       await gesture(async () => {
-        await driver.injectMultiPointerAction(twoFingers(from, to, 20), speed(300));
+        await driver.injectMultiPointerAction(twoFingers(from, to, 61), speed(300));
       });
       expect(camera().pitch).assertLarger(20);
       expectNear(camera().zoom, ZOOM, 0.01);
+      expectNear(camera().bearing, 0, 0.01);
     });
 
     it('zooms in one level with a double tap, and out with a two-finger tap', 0, async () => {
