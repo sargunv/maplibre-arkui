@@ -167,6 +167,9 @@ ohpm. To publish:
 
 ## Project invariants
 
+- Nothing is published, so the public API has no users to keep working. When a
+  better name or shape appears, change it everywhere: no deprecations, aliases,
+  or compatibility shims until the first release.
 - State management V2 only (`@ComponentV2`, `@ObservedV2`/`@Trace`, `@Param`,
   `@Event`, `@Local`, `@Provider`/`@Consumer`, `@Monitor`, `@Computed`); no V1
   decorators. API floor 20, FFI's.
