@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from '@ohos/hypium';
 import {
   CameraUpdateMode,
   eq,
+  fp,
   GeoJsonFeatureCollection,
   GeoJsonGeometry,
   GeoJsonSourceDataHandle,
@@ -192,6 +193,63 @@ export default function contentTest(): void {
       expect(testMap.errors.length).assertEqual(0);
     });
 
+    it('places layers under content layers, wherever those go', 0, async () => {
+      // e under b under a on top, and d under c under labels.
+      testMap.content = content(TWO, [
+        circles('a', '#ff0000'), circles('b', '#ff0000', 'a'), circles('c', '#ff0000', 'labels'),
+        circles('d', '#ff0000', 'c'), circles('e', '#ff0000', 'b'),
+      ]);
+      await untilLayers('background,d,c,labels,e,b,a');
+      await markLayer('e');
+      // b and the layer under it follow it under c, after d in the content.
+      testMap.content = content(TWO, [
+        circles('a', '#ff0000'), circles('b', '#ff0000', 'c'), circles('c', '#ff0000', 'labels'),
+        circles('d', '#ff0000', 'c'), circles('e', '#ff0000', 'b'),
+      ]);
+      await untilLayers('background,e,b,d,c,labels,a');
+      expect(await marked('e')).assertTrue();
+      // Without c, its layers go on top, as under a missing base layer.
+      testMap.content = content(TWO, [
+        circles('a', '#ff0000'), circles('b', '#ff0000', 'c'), circles('d', '#ff0000', 'c'),
+        circles('e', '#ff0000', 'b'),
+      ]);
+      await untilLayers('background,labels,a,e,b,d');
+      expect(testMap.errors.length).assertEqual(0);
+    });
+
+    it('puts layers that name each other in a cycle on top', 0, async () => {
+      testMap.content = content(TWO, [
+        circles('x', '#ff0000', 'y'), circles('y', '#ff0000', 'x'), circles('z', '#ff0000', 'x'),
+        circles('self', '#ff0000', 'self'),
+      ]);
+      await untilLayers('background,labels,z,x,y,self');
+      expect(testMap.errors.length).assertEqual(0);
+    });
+
+    it('sets the font scale that fp() reads on each style, and follows a change', 0, async () => {
+      const context = testMap.context!;
+      const scale = (): number => context.fp2px(1) / context.vp2px(1);
+      const state = async (): Promise<number | undefined> => {
+        const global = await requireMap().getGlobalState() as Record<string, Object>;
+        return global['maplibre-arkui:font-scale'] as number | undefined;
+      };
+      await eventually('the map has the font scale', async () => await state() === scale() ? true : undefined);
+      await setStyle(baseStyle('#4ad94a'));
+      expect(await state()).assertEqual(scale());
+
+      const app = application.getApplicationContext();
+      const before = scale();
+      app.setFontSizeScale(2);
+      try {
+        await until('the font scale changes', () => scale() !== before);
+        await eventually('the map follows the font scale', async () => await state() === scale() ? true : undefined);
+      } finally {
+        app.setFontSizeScale(before);
+      }
+      await eventually('the map follows it back', async () => await state() === before ? true : undefined);
+      expect(testMap.errors.length).assertEqual(0);
+    });
+
     it('replaces GeoJSON data in place', 0, async () => {
       await testMap.controller.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 0 } });
       testMap.content = content(TWO, [circles('dots', '#ff0000')]);
@@ -322,6 +380,26 @@ export default function contentTest(): void {
       expect(pixelAt(pixels, 128, 96, 32).join()).assertEqual('0,0,255,255');
       await pixelMap.release();
     });
+    it('scales fp() sizes by a snapshot\'s font scale', 0, async () => {
+      const center: GeoJsonGeometry = { type: 'Point', coordinates: [0, 0] };
+      const dot: MapContent = {
+        sources: [{ id: 'dot', json: { 'type': 'geojson', 'data': center } }],
+        layers: [{ id: 'dot', type: 'circle', source: 'dot', paint: { 'circle-color': '#ff0000', 'circle-radius': fp(8) } }],
+      };
+      // 12 vp from the dot's center: outside it at 8 vp, inside at 16.
+      const edge = async (fontScale?: number): Promise<string> => {
+        const pixelMap = await snapshot({
+          style: backgroundStyle('#0000ff'), content: dot, width: 64, height: 32, scaleFactor: 2,
+          camera: { center: { latitude: 0, longitude: 0 }, zoom: 0 }, fontScale: fontScale,
+        });
+        const pixels = await readPixels(pixelMap);
+        await pixelMap.release();
+        return pixelAt(pixels, 128, 2 * (32 + 12), 32).join();
+      };
+      expect(await edge()).assertEqual('0,0,255,255');
+      expect(await edge(2)).assertEqual('255,0,0,255');
+    });
+
     it('changes the filter, zoom range, and layout in place, and unsets them', 0, async () => {
       const plain: MapLayer = { id: 'dots', type: 'circle', source: 'places', paint: { 'circle-color': '#ff0000' } };
       testMap.content = content(TWO, [plain]);

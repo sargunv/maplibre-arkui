@@ -15,6 +15,7 @@ import {
 } from '@maplibre/native-ffi';
 
 import { Expression } from './Expressions';
+import { FONT_SCALE_STATE } from './fontScale';
 import { logError } from './log';
 
 /** Picks a layer of the base style, for `MapLayer.below`. */
@@ -51,7 +52,7 @@ export type FeatureClickHandler = (features: RenderedFeature[], event: MapClickE
 export interface MapContent {
   /** The sources that the layers draw, besides the base style's. */
   sources?: MapSource[];
-  /** The layers, from bottom to top among those with the same `below`. */
+  /** The layers, from bottom to top among those that go under the same layer. */
   layers?: MapLayer[];
   /** The images that the layers name, such as in `icon-image`. */
   images?: MapImage[];
@@ -116,12 +117,14 @@ export interface MapLayer {
   /** Layout properties by their style-spec names, as expressions or plain values. */
   layout?: Record<string, Object>;
   /**
-   * Places the layer under a layer of the base style: the one with this ID,
-   * or the lowest one that the predicate picks, such as
-   * `(layer: StyleLayerInfo) => layer.type === 'symbol'` to go below the
-   * labels, or `() => true` to go below everything. Without it, or when the
-   * base style has no such layer, the layer goes on top. Layers placed under
-   * the same layer keep their order in `MapContent.layers`.
+   * Places the layer under another: the content layer or base-style layer
+   * with this ID, or the lowest base-style layer that the predicate picks,
+   * such as `(layer: StyleLayerInfo) => layer.type === 'symbol'` to go below
+   * the labels, or `() => true` to go below everything. Under a content
+   * layer, it goes directly under that layer, wherever that layer goes.
+   * Without it, when no layer matches, or when content layers name each
+   * other in a cycle, the layer goes on top. Layers placed under the same
+   * layer keep their order in `MapContent.layers`.
    */
   below?: string | LayerPredicate;
   /**
@@ -201,6 +204,9 @@ export class ContentReconciler {
   private rejectedLayers: Map<string, string> = new Map<string, string>();
   private passes: Promise<void> = Promise.resolve();
   private queued: boolean = false;
+  // The font scale that fp() reads, and the one the current style has.
+  private fontScale: number = 1;
+  private appliedFontScale: number | undefined = undefined;
 
   constructor(map: MapHandle, onError: (error: Error) => void) {
     this.map = map;
@@ -210,6 +216,12 @@ export class ContentReconciler {
   /** Applies `content` to the loaded style, and to each style from now on. */
   setContent(content: MapContent | undefined): void {
     this.content = content;
+    this.schedule();
+  }
+
+  /** Sets the font scale that `fp()` reads, in the loaded style and each style from now on. */
+  setFontScale(scale: number): void {
+    this.fontScale = scale;
     this.schedule();
   }
 
@@ -255,6 +267,7 @@ export class ContentReconciler {
     this.generation++;
     this.loaded = false;
     this.base = undefined;
+    this.appliedFontScale = undefined;
     this.stack = [];
     this.sources.clear();
     this.layers.clear();
@@ -287,6 +300,13 @@ export class ContentReconciler {
         this.check(generation);
         this.base = base;
         this.stack = base.map((layer: StyleLayerInfo) => layer.id);
+      }
+      // Before the content, so its labels start at their size.
+      const scale = this.fontScale;
+      if (this.appliedFontScale !== scale) {
+        this.appliedFontScale = scale;
+        await this.run(generation, 'setting the font scale',
+          this.map.setGlobalStateProperty(FONT_SCALE_STATE, scale));
       }
       await this.apply(this.content, generation);
     } catch (error) {
@@ -419,17 +439,25 @@ export class ContentReconciler {
       }
     }
 
-    // Each group of layers under the same base layer, from its top down: each
-    // layer goes directly under the one above it.
+    // The layers under each content layer, and the rest by the base layer
+    // they go under.
+    const under = new Map<string, MapLayer[]>();
     const groups = new Map<string, MapLayer[]>();
     for (const layer of Array.from(layers.values())) {
-      const before = this.resolve(layer.below);
-      const group = groups.get(before) ?? [];
-      group.push(layer);
-      groups.set(before, group);
+      const below = layer.below;
+      const parent = typeof below === 'string' && layers.has(below) && !inCycle(layer, layers) ? below : undefined;
+      const into = parent !== undefined ? under : groups;
+      const key = parent ?? this.resolve(below);
+      const siblings = into.get(key) ?? [];
+      siblings.push(layer);
+      into.set(key, siblings);
     }
+    // Each group, from its top down: each layer goes directly under the one
+    // above it, and a layer that the map rejected leaves its place to the
+    // layers under it.
     for (const before of Array.from(groups.keys())) {
-      const group = groups.get(before) ?? [];
+      const group: MapLayer[] = [];
+      stackUp(groups.get(before) ?? [], under, group);
       let above = before;
       for (let i = group.length - 1; i >= 0; i--) {
         if (await this.applyLayer(group[i], above, generation)) {
@@ -558,6 +586,27 @@ export class ContentReconciler {
       found = base.find(below);
     }
     return found?.id ?? '';
+  }
+}
+
+// Whether following `below` from `layer` through content layers comes back to
+// it.
+function inCycle(layer: MapLayer, layers: Map<string, MapLayer>): boolean {
+  let next = layers.get(typeof layer.below === 'string' ? layer.below : '');
+  for (let steps = 0; next !== undefined && steps < layers.size; steps++) {
+    if (next.id === layer.id) {
+      return true;
+    }
+    next = layers.get(typeof next.below === 'string' ? next.below : '');
+  }
+  return false;
+}
+
+// Appends `layers` to `stack`, bottom to top, each above the layers under it.
+function stackUp(layers: MapLayer[], under: Map<string, MapLayer[]>, stack: MapLayer[]): void {
+  for (const layer of layers) {
+    stackUp(under.get(layer.id) ?? [], under, stack);
+    stack.push(layer);
   }
 }
 

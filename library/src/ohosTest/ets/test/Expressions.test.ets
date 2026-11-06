@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@ohos/hypium';
 import {
   abs, add, all, any, call, cases, ceil, coalesce, concat, cubicBezier, divide, downcase, eq,
-  Expression, exponential, featureState, floor, format, geometryType, get, globalState, gt, gte, has,
+  Expression, exponential, featureState, floor, format, fp, geometryType, get, globalState, gt, gte, has,
   heatmapDensity, id, image, interpolate, interpolateHcl, interpolateLab, JsonValue, linear,
   lineProgress, literal, lt, lte, match, max, min, mod, multiply, neq, not, pow, properties, rgb, rgba,
   round, sqrt, step, StyleExpressionHandle, StyleExpressionInputs, StyleExpressionTypeKind, subtract, toBoolean,
@@ -116,6 +116,11 @@ export default function expressionsTest(): void {
       }
     });
 
+    it('writes fp() as a product with the font scale, or 1', 0, () => {
+      expect(fp(14).toString())
+        .assertEqual('["*",14,["number",["global-state","maplibre-arkui:font-scale"],1]]');
+    });
+
     it('keeps a copy of the values it was built from', 0, () => {
       const labels: string[] = ['lake'];
       const values: JsonValue[] = ['a'];
@@ -223,6 +228,16 @@ export default function expressionsTest(): void {
       const props = withFeature({ 'a': 'x' });
       expect(evaluate(get('a', properties()), STRING, props)).assertEqual('"x"');
       expect(evaluate(has('b', properties()), BOOLEAN, props)).assertEqual('false');
+    });
+
+    it('scales fp() by the font scale, in a whole size or in each stop', 0, () => {
+      const scaled: Record<string, JsonValue> = { 'maplibre-arkui:font-scale': 1.5 };
+      expect(evaluate(fp(get('size')), NUMBER, withFeature({ 'size': 10 }))).assertEqual('10');
+      const inputs: StyleExpressionInputs = { feature: point({ 'size': 10 }), globalState: scaled };
+      expect(evaluate(fp(get('size')), NUMBER, inputs)).assertEqual('15');
+      const ramp = interpolate(linear(), zoom(), [[10, fp(12)], [20, fp(22)]]);
+      expect(evaluate(ramp, NUMBER, { zoom: 15, globalState: scaled })).assertEqual('25.5');
+      expect(evaluate(ramp, NUMBER, atZoom(15))).assertEqual('17');
     });
 
     it('computes math', 0, () => {

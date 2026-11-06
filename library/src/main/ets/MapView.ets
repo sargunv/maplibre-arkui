@@ -35,10 +35,13 @@ import {
   ScreenPoint,
   StyleSourceInfo,
 } from '@maplibre/native-ffi';
+import { Configuration } from '@ohos.app.ability.Configuration';
+import EnvironmentCallback from '@ohos.app.ability.EnvironmentCallback';
 import observer from '@ohos.arkui.observer';
 import geoLocationManager from '@ohos.geoLocationManager';
 
 import { ContentReconciler, loadStyle, MapClickEvent, MapContent, MapLayer } from './Content';
+import { fontScaleOf } from './fontScale';
 import { GESTURE_ANIMATION_MS, GestureTarget, MapGestures, snapBearing } from './gestures';
 import { FOLLOW_MS, UserLocationLayer } from './location';
 import { logError } from './log';
@@ -95,6 +98,15 @@ export class MapView extends XComponentController implements GestureTarget {
       this.recreateMap();
     }
   };
+  // The user's font size setting reaches the app as a configuration change.
+  private readonly environmentCallback: EnvironmentCallback = {
+    onConfigurationUpdated: (config: Configuration): void => {
+      this.reconciler?.setFontScale(fontScaleOf(this.context));
+    },
+    onMemoryLevel: (): void => {
+    },
+  };
+  private environmentCallbackId: number | undefined = undefined;
   private controller: MapController | undefined = undefined;
   private disposed: boolean = false;
   // How many times the app has moved the camera, which ends a gesture's say.
@@ -179,6 +191,8 @@ export class MapView extends XComponentController implements GestureTarget {
     this.content = content;
     this.bounds = bounds;
     this.context.getUIObserver().on('densityUpdate', this.densityListener);
+    this.environmentCallbackId = this.context.getHostContext()?.getApplicationContext()
+      .on('environment', this.environmentCallback);
     const runtimeReady = runtime === undefined ? getDefaultRuntime() : Promise.resolve(runtime);
     runtimeReady.then((runtime: RuntimeHandle) => {
       if (this.disposed) {
@@ -475,6 +489,9 @@ export class MapView extends XComponentController implements GestureTarget {
   dispose(): void {
     this.disposed = true;
     this.context.getUIObserver().off('densityUpdate', this.densityListener);
+    if (this.environmentCallbackId !== undefined) {
+      this.context.getHostContext()?.getApplicationContext().off('environment', this.environmentCallbackId);
+    }
     this.gestures.dispose();
     const runtime = this.runtime;
     // The map goes first, so the mask change that the listener's removal makes
@@ -555,6 +572,7 @@ export class MapView extends XComponentController implements GestureTarget {
     this.map = map;
     this.reconciler = new ContentReconciler(map, (error: Error) => this.fail(error));
     this.reconciler.setContent(this.content);
+    this.reconciler.setFontScale(fontScaleOf(this.context));
     this.defaultBounds = boundOptions(map.getSnapshot().bounds);
     addRuntimeMap(runtime, map, (error: Error) => this.fail(error));
     // The controller takes camera changes from here on, and the map runs

@@ -23,6 +23,7 @@ import {
   ConnectivityMode,
   eq,
   FollowBearing,
+  fp,
   GeoJsonFeature,
   GeoJsonFeatureCollection,
   get,
@@ -30,6 +31,7 @@ import {
   interpolate,
   LatLngBounds,
   linear,
+  literal,
   LogEvent,
   LogSeverity,
   LogSeverityFlag,
@@ -135,6 +137,17 @@ struct ContentExample {
         {
           id: 'monuments', type: 'symbol', source: 'places', filter: eq(get('kind'), 'monument'),
           layout: { 'icon-image': 'pin', 'icon-anchor': 'bottom', 'icon-allow-overlap': true },
+        },
+        {
+          id: 'names', type: 'symbol', source: 'places',
+          // fp(): the labels follow the user's font size setting.
+          layout: {
+            'text-field': get('name'), 'text-font': literal(['Noto Sans Regular']), 'text-size': fp(14),
+            'text-anchor': 'top', 'text-offset': literal([0, 0.8]),
+          },
+          paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 1 },
+          // Directly under the pins, wherever they go.
+          below: 'monuments',
         },
       ],
       images: [{ id: 'pin', image: this.pin, options: { pixelRatio: 3 } }],
