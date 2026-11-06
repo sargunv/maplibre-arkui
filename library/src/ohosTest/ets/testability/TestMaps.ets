@@ -6,6 +6,7 @@ import {
   CameraPosition,
   CameraUpdateMode,
   LatLng,
+  MapClickEvent,
   MapContent,
   MapController,
   MapGestureOptions,
@@ -78,6 +79,12 @@ export class TestMap {
   // What a case does as a gesture starts or ends, as an app would.
   onGestureStart: () => void = noop;
   onGestureEnd: () => void = noop;
+  // What got each click, in order, as 'click', 'long click', and 'unhandled'
+  // for the map's events, and what the cases' layer handlers add, with the
+  // events. The map's handlers consume the clicks while `consumeClicks` is on.
+  clicks: string[] = [];
+  clickEvents: MapClickEvent[] = [];
+  consumeClicks: boolean = false;
   controller: MapController = new MapController({ camera: { zoom: 1 } });
   scroller: Scroller = new Scroller();
   // The page's UI context, once the page appears.
@@ -103,6 +110,7 @@ export class TestMap {
     }
     this.onGestureStart = noop;
     this.onGestureEnd = noop;
+    this.consumeClicks = false;
     this.throwOnError = false;
     this.cameraBounds = undefined;
     this.scaleBar = undefined;
@@ -128,6 +136,8 @@ export class TestMap {
     await until('the map loads the style', () => this.styleLoads > loads && controller.styleLoaded);
     this.errors = [];
     this.cameraIdles = [];
+    this.clicks = [];
+    this.clickEvents = [];
     this.scroller.scrollTo({ xOffset: 0, yOffset: 0 });
     await controller.updateCamera({
       mode: CameraUpdateMode.jump,
@@ -139,6 +149,13 @@ export class TestMap {
         padding: { top: 0, left: 0, bottom: 0, right: 0 },
       },
     });
+  }
+
+  /** Records a click that `what` got, and returns whether it consumes it. */
+  click(what: string, event: MapClickEvent, consume: boolean): boolean {
+    this.clicks.push(what);
+    this.clickEvents.push(event);
+    return consume;
   }
 }
 

@@ -2,7 +2,7 @@ import { BoundOptions, Camera as CameraPosition, RuntimeHandle } from '@maplibre
 import geoLocationManager from '@ohos.geoLocationManager';
 
 import { MapGestureOptions, TAP_SLOP } from './gestures';
-import { MapContent } from './Content';
+import { MapClickEvent, MapContent } from './Content';
 import { MapController } from './MapController';
 import { noContent } from './MapMarker';
 import { MapView } from './MapView';
@@ -35,6 +35,12 @@ const BOTTOM_END: LocalizedAlignRuleOptions = {
  * which. The map takes the drags that start on it from a scrolling parent,
  * unless `gestures.cooperative` leaves one-finger drags to the parent. Content
  * above the map that handles its own gestures keeps them.
+ *
+ * A tap is a click, and a long press or a right click is a long click.
+ * `onMapClick` gets a click first, then the layers of `content` that handle
+ * it, from the top layer down, then `onUnhandledClick`, until one of them
+ * consumes it. While `gestures.zoom` is on, a tap clicks once 300 ms pass
+ * without a second tap, so a double tap zooms without clicking.
  *
  * ```ets
  * private map: MapController = new MapController({
@@ -149,6 +155,22 @@ export struct MapLibreMap {
    */
   @Event onGestureEnd: () => void = () => {
   };
+  /**
+   * The user clicked the map, before the layers of `content` get the click.
+   * Return `true` to consume it, so they don't, or `false` to pass it on.
+   */
+  @Event onMapClick: (event: MapClickEvent) => boolean = (event: MapClickEvent) => false;
+  /**
+   * The user long pressed or right clicked the map, before the layers of
+   * `content` get the long click. Return `true` to consume it.
+   */
+  @Event onMapLongClick: (event: MapClickEvent) => boolean = (event: MapClickEvent) => false;
+  /**
+   * Neither `onMapClick` nor a layer consumed a click, such as one beside the
+   * app's features, which may clear a selection.
+   */
+  @Event onUnhandledClick: (event: MapClickEvent) => void = (event: MapClickEvent) => {
+  };
 
   private view: MapView = new MapView(this.getUIContext(), {
     onStyleLoaded: () => this.onStyleLoaded(),
@@ -156,6 +178,9 @@ export struct MapLibreMap {
     onMapError: (error: Error) => this.onMapError(error),
     onGestureStart: () => this.onGestureStart(),
     onGestureEnd: () => this.onGestureEnd(),
+    onMapClick: (event: MapClickEvent): boolean => this.onMapClick(event),
+    onMapLongClick: (event: MapClickEvent): boolean => this.onMapLongClick(event),
+    onUnhandledClick: (event: MapClickEvent) => this.onUnhandledClick(event),
   });
 
   aboutToAppear(): void {
@@ -202,16 +227,17 @@ export struct MapLibreMap {
   // ArkUI's gestures decide whether the map owns a touch, against a scrolling
   // parent and content above the map, and MapGestures moves the camera from the
   // raw touches once one of them starts. The pan needs two fingers when one
-  // finger shouldn't move the map, so a parent scrolls instead. Taps zoom.
+  // finger shouldn't move the map, so a parent scrolls instead. Taps zoom, and
+  // MapGestures decides which taps click.
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
       XComponent({ type: XComponentType.SURFACE, controller: this.view })
         .width('100%')
         .height('100%')
-        .hitTestBehavior(this.anyGesture() ? HitTestMode.Default : HitTestMode.None)
         .focusable(true)
         .focusOnTouch(true)
         .onTouch((event: TouchEvent) => this.view.gestures.onTouch(event))
+        .onMouse((event: MouseEvent) => this.view.gestures.onMouse(event))
         .onAxisEvent((event: AxisEvent) => this.view.gestures.onAxis(event))
         .onKeyEvent((event: KeyEvent): boolean => this.view.gestures.onKey(event))
         .gesture(GestureGroup(GestureMode.Parallel,
@@ -224,6 +250,8 @@ export struct MapLibreMap {
             .onActionCancel(() => this.view.gestures.pinchCancelled()),
           RotationGesture()
             .onActionStart(() => this.view.gestures.claim()),
+          LongPressGesture()
+            .onAction(() => this.view.gestures.longPress()),
           TapGesture({ count: 2, distanceThreshold: TAP_SLOP })
             .onAction((event: GestureEvent) => {
               const finger = event.fingerList[0];
@@ -267,12 +295,6 @@ export struct MapLibreMap {
     .width('100%')
     .height('100%')
     .clip(true)
-  }
-
-  private anyGesture(): boolean {
-    const gestures = this.gestures;
-    return gestures.pan !== false || gestures.zoom !== false || gestures.rotate !== false ||
-      gestures.pitch !== false;
   }
 
   private panFingers(): number {

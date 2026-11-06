@@ -2,7 +2,7 @@
 // in GestureInput.test.ets.
 
 import { describe, expect, it } from '@ohos/hypium';
-import { CameraDelta, GesturePhase } from '@maplibre/arkui';
+import { CameraDelta, GesturePhase, ScreenPoint } from '@maplibre/arkui';
 import {
   GestureTarget,
   MapGestures,
@@ -20,8 +20,17 @@ class Recorder implements GestureTarget {
   ends: number = 0;
   rotated: boolean = false;
 
+  // Where each click was, and whether it was long.
+  clicks: ScreenPoint[] = [];
+  long: boolean[] = [];
+
   applyCameraDelta(delta: CameraDelta): void {
     this.deltas.push(delta);
+  }
+
+  clicked(point: ScreenPoint, long: boolean): void {
+    this.clicks.push({ x: point.x, y: point.y });
+    this.long.push(long);
   }
 
   gestureStarted(): void {
@@ -458,6 +467,51 @@ export default function gesturesTest(): void {
       // The second step replaced the first, which ended.
       expect(camera.starts).assertEqual(2);
       expect(camera.ends).assertEqual(1);
+    });
+
+    it('clicks at a tap once no second tap follows, and not at a double tap and drag', 0, async () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      gestures.height = 600;
+      gestures.touch(0, [touch(1, 200, 300)]);
+      gestures.touch(80, [touch(1, 204, 300)]);
+      gestures.touch(100, []);
+      // It waits for a second tap first.
+      expect(camera.clicks.length).assertEqual(0);
+      await until('the tap clicks', () => camera.clicks.length === 1);
+      expect(camera.clicks[0].x).assertEqual(204);
+      expect(camera.long[0]).assertFalse();
+
+      gestures.touch(1000, [touch(2, 200, 300)]);
+      gestures.touch(1080, []);
+      const end = drag(gestures, 1200, [touch(3, 200, 300)], [touch(3, 200, 450)], 10, 50);
+      gestures.touch(end + 100, []);
+      await frames(40);
+      expect(camera.clicks.length).assertEqual(1);
+      expect(camera.zoom()).assertLarger(0);
+    });
+
+    it('clicks at once while zoom is off, and long at a long press or a right click', 0, () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      gestures.options = { zoom: false };
+      gestures.touch(0, [touch(1, 200, 300)]);
+      gestures.touch(80, []);
+      expect(JSON.stringify(camera.long)).assertEqual('[false]');
+
+      gestures.touch(1000, [touch(2, 100, 100)]);
+      gestures.longPress();
+      gestures.touch(1600, []);
+      expect(JSON.stringify(camera.long)).assertEqual('[false,true]');
+      expect(camera.clicks[1].x).assertEqual(100);
+
+      gestures.rightClick(MouseAction.Press, { x: 50, y: 60 });
+      gestures.rightClick(MouseAction.Release, { x: 52, y: 60 });
+      expect(JSON.stringify(camera.long)).assertEqual('[false,true,true]');
+      // A long press after a drag isn't a click.
+      drag(gestures, 2000, [touch(3, 200, 300)], [touch(3, 300, 300)], 5, 20);
+      gestures.longPress();
+      expect(camera.long.length).assertEqual(3);
     });
 
     it('snaps a bearing near north', 0, () => {

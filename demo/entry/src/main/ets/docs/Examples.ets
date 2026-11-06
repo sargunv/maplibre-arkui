@@ -27,6 +27,7 @@ import {
   LogEvent,
   LogSeverity,
   LogSeverityFlag,
+  MapClickEvent,
   MapCompass,
   MapContent,
   MapController,
@@ -38,6 +39,7 @@ import {
   OfflineRegionDownloadState,
   PremultipliedRgba8Image,
   readPixelMap,
+  RenderedFeature,
   RuntimeEvent,
   RuntimeEventFlag,
   RuntimeEventType,
@@ -112,6 +114,16 @@ struct ContentExample {
           paint: { 'circle-radius': 8, 'circle-color': match(get('kind'), [['museum', '#fb8c00']], this.color) },
           // Under the base style's labels.
           below: (layer: StyleLayerInfo) => layer.type === 'symbol',
+          // #region layer-click
+          // A click up to 8 vp beside a circle counts.
+          hitPadding: 8,
+          onClick: (features: RenderedFeature[], event: MapClickEvent): boolean => {
+            const feature = features[0].feature as GeoJsonFeature;
+            this.selected = `${feature.properties?.['name']}`;
+            // Consumed: the layers under this one and onUnhandledClick don't get it.
+            return true;
+          },
+          // #endregion layer-click
         },
         {
           id: 'monuments', type: 'symbol', source: 'places', filter: eq(get('kind'), 'monument'),
@@ -125,10 +137,22 @@ struct ContentExample {
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      // #region query-click
-      MapLibreMap({ controller: this.controller, style: STYLE, content: this.content })
-        .onClick((event: ClickEvent) => this.select(event.x, event.y))
-      // #endregion query-click
+      // #region map-click
+      MapLibreMap({
+        controller: this.controller,
+        style: STYLE,
+        content: this.content,
+        // Before the layers: true keeps the long click from them.
+        onMapLongClick: (event: MapClickEvent): boolean => {
+          this.selected = `${event.coordinate.latitude.toFixed(4)}, ${event.coordinate.longitude.toFixed(4)}`;
+          return true;
+        },
+        // Neither the map's handler nor a layer consumed the click.
+        onUnhandledClick: (event: MapClickEvent) => {
+          this.selected = 'Nothing here';
+        },
+      })
+      // #endregion map-click
       Column({ space: 8 }) {
         Text(this.selected)
         Row({ space: 8 }) {
@@ -146,18 +170,43 @@ struct ContentExample {
       .margin({ bottom: 64 })
     }
   }
+}
 
-  // A click's point is in vp from the map's top-left corner, as queries take it.
+@ComponentV2
+struct QueryExample {
+  @Local found: string = 'Tap the map';
+  private controller: MapController = new MapController({
+    camera: { center: { latitude: 48.858, longitude: 2.315 }, zoom: 15 },
+  });
+
+  build() {
+    Stack({ alignContent: Alignment.Bottom }) {
+      // #region query-click
+      MapLibreMap({
+        controller: this.controller,
+        style: STYLE,
+        onMapClick: (event: MapClickEvent): boolean => {
+          this.query(event.x, event.y);
+          return false;
+        },
+      })
+      // #endregion query-click
+      Text(this.found)
+        .margin({ bottom: 64 })
+    }
+  }
+
+  // The base style's features within 20 vp of a click, in any layer.
   // #region query
-  private async select(x: number, y: number): Promise<void> {
+  private async query(x: number, y: number): Promise<void> {
     const session = this.controller.renderSession;
     if (session === undefined) {
       return;
     }
-    const hits = await session.queryRenderedFeatures({ kind: 'point', value: { x: x, y: y } },
-      { layerIds: ['places', 'monuments'] });
-    const feature = hits.length > 0 ? hits[0].feature as GeoJsonFeature : undefined;
-    this.selected = feature === undefined ? 'Nothing here' : `${feature.properties?.['name']}`;
+    const hits = await session.queryRenderedFeatures(
+      { kind: 'box', value: { min: { x: x - 20, y: y - 20 }, max: { x: x + 20, y: y + 20 } } });
+    const layers = new Set<string>(hits.map((hit: RenderedFeature) => hit.layerId));
+    this.found = `${hits.length} features in ${Array.from(layers).join(', ')}`;
   }
   // #endregion query
 }
@@ -511,6 +560,9 @@ export struct DocExamples {
         TabContent() {
           ContentExample()
         }.tabBar('Content')
+        TabContent() {
+          QueryExample()
+        }.tabBar('Query')
         TabContent() {
           MarkerExample()
         }.tabBar('Marker')

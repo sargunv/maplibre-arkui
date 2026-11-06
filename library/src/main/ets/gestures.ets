@@ -1,4 +1,4 @@
-// Gestures and other input that move a map's camera.
+// Gestures and other input that move a map's camera or click it.
 //
 // ArkUI's recognizers, which MapLibreMap binds, decide whether the map owns a
 // touch: against a parent such as a Scroll, and against content above the map.
@@ -12,6 +12,7 @@ import { CameraDelta, GesturePhase, ScreenPoint } from '@maplibre/native-ffi';
 
 /**
  * Which gestures move the map. Each defaults to on, except `cooperative`.
+ * Clicks reach the map's handlers whichever are on.
  *
  * ```ets
  * MapLibreMap({ controller: this.map, style: STYLE, gestures: { rotate: false, pitch: false } })
@@ -46,6 +47,8 @@ export interface TouchPoint {
 /** What gestures move and tell. The map implements it over its FFI map. */
 export interface GestureTarget {
   applyCameraDelta(delta: CameraDelta): void;
+  /** The user clicked at `point`: a tap, or a long press or right click if `long`. */
+  clicked(point: ScreenPoint, long: boolean): void;
   /** The user started to move the camera. */
   gestureStarted(): void;
   /** The camera stopped moving from the user's input. */
@@ -70,8 +73,10 @@ const SHOVE_MAX_ANGLE = 45;
 const PITCH_PER_VP = -0.3;
 // Closer fingers (6 mm) give unstable scale and angle.
 const MIN_SPAN = 37.8;
-// A second press this soon and close after a tap, then a drag, zooms. Four
-// levels per map height, and dragging down zooms in.
+// A second press this soon and close after a tap is a double tap, as ArkUI's
+// tap gesture finds it, and a drag from it zooms: four levels per map height,
+// and dragging down zooms in. While zoom is on, a tap clicks once this long
+// passes without that press.
 const QUICK_ZOOM_MS = 300;
 const QUICK_ZOOM_SLOP = 60;
 const QUICK_ZOOM_LEVELS = 4;
@@ -143,12 +148,19 @@ export class MapGestures {
   private readonly panY: Velocity = new Velocity();
   private readonly zoom: Velocity = new Velocity();
   private readonly turn: Velocity = new Velocity();
-  // Taps, for a double tap and drag.
+  // Taps, for clicks and a double tap and drag.
   private down: TouchPoint | undefined = undefined;
   private tap: boolean = false;
   private lastTap: TouchPoint | undefined = undefined;
   private lastTapTime: number = -Infinity;
   private quickZoomReady: boolean = false;
+  // A tap that clicks unless a second tap follows it, and the frame time when
+  // it started to wait. The press of a second tap makes neither tap click.
+  private pendingTap: TouchPoint | undefined = undefined;
+  private pendingSince: number = -1;
+  private secondTap: boolean = false;
+  // Where the right mouse button went down.
+  private rightDown: ScreenPoint | undefined = undefined;
   // The camera gesture: FFI's gesture phase is open, the app was told it
   // started, and whether it rotated the map.
   private phaseOpen: boolean = false;
@@ -267,6 +279,38 @@ export class MapGestures {
     this.claimed = true;
     this.tap = false;
     this.restart(true);
+  }
+
+  /**
+   * The map's long press gesture recognized the touch that's down. It's a
+   * long click unless the touch moved, and its release doesn't click.
+   */
+  longPress(): void {
+    if (!this.tap || this.claimed || this.touches.length !== 1) {
+      return;
+    }
+    this.tap = false;
+    this.target.clicked(this.touches[0], true);
+  }
+
+  /** Takes a mouse event of the map: a right click is a long click. */
+  onMouse(event: MouseEvent): void {
+    if (event.button === MouseButton.Right) {
+      this.rightClick(event.action, { x: event.x, y: event.y });
+    }
+  }
+
+  /** Takes the right mouse button going down or up at `point`. */
+  rightClick(action: MouseAction, point: ScreenPoint): void {
+    const down = this.rightDown;
+    if (action === MouseAction.Press) {
+      this.rightDown = point;
+    } else if (action === MouseAction.Release && down !== undefined) {
+      this.rightDown = undefined;
+      if (distance(down, point) <= TAP_SLOP) {
+        this.target.clicked(point, true);
+      }
+    }
   }
 
   /** Zooms in at a double tap. */
@@ -426,11 +470,16 @@ export class MapGestures {
     }
   }
 
-  /** The system took the touches back: end without momentum. */
+  /** The system took the touches back: end without momentum or a click. */
   cancel(): void {
     this.stopMomentum();
     this.touches = [];
     this.claimed = false;
+    this.tap = false;
+    this.lastTap = undefined;
+    this.pendingTap = undefined;
+    this.rightDown = undefined;
+    this.idleFrames();
     if (this.phaseOpen) {
       this.phaseOpen = false;
       this.moving = false;
@@ -448,7 +497,8 @@ export class MapGestures {
   }
 
   // The first touch of a sequence stops momentum. A press soon after a tap may
-  // start a quick zoom.
+  // start a quick zoom, and is a second tap: the tap before it doesn't click.
+  // Any other press lets that tap click at once.
   private press(time: number, point: TouchPoint): void {
     this.stopMomentum();
     this.finish();
@@ -459,6 +509,13 @@ export class MapGestures {
     const lastTap = this.lastTap;
     this.quickZoomReady = lastTap !== undefined && time - this.lastTapTime < QUICK_ZOOM_MS &&
       distance(lastTap, point) < QUICK_ZOOM_SLOP;
+    const pending = this.pendingTap;
+    this.pendingTap = undefined;
+    this.idleFrames();
+    this.secondTap = pending !== undefined && this.quickZoomReady;
+    if (pending !== undefined && !this.secondTap) {
+      this.target.clicked(pending, false);
+    }
   }
 
   // Recognition starts again from the touches that are down. Once the map
@@ -609,13 +666,23 @@ export class MapGestures {
     }
   }
 
-  // The last finger lifted: coast with the motion's momentum, then end.
+  // The last finger lifted: coast with the motion's momentum, then end. A tap
+  // clicks, after the time for a second tap while zoom is on.
   private release(time: number, previous: TouchPoint[]): void {
     const claimed = this.claimed;
     this.claimed = false;
     if (this.tap && previous.length === 1) {
       this.lastTap = previous[0];
       this.lastTapTime = time;
+      if (this.secondTap) {
+        // A double tap, which zooms if anything.
+      } else if (this.options.zoom === false) {
+        this.target.clicked(previous[0], false);
+      } else {
+        this.pendingTap = previous[0];
+        this.pendingSince = -1;
+        this.runFrames();
+      }
     } else {
       this.lastTap = undefined;
     }
@@ -634,12 +701,39 @@ export class MapGestures {
     }
     this.momentum = momentum;
     this.momentumStart = -1;
+    this.runFrames();
+  }
+
+  // Frames drive momentum and the wait for a second tap.
+  private runFrames(): void {
     if (this.frames === undefined) {
       const frames = displaySync.create();
-      frames.on('frame', (info: displaySync.IntervalInfo) => this.coast(info.timestamp / 1e6));
+      frames.on('frame', (info: displaySync.IntervalInfo) => this.frame(info.timestamp / 1e6));
       this.frames = frames;
     }
     this.frames.start();
+  }
+
+  private idleFrames(): void {
+    if (this.momentum === undefined && this.pendingTap === undefined) {
+      this.frames?.stop();
+    }
+  }
+
+  private frame(time: number): void {
+    this.coast(time);
+    const pending = this.pendingTap;
+    if (pending === undefined) {
+      return;
+    }
+    if (this.pendingSince < 0) {
+      this.pendingSince = time;
+    }
+    if (time - this.pendingSince >= QUICK_ZOOM_MS) {
+      this.pendingTap = undefined;
+      this.idleFrames();
+      this.target.clicked(pending, false);
+    }
   }
 
   // The momentum of the motion so far, if the last finger lifted at `time`.
@@ -676,7 +770,7 @@ export class MapGestures {
   private stopMomentum(): void {
     if (this.momentum !== undefined) {
       this.momentum = undefined;
-      this.frames?.stop();
+      this.idleFrames();
     }
   }
 

@@ -15,19 +15,23 @@ import {
   LogicalSize,
   MapHandle,
   MapMode,
+  MapProjectionHandle,
   MapView as FrameView,
   RenderDriverKind,
+  RenderedFeature,
+  RenderedQueryGeometry,
   RenderResult,
   RenderSessionHandle,
   RuntimeEvent,
   RuntimeEventFlag,
   RuntimeEventType,
   RuntimeHandle,
+  ScreenPoint,
   StyleSourceInfo,
 } from '@maplibre/native-ffi';
 import geoLocationManager from '@ohos.geoLocationManager';
 
-import { ContentReconciler, loadStyle, MapContent } from './Content';
+import { ContentReconciler, loadStyle, MapClickEvent, MapContent, MapLayer } from './Content';
 import { GESTURE_ANIMATION_MS, GestureTarget, MapGestures, snapBearing } from './gestures';
 import { FOLLOW_MS, UserLocationLayer } from './location';
 import { logError } from './log';
@@ -55,6 +59,9 @@ export interface MapViewEvents {
   onMapError: (error: Error) => void;
   onGestureStart: () => void;
   onGestureEnd: () => void;
+  onMapClick: (event: MapClickEvent) => boolean;
+  onMapLongClick: (event: MapClickEvent) => boolean;
+  onUnhandledClick: (event: MapClickEvent) => void;
 }
 
 export class MapView extends XComponentController implements GestureTarget {
@@ -98,6 +105,8 @@ export class MapView extends XComponentController implements GestureTarget {
   private target: bigint | undefined = undefined;
   // Target changes run one at a time, in the order the component reports them.
   private targets: Promise<void> = Promise.resolve();
+  // Clicks reach the app one at a time, in order, across their queries.
+  private clicks: Promise<void> = Promise.resolve();
   // The view of the last frame shown, as JSON, to skip frames that only
   // redraw it.
   private frameView: string = '';
@@ -261,6 +270,97 @@ export class MapView extends XComponentController implements GestureTarget {
         this.cameraIdle(result.camera);
       }
     }).catch((error: Error) => this.fail(error));
+  }
+
+  // The coordinate is the one under the click as it happens, before the
+  // queries that the layers need.
+  clicked(point: ScreenPoint, long: boolean): void {
+    const map = this.map;
+    if (map === undefined || this.disposed) {
+      return;
+    }
+    const projection = MapProjectionHandle.create(map.getSnapshot().view);
+    let event: MapClickEvent;
+    try {
+      event = { x: point.x, y: point.y, coordinate: projection.latLngForPixel(point) };
+    } finally {
+      projection.release();
+    }
+    this.clicks = this.clicks
+      .then(() => this.dispatchClick(map, event, long))
+      .catch((error: Error) => logError(`A click handler threw: ${error.message}`));
+  }
+
+  // The map's handler first, then the layers' from the top down, then the
+  // unhandled click. A click whose map or style went away during the query is
+  // dropped.
+  private async dispatchClick(map: MapHandle, event: MapClickEvent, long: boolean): Promise<void> {
+    const reconciler = this.reconciler;
+    if (this.map !== map || reconciler === undefined) {
+      return;
+    }
+    if (long ? this.events.onMapLongClick(event) : this.events.onMapClick(event)) {
+      return;
+    }
+    const layers = reconciler.clickableLayers(long);
+    if (layers.length > 0) {
+      const generation = reconciler.styleGeneration;
+      const hits = await this.queryClick(layers, event);
+      if (this.map !== map || this.reconciler !== reconciler || reconciler.styleGeneration !== generation ||
+        hits === undefined) {
+        return;
+      }
+      for (const layer of layers) {
+        const handler = long ? layer.onLongClick : layer.onClick;
+        const features = hits.filter((hit: RenderedFeature) => hit.layerId === layer.id);
+        if (handler !== undefined && features.length > 0 && handler(features, event)) {
+          return;
+        }
+      }
+    }
+    if (!long) {
+      this.events.onUnhandledClick(event);
+    }
+  }
+
+  // The features of the layers under the click, with one query for each
+  // hitPadding, or undefined if a query fails.
+  private async queryClick(layers: MapLayer[], event: MapClickEvent): Promise<RenderedFeature[] | undefined> {
+    const session = this.session;
+    if (session === undefined) {
+      return [];
+    }
+    const byPadding = new Map<number, string[]>();
+    for (const layer of layers) {
+      const padding = Math.max(0, layer.hitPadding ?? 0);
+      const ids = byPadding.get(padding) ?? [];
+      ids.push(layer.id);
+      byPadding.set(padding, ids);
+    }
+    const queries: Promise<readonly RenderedFeature[]>[] = [];
+    byPadding.forEach((ids: string[], padding: number) => {
+      const geometry: RenderedQueryGeometry = padding === 0 ?
+        { kind: 'point', value: { x: event.x, y: event.y } } :
+        {
+          kind: 'box',
+          value: {
+            min: { x: event.x - padding, y: event.y - padding },
+            max: { x: event.x + padding, y: event.y + padding },
+          },
+        };
+      queries.push(session.queryRenderedFeatures(geometry, { layerIds: ids }));
+    });
+    try {
+      const results = await Promise.all(queries);
+      let hits: RenderedFeature[] = [];
+      for (const result of results) {
+        hits = hits.concat(Array.from(result));
+      }
+      return hits;
+    } catch (error) {
+      this.fail(error as Error);
+      return undefined;
+    }
   }
 
   dispose(): void {

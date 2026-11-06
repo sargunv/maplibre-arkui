@@ -25,7 +25,9 @@ as ArkTS.
   fields it needs: `MapContent`, `MapSource`, `MapLayer`, `MapImage`.
 - Events are `@Event` params named `on` and what happened: `onStyleLoaded`,
   `onCameraIdle`, `onMapError`, and `onGestureStart` / `onGestureEnd`, as
-  ArkUI's `onScrollStart` / `onScrollStop` pair.
+  ArkUI's `onScrollStart` / `onScrollStop` pair. A handler that can keep an
+  event from the handlers after it returns `true` to consume it, as ArkUI's
+  `onKeyEvent` does: `onMapClick` and `MapLayer.onClick`.
 - A flag that shows an ornament ends in `Enabled` (`compassEnabled`), and other
   flags are adjectives or the names of what they turn on (`alwaysShown`,
   `cooperative`, `rotate`).

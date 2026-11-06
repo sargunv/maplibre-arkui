@@ -38,8 +38,9 @@ declares GeoJSON's types (<Api of="GeoJsonFeatureCollection" />,
 <Code code={region(examples, "geojson")} lang="ts" />
 
 Layers go on top, or under the base-style layer that `below` names or picks, in
-their order in `layers`. A source or layer that the map rejects goes to
-`onMapError` and stays out until it changes. <Api of="readPixelMap" display="readPixelMap()" />
+their order in `layers`, and their `onClick` and `onLongClick` handle
+[clicks](/maplibre-arkui/gestures/#clicks) on their features. A source or layer
+that the map rejects goes to `onMapError` and stays out until it changes. <Api of="readPixelMap" display="readPixelMap()" />
 turns a decoded `PixelMap` into a style image; the demo's [`readImage()`] reads
 one from `resources/rawfile`.
 
