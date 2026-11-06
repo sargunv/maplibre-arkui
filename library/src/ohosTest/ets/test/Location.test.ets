@@ -218,6 +218,7 @@ export default function locationTest(): void {
       // While it follows without the heading, a new heading leaves a camera
       // change that the app makes.
       map.followUserLocation({ bearing: FollowBearing.course });
+      await until('the camera turns to the course', () => restsAt(5.1, 6.1) && near(camera().bearing, 90, 0.001));
       await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { center: { latitude: 5.2, longitude: 6.2 } } });
       testMap.userHeading = 120;
       await eventually('the arrow turns to the heading', async () =>
