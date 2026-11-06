@@ -27,6 +27,8 @@ class Recorder implements GestureTarget {
   ticks: number = 0;
   // The camera's bearing before the deltas.
   initialBearing: number = 0;
+  // Whether zoom and rotation keep the center, as while following a location.
+  keeps: boolean = false;
 
   // Where each click was, and whether it was long.
   clicks: ScreenPoint[] = [];
@@ -57,6 +59,10 @@ class Recorder implements GestureTarget {
 
   hapticTick(): void {
     this.ticks++;
+  }
+
+  keepsCenter(): boolean {
+    return this.keeps;
   }
 
   offsetX(from: number = 0): number {
@@ -320,6 +326,40 @@ export default function gesturesTest(): void {
       const anchor = camera.deltas[1].anchor;
       expect(anchor?.x).assertEqual(200);
       expect(anchor?.y).assertEqual(300);
+    });
+
+    it('zooms and rotates about the center while the target keeps it, and two fingers don\'t pan', 0, () => {
+      const camera = new Recorder();
+      camera.keeps = true;
+      const gestures = new MapGestures(camera);
+      // A pinch whose fingers drift down and to the side, which pans after 4 vp.
+      let end = drag(gestures, 0, [touch(1, 150, 300), touch(2, 250, 300)],
+        [touch(1, 70, 360), touch(2, 370, 360)], 20, 16);
+      gestures.touch(end + 100, []);
+      expect(camera.zoom()).assertLarger(1);
+      expect(camera.offsetX()).assertEqual(0);
+      expect(camera.offsetY()).assertEqual(0);
+      expect(camera.deltas.every((d: CameraDelta) => d.anchor === undefined)).assertTrue();
+
+      const twisted = camera.deltas.length;
+      end = twist(gestures, 100, 60, 20, end + 1000);
+      gestures.touch(end + 100, []);
+      expect(camera.bearing()).assertLess(-40);
+      expect(camera.offsetX(twisted)).assertEqual(0);
+      expect(camera.deltas.every((d: CameraDelta) => d.anchor === undefined)).assertTrue();
+
+      gestures.doubleTap(100, 100);
+      expect(camera.deltas[camera.deltas.length - 1].scale).assertEqual(2);
+      expect(camera.deltas[camera.deltas.length - 1].anchor).assertUndefined();
+
+      // Once the target lets the center go, the fingers pan and anchor again.
+      camera.keeps = false;
+      const panned = camera.deltas.length;
+      end = drag(gestures, end + 2000, [touch(1, 150, 300), touch(2, 250, 300)],
+        [touch(1, 70, 360), touch(2, 370, 360)], 20, 16);
+      gestures.touch(end + 100, []);
+      expect(camera.offsetY(panned)).assertLarger(0);
+      expect(camera.deltas.slice(panned).some((d: CameraDelta) => d.anchor !== undefined)).assertTrue();
     });
 
     it('keeps the content under the fingers of a pinch that report one at a time', 0, () => {

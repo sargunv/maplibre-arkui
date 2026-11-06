@@ -98,8 +98,9 @@ export class MapController {
   @Trace attributions: string[] = [];
   /**
    * Whether the camera follows the map's `userLocation`. Only
-   * `followUserLocation()`, `stopFollowingUserLocation()`, and the map set it:
-   * the map stops following as the user starts a gesture.
+   * `followUserLocation()` and `stopFollowingUserLocation()` set it; the
+   * user's input doesn't, so an app stops following where it chooses, such as
+   * in the `onStart` of the map's `interactions.pan`.
    */
   @Trace followingUserLocation: boolean = false;
 
@@ -275,15 +276,31 @@ export class MapController {
   /**
    * Moves the camera to the map's `userLocation`, and then to each new one,
    * and to each new `userHeading` too while `options` follows the heading,
-   * until the user starts a gesture or the app calls
-   * `stopFollowingUserLocation()`. Without a location yet, the camera moves
-   * once the map gets one. Each move eases the center, the first also the
-   * zoom that `options` names, and each the bearing if `options` asks; the
-   * rest of the camera stays as the app leaves it. A camera change that the
-   * app makes while following lasts until the next location or heading.
+   * until the app calls `stopFollowingUserLocation()`. Without a location yet,
+   * the camera moves once the map gets one. Each move eases the center, the
+   * first also the zoom that `options` names, and each the bearing if
+   * `options` asks; the rest of the camera stays as the app leaves it. A
+   * camera change that the app makes while following lasts until the next
+   * location or heading.
+   *
+   * While it follows, the user's zoom and rotation keep the location at the
+   * center, and two fingers don't pan. The camera waits for the user's input
+   * to end, then catches up with the location, so a pan or a rotation away
+   * from a followed bearing eases back unless the app stops following, or
+   * follows without the bearing, in that movement's `onStart`:
    *
    * ```ets
    * this.controller.followUserLocation({ zoom: 16, bearing: FollowBearing.heading });
+   *
+   * MapLibreMap({
+   *   controller: this.controller,
+   *   style: STYLE,
+   *   userLocation: this.location,
+   *   interactions: {
+   *     pan: { onStart: () => this.controller.stopFollowingUserLocation() },
+   *     rotate: { onStart: () => this.controller.followUserLocation() },
+   *   },
+   * })
    * ```
    */
   followUserLocation(options?: FollowUserLocationOptions): void {

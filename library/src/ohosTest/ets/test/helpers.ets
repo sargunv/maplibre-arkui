@@ -6,7 +6,7 @@ import { CameraPosition, LatLng, MapHandle, MapProjectionHandle, readPixelMap, S
 import application from '@ohos.app.ability.application';
 import fs from '@ohos.file.fs';
 import image from '@ohos.multimedia.image';
-import { Driver, ON, Point, Rect as Bounds } from '@ohos.UiTest';
+import { Driver, ON, Point, PointerMatrix, Rect as Bounds } from '@ohos.UiTest';
 
 import { testMap, until } from '../testability/TestMaps';
 
@@ -143,4 +143,53 @@ export async function screenPixel(point: Point): Promise<number[]> {
 // A color written #rrggbb, as red, green, and blue.
 export function rgb(color: string): number[] {
   return [1, 3, 5].map((start: number) => parseInt(color.slice(start, start + 2), 16));
+}
+
+// Two fingers that move from `from` to `to` together, in px.
+export function twoFingers(from: Point[], to: Point[], steps: number): PointerMatrix {
+  const pointers = PointerMatrix.create(2, steps);
+  for (let step = 0; step < steps; step++) {
+    const t = steps === 1 ? 0 : step / (steps - 1);
+    for (let finger = 0; finger < 2; finger++) {
+      pointers.setPoint(finger, step, {
+        x: Math.round(from[finger].x + (to[finger].x - from[finger].x) * t),
+        y: Math.round(from[finger].y + (to[finger].y - from[finger].y) * t),
+      });
+    }
+  }
+  return pointers;
+}
+
+// Two fingers on a circle of `radius` vp about `c`, `degrees` around it. Then
+// they stay at that angle for `hold` steps, which take time only if the
+// fingers move, so they move 1 vp in and out.
+export function twist(c: Point, radius: number, degrees: number, steps: number, hold: number = 0): PointerMatrix {
+  const pointers = PointerMatrix.create(2, steps + hold);
+  for (let step = 0; step < steps + hold; step++) {
+    const r = degrees * Math.min(1, step / (steps - 1)) * Math.PI / 180;
+    const length = vp2px(radius + (step >= steps ? (step - steps) % 2 : 0));
+    const dx = Math.round(length * Math.cos(r));
+    const dy = Math.round(length * Math.sin(r));
+    pointers.setPoint(0, step, { x: c.x - dx, y: c.y - dy });
+    pointers.setPoint(1, step, { x: c.x + dx, y: c.y + dy });
+  }
+  return pointers;
+}
+
+// A speed of `vp` vp a second, in the px a second that Driver takes.
+export function speed(vp: number): number {
+  return Math.round(vp2px(vp));
+}
+
+// Waits until the input that `act` makes has moved the camera and stopped,
+// with its momentum and any animation.
+export async function gesture(act: () => Promise<void>): Promise<void> {
+  const starts = testMap.gestureStarts;
+  await act();
+  await until('a gesture starts', () => testMap.gestureStarts > starts);
+  await until('the camera rests', () => {
+    const snapshot = testMap.controller.map?.getSnapshot();
+    return testMap.gestureEnds === testMap.gestureStarts && snapshot !== undefined &&
+      !snapshot.transitionInProgress && !snapshot.gestureInProgress;
+  });
 }

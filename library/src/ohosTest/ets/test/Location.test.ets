@@ -1,10 +1,10 @@
 // The user's location: the indicator that the map draws, and a camera that
-// follows it until a gesture. The locations and headings are made up, as an
+// follows it through the user's input until the app stops it. The locations and headings are made up, as an
 // app's test or its simulated walk makes them; the emulator's Location Kit has
 // no fixes, and it has no compass.
 
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
-import { CameraUpdateMode, FollowBearing, MapHandle } from '@maplibre/arkui';
+import { CameraUpdateMode, FollowBearing, LatLng, MapHandle, StyleLayerInfo } from '@maplibre/arkui';
 import {
   BORDER_RADIUS,
   DOT_COLOR,
@@ -13,7 +13,7 @@ import {
 } from '@maplibre/arkui/src/main/ets/location';
 
 import geoLocationManager from '@ohos.geoLocationManager';
-import { Driver } from '@ohos.UiTest';
+import { Driver, Point } from '@ohos.UiTest';
 
 import { backgroundStyle, testMap } from '../testability/TestMaps';
 import {
@@ -21,6 +21,7 @@ import {
   eventually,
   expectNear,
   frames,
+  gesture,
   mapCenter,
   near,
   offset,
@@ -28,8 +29,10 @@ import {
   rgb,
   screenPixel,
   setStyle,
+  speed,
+  twist,
+  twoFingers,
   until,
-  vp2px,
 } from './helpers';
 
 // A location as Location Kit reports one.
@@ -81,6 +84,27 @@ async function accuracyRadius(): Promise<number> {
 
 async function arrowBearing(): Promise<number> {
   return await requireMap().getStyleLayerProperty(USER_LOCATION_LAYER, 'bearing') as number;
+}
+
+// Where the camera's center is as the next gesture ends, before the camera
+// catches up with the location.
+function centerAtEnd(): LatLng[] {
+  const centers: LatLng[] = [];
+  testMap.onGestureEnd = () => {
+    const center = requireMap().getSnapshot().view.camera.center;
+    centers.push({ latitude: center.latitude, longitude: center.longitude });
+  };
+  return centers;
+}
+
+function expectAt(centers: LatLng[], latitude: number, longitude: number): void {
+  expect(centers.length).assertEqual(1);
+  expectNear(centers[0].latitude, latitude, 1e-6);
+  expectNear(centers[0].longitude, longitude, 1e-6);
+}
+
+function wrap(degrees: number): number {
+  return (((degrees + 180) % 360) + 360) % 360 - 180;
 }
 
 // How far the middle of the arrow is from the dot's center, in vp.
@@ -254,8 +278,17 @@ export default function locationTest(): void {
       expectNear(camera().zoom, 14, 0.001);
     });
 
-    it('stops following as a gesture starts, until the app resumes', 0, async () => {
+    it('stops following where pan\'s onStart stops it, until the app resumes', 0, async () => {
       const map = testMap.controller;
+      let pans = 0;
+      testMap.interactions = {
+        pan: {
+          onStart: () => {
+            pans++;
+            map.stopFollowingUserLocation();
+          },
+        },
+      };
       map.followUserLocation();
       testMap.userLocation = fix(0.01, 0.01);
       await until('the camera follows', () => restsAt(0.01, 0.01));
@@ -263,12 +296,9 @@ export default function locationTest(): void {
       const c = await mapCenter();
       const from = offset(c, 100, 0);
       const to = offset(c, -100, 0);
-      const starts = testMap.gestureStarts;
-      await Driver.create().swipe(from.x, from.y, to.x, to.y, Math.round(vp2px(200)));
-      await until('a gesture starts', () => testMap.gestureStarts > starts);
+      await gesture(() => Driver.create().swipe(from.x, from.y, to.x, to.y, speed(200)));
+      expect(pans).assertEqual(1);
       expect(map.followingUserLocation).assertFalse();
-      await until('the gesture ends', () => testMap.gestureEnds === testMap.gestureStarts &&
-        !(map.map?.getSnapshot().transitionInProgress ?? true));
       const panned = camera().center;
       expect(panned.longitude).assertLarger(0.05);
 
@@ -281,6 +311,137 @@ export default function locationTest(): void {
 
       map.followUserLocation();
       await until('the camera follows again', () => restsAt(0.02, 0.02));
+    });
+
+    it('keeps following through a pinch, about the location, and catches up after it', 0, async () => {
+      const map = testMap.controller;
+      map.followUserLocation();
+      testMap.userLocation = fix(0.01, 0.01);
+      await until('the camera follows', () => restsAt(0.01, 0.01));
+      // A location that comes during the pinch waits for it.
+      testMap.onGestureStart = () => {
+        testMap.userLocation = fix(0.011, 0.011);
+      };
+      const ended = centerAtEnd();
+
+      // Off the center, and drifting, which would zoom about the fingers and
+      // pan.
+      const c = await mapCenter();
+      const from: Point[] = [offset(c, 20, 100), offset(c, 120, 100)];
+      const to: Point[] = [offset(c, -60, 130), offset(c, 200, 130)];
+      await gesture(async () => {
+        await Driver.create().injectMultiPointerAction(twoFingers(from, to, 20), speed(400));
+      });
+      expect(map.followingUserLocation).assertTrue();
+      expect(camera().zoom).assertLarger(10.8);
+      expectAt(ended, 0.01, 0.01);
+      await until('the camera reaches the location that came during the pinch', () => restsAt(0.011, 0.011));
+      expect(map.followingUserLocation).assertTrue();
+    });
+
+    it('keeps following through a twist, about the location, with its bearing', 0, async () => {
+      const map = testMap.controller;
+      map.followUserLocation();
+      testMap.userLocation = fix(0.01, 0.01);
+      await until('the camera follows', () => restsAt(0.01, 0.01));
+
+      const ended = centerAtEnd();
+      const c = offset(await mapCenter(), 60, 120);
+      await gesture(async () => {
+        await Driver.create().injectMultiPointerAction(twist(c, 100, 60, 20), speed(300));
+      });
+      expect(map.followingUserLocation).assertTrue();
+      expectAt(ended, 0.01, 0.01);
+      await until('the camera rests at the location', () => restsAt(0.01, 0.01));
+      const bearing = camera().bearing;
+      expect(Math.abs(wrap(bearing))).assertLarger(40);
+
+      // The next location keeps the user's bearing.
+      testMap.userLocation = fix(0.012, 0.012);
+      await until('the camera follows the next location', () => restsAt(0.012, 0.012));
+      expectNear(camera().bearing, bearing, 0.001);
+    });
+
+    it('turns back to the course after a twist, unless rotate\'s onStart follows without it', 0, async () => {
+      const map = testMap.controller;
+      map.followUserLocation({ bearing: FollowBearing.course });
+      testMap.userLocation = fix(0.01, 0.01, 10, 3, 90);
+      await until('the camera turns to the course', () => restsAt(0.01, 0.01) && near(camera().bearing, 90, 0.001));
+
+      const c = await mapCenter();
+      await gesture(async () => {
+        await Driver.create().injectMultiPointerAction(twist(c, 100, 60, 20), speed(300));
+      });
+      await until('the camera turns back to the course', () =>
+        restsAt(0.01, 0.01) && near(camera().bearing, 90, 0.001));
+
+      testMap.interactions = { rotate: { onStart: () => map.followUserLocation() } };
+      await gesture(async () => {
+        await Driver.create().injectMultiPointerAction(twist(c, 100, 60, 20), speed(300));
+      });
+      expect(map.followingUserLocation).assertTrue();
+      await until('the camera rests at the location', () => restsAt(0.01, 0.01));
+      const bearing = camera().bearing;
+      expect(Math.abs(wrap(bearing - 90))).assertLarger(40);
+      testMap.userLocation = fix(0.012, 0.012, 10, 3, 90);
+      await until('the camera follows the next location', () => restsAt(0.012, 0.012));
+      expectNear(camera().bearing, bearing, 0.001);
+    });
+
+    it('draws the indicator with the options\' colors, images, and layer', 0, async () => {
+      // A layer of content for the indicator to go under.
+      const top: Record<string, Object> = { 'background-color': '#00ff00', 'background-opacity': 0 };
+      testMap.content = { layers: [{ id: 'top', type: 'background', paint: top }] };
+      testMap.userLocationIndicator = {
+        color: '#ff0000',
+        accuracyColor: '#00ff00',
+        accuracyBorderColor: 'rgba(0, 0, 255, 0.5)',
+        bearingImage: 'custom-arrow',
+        shadowImage: '',
+        below: 'top',
+      };
+      testMap.userLocation = fix(0, 0, 25, 3, 45);
+      await drawnAt(0, 0);
+      const map = requireMap();
+      // The style's normalized forms: colors as rgba() with premultiplied
+      // channels undone.
+      expect(await map.getStyleLayerProperty(USER_LOCATION_LAYER, 'accuracy-radius-color') as string)
+        .assertEqual('rgba(0,255,0,1)');
+      expect(await map.getStyleLayerProperty(USER_LOCATION_LAYER, 'accuracy-radius-border-color') as string)
+        .assertEqual('rgba(0,0,255,0.5)');
+      expect(await map.getStyleLayerProperty(USER_LOCATION_LAYER, 'top-image') as string)
+        .assertEqual('maplibre-arkui-user-location-dot');
+      expect(await map.getStyleLayerProperty(USER_LOCATION_LAYER, 'bearing-image') as string)
+        .assertEqual('custom-arrow');
+      expect(await map.getStyleLayerProperty(USER_LOCATION_LAYER, 'shadow-image') as string).assertEqual('');
+      const ids = (await map.listStyleLayers()).map((layer: StyleLayerInfo) => layer.id);
+      expect(ids.indexOf(USER_LOCATION_LAYER)).assertEqual(ids.indexOf('top') - 1);
+
+      // On screen, the default dot in the options' color.
+      const c = await mapCenter();
+      const dot = await eventually('the red dot draws', async () => {
+        const pixel = await screenPixel(c);
+        return pixel[0] > 200 && pixel[1] < 60 && pixel[2] < 60 ? pixel : undefined;
+      });
+      expect(dot.length).assertEqual(3);
+
+      // Without the options, the indicator is the default again, at the top.
+      testMap.userLocationIndicator = {};
+      await eventually('the default accuracy color', async () =>
+        await map.getStyleLayer(USER_LOCATION_LAYER) !== undefined &&
+          (await map.getStyleLayerProperty(USER_LOCATION_LAYER, 'accuracy-radius-color') as string) !==
+            'rgba(0,255,0,1)' ? true : undefined);
+      expect(await map.getStyleLayerProperty(USER_LOCATION_LAYER, 'shadow-image') as string)
+        .assertEqual('maplibre-arkui-user-location-shadow');
+      const after = (await map.listStyleLayers()).map((layer: StyleLayerInfo) => layer.id);
+      expect(after[after.length - 1]).assertEqual(USER_LOCATION_LAYER);
+    });
+
+    it('reports a layer to go under that the style doesn\'t have', 0, async () => {
+      testMap.userLocationIndicator = { below: 'missing' };
+      testMap.userLocation = fix(0, 0);
+      await until('the map reports it', () => testMap.errors.length > 0);
+      expect(await requireMap().getStyleLayer(USER_LOCATION_LAYER)).assertUndefined();
     });
   });
 }

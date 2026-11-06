@@ -14,7 +14,10 @@ import { CameraDelta, GesturePhase, ScreenPoint } from '@maplibre/native-ffi';
  * How the user moves the map: which camera movements input makes, what the app
  * does as each starts, and what the wheel, rotation, and haptics do. Fields
  * that it leaves out keep their defaults, so every movement is on. Clicks reach
- * the map's handlers whichever movements are on.
+ * the map's handlers whichever movements are on. While the camera follows the
+ * user's location, zoom and rotation keep the location at the center, and two
+ * fingers don't pan; the input stops following only where an `onStart` stops
+ * it.
  *
  * ```ets
  * MapLibreMap({
@@ -112,6 +115,11 @@ export interface GestureTarget {
   /** The user started to move the camera. */
   gestureStarted(): void;
   /**
+   * Whether zoom and rotation keep the camera's center in place, as while the
+   * camera follows the user's location.
+   */
+  keepsCenter(): boolean;
+  /**
    * The camera stopped moving from the user's input. It may ease to the
    * nearest of `snapBearings` within 7°; they're empty unless it rotated.
    */
@@ -123,6 +131,10 @@ export interface GestureTarget {
 // Thresholds, after MapLibre Compose's GestureMath, which follows MapLibre
 // Android and GL JS.
 const PAIR_PAN_SLOP = 4;
+// While zoom and rotation keep the center, two fingers pan only this far, so a
+// pinch or twist that drifts doesn't pan, as MapLibre Android's location
+// tracking does.
+const PAIR_PAN_SLOP_KEEPING_CENTER = 400;
 // A change in the distance between two fingers that starts a pinch, and the
 // larger one while they rotate. A slow change doesn't (startsZoom).
 const ZOOM_SLOP = 3.5;
@@ -423,14 +435,14 @@ export class MapGestures {
   /** Zooms in at a double tap. */
   doubleTap(x: number, y: number): void {
     if (this.canZoom()) {
-      this.animate({ scale: 2, anchor: { x: x, y: y } }, ZOOM);
+      this.animate({ scale: 2, anchor: this.anchorAt({ x: x, y: y }) }, ZOOM);
     }
   }
 
   /** Zooms out at a two-finger tap, about the point between the fingers. */
   twoFingerTap(x: number, y: number): void {
     if (this.canZoom()) {
-      this.animate({ scale: 0.5, anchor: { x: x, y: y } }, ZOOM);
+      this.animate({ scale: 0.5, anchor: this.anchorAt({ x: x, y: y }) }, ZOOM);
     }
   }
 
@@ -495,7 +507,7 @@ export class MapGestures {
         return;
       }
       this.stop();
-      this.move({ scale: Math.pow(2, -y * WHEEL_LEVELS_PER_UNIT), anchor: this.pointer }, ZOOM);
+      this.move({ scale: Math.pow(2, -y * WHEEL_LEVELS_PER_UNIT), anchor: this.anchorAt(this.pointer) }, ZOOM);
     }
     this.axisOwned = true;
   }
@@ -559,7 +571,7 @@ export class MapGestures {
     this.pinchScale = scale;
     // The event's pinch center is in window coordinates, and the axis events
     // of the pinch have the map's.
-    this.move({ scale: step, anchor: this.pointer }, ZOOM);
+    this.move({ scale: step, anchor: this.anchorAt(this.pointer) }, ZOOM);
     this.axisOwned = true;
   }
 
@@ -863,6 +875,7 @@ export class MapGestures {
     const center = midpoint(a, b);
     this.minSpan = Math.min(this.minSpan, span);
     const stable = span0 >= MIN_SPAN && span >= MIN_SPAN;
+    const anchor = this.anchorAt(center);
 
     // Options can change mid-gesture, so each motion checks its option too.
     const delta: CameraDelta = {};
@@ -876,7 +889,7 @@ export class MapGestures {
     }
     if (this.zooming && stable && this.canZoom()) {
       delta.scale = span / span0;
-      delta.anchor = center;
+      delta.anchor = anchor;
       this.zoom.add(time, Math.log2(span));
       movements |= ZOOM;
     }
@@ -884,7 +897,7 @@ export class MapGestures {
       const turn = wrap(angle(a, b) - angle(a0, b0));
       this.turned -= turn;
       delta.bearing = -turn;
-      delta.anchor = center;
+      delta.anchor = anchor;
       this.turn.add(time, this.turned);
       movements |= ROTATE;
     }
@@ -892,8 +905,10 @@ export class MapGestures {
       delta.pitch = ((a.y - a0.y) + (b.y - b0.y)) / 2 * PITCH_PER_VP;
       movements |= PITCH;
     }
+    if ((movements & (ZOOM | ROTATE)) !== 0) {
+      this.anchor = anchor;
+    }
     if (delta.anchor !== undefined) {
-      this.anchor = delta.anchor;
       // ArkUI reports one finger at a time, so the midpoint moves by half that
       // finger's step even when the pair doesn't pan. Moving with it keeps the
       // content under both fingers; scaling or turning about it alone drifts.
@@ -941,8 +956,8 @@ export class MapGestures {
         this.turn.clear();
       }
     }
-    if (!this.panning && this.canPan() &&
-      distance(midpoint(o1, o2), center) >= PAIR_PAN_SLOP) {
+    const panSlop = this.target.keepsCenter() ? PAIR_PAN_SLOP_KEEPING_CENTER : PAIR_PAN_SLOP;
+    if (!this.panning && this.canPan() && distance(midpoint(o1, o2), center) >= panSlop) {
       this.panning = true;
       this.panX.clear();
       this.panY.clear();
@@ -1268,6 +1283,12 @@ export class MapGestures {
       const snaps = this.rotated && this.canRotate();
       this.target.gestureEnded(snaps ? this.options.rotate?.snapBearings ?? [0] : []);
     }
+  }
+
+  // Where zoom and rotation at `point` keep the content: there, or at the
+  // camera's center while the target keeps it.
+  private anchorAt(point: ScreenPoint | undefined): ScreenPoint | undefined {
+    return this.target.keepsCenter() ? undefined : point;
   }
 
   private canPan(): boolean {

@@ -4,6 +4,7 @@ import geoLocationManager from '@ohos.geoLocationManager';
 import { MapInteractionOptions, TAP_SLOP } from './gestures';
 import { MapClickEvent, MapContent } from './Content';
 import { MapController } from './MapController';
+import { UserLocationIndicatorOptions } from './location';
 import { MapView } from './MapView';
 import { defaultOverlay } from './Overlay';
 import { NO_INSETS } from './padding';
@@ -104,8 +105,9 @@ export struct MapLibreMap {
   /**
    * The user's location, which the map shows as a dot in a circle of its
    * `accuracy`, with an arrow for `userHeading`, or for the course while it
-   * moves. Pass each location that Location Kit reports; the app requests the
-   * permission and the updates. The dot eases to each new location.
+   * moves, as `userLocationIndicator` styles them. Pass each location that
+   * Location Kit reports; the app requests the permission and the updates.
+   * The dot eases to each new location.
    * `controller.followUserLocation()` moves the camera with it.
    */
   @Param userLocation: geoLocationManager.Location | undefined = undefined;
@@ -116,6 +118,12 @@ export struct MapLibreMap {
    * `userLocation`.
    */
   @Param userHeading: number | undefined = undefined;
+  /**
+   * How the map draws `userLocation`: its colors, images of the style's own,
+   * and the layer that it goes under. The default is a blue dot with an arrow
+   * and a shadow, above every layer.
+   */
+  @Param userLocationIndicator: UserLocationIndicatorOptions = {};
   /**
    * The style has loaded, so its layers and sources exist, and the map has
    * added `content` to it. Each style starts from its own document, without
@@ -130,8 +138,8 @@ export struct MapLibreMap {
   @Event onMapError: (error: Error) => void = (error: Error) => {
   };
   /**
-   * The user started to move the camera, such as to stop following a
-   * location.
+   * The user started to move the camera. `interactions` tells which way, such
+   * as a pan that stops following the user's location.
    */
   @Event onGestureStart: () => void = () => {
   };
@@ -182,6 +190,7 @@ export struct MapLibreMap {
     this.scope.controller = this.controller;
     this.scope.insets = this.viewportInsets;
     this.view.gestures.options = this.interactions;
+    this.view.setUserLocationIndicator(this.userLocationIndicator);
     this.view.setUserLocation(this.userLocation);
     this.view.setUserHeading(this.userHeading);
     this.view.setViewportInsets(this.viewportInsets);
@@ -222,6 +231,11 @@ export struct MapLibreMap {
   @Monitor('userLocation')
   userLocationChanged(): void {
     this.view.setUserLocation(this.userLocation);
+  }
+
+  @Monitor('userLocationIndicator')
+  userLocationIndicatorChanged(): void {
+    this.view.setUserLocationIndicator(this.userLocationIndicator);
   }
 
   @Monitor('userHeading')

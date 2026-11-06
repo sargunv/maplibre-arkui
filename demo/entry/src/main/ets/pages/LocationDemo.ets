@@ -4,7 +4,7 @@ import common from '@ohos.app.ability.common';
 import geoLocationManager from '@ohos.geoLocationManager';
 import sensor from '@ohos.sensor';
 
-import { FollowBearing, MapController, MapLibreMap } from '@maplibre/arkui';
+import { FollowBearing, MapController, MapLibreMap, UserLocationIndicatorOptions } from '@maplibre/arkui';
 
 import { LIBERTY, PANEL } from './common';
 
@@ -51,9 +51,18 @@ function simulatedLocation(seconds: number): geoLocationManager.Location {
 const BEARINGS: (FollowBearing | undefined)[] = [undefined, FollowBearing.course, FollowBearing.heading];
 const BEARING_LABELS: string[] = ['Keep the bearing', 'Turn with course', 'Turn with heading'];
 
+// The restyled indicator: red, without a shadow, under the style's labels.
+const RED_INDICATOR: UserLocationIndicatorOptions = {
+  color: '#e53935',
+  accuracyColor: 'rgba(229, 57, 53, 0.15)',
+  accuracyBorderColor: 'rgba(229, 57, 53, 0.5)',
+  shadowImage: '',
+  below: 'waterway_line_label',
+};
+
 // A map that shows where the user is and where they face, from Location Kit
-// and the compass or a simulated walk, and follows it until a gesture moves
-// the map.
+// and the compass or a simulated walk, and follows it until the user pans.
+// Zooming and rotating keep following.
 @ComponentV2
 export struct LocationDemo {
   @Local location: geoLocationManager.Location | undefined = undefined;
@@ -63,6 +72,7 @@ export struct LocationDemo {
   // The index in BEARINGS of how the camera turns.
   @Local bearing: number = 0;
   @Local message: string = '';
+  @Local red: boolean = false;
   private map: MapController = new MapController({
     camera: { center: { latitude: CENTER_LATITUDE, longitude: CENTER_LONGITUDE }, zoom: 15 },
   });
@@ -98,6 +108,8 @@ export struct LocationDemo {
           style: LIBERTY,
           userLocation: this.location,
           userHeading: this.heading,
+          userLocationIndicator: this.red ? RED_INDICATOR : {},
+          interactions: { pan: { onStart: () => this.map.stopFollowingUserLocation() } },
           onMapError: (error: Error) => {
             this.message = error.message;
           },
@@ -130,6 +142,13 @@ export struct LocationDemo {
             }
             .margin(4)
             .onChange((isOn: boolean) => isOn ? this.startSimulating() : this.stopSimulating())
+            Toggle({ type: ToggleType.Button, isOn: this.red }) {
+              Text('Red, under labels').fontSize(14).padding({ left: 12, right: 12 })
+            }
+            .margin(4)
+            .onChange((isOn: boolean) => {
+              this.red = isOn;
+            })
           }
         }
         .attributeModifier(PANEL)
