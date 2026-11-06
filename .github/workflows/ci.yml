@@ -34,8 +34,7 @@ jobs:
 
   # Builds the library HAR, the demo HAP, the test HAP, and the documentation
   # site against the FFI packages that FFI's CI packed at the pinned commit.
-  # The site's API reference needs the SDK too. It doesn't boot the emulator,
-  # which needs KVM and a 1.4 GB image.
+  # The site's API reference needs the SDK too. The test job boots the emulator.
   build:
     name: build
     runs-on: ubuntu-24.04
@@ -82,6 +81,36 @@ jobs:
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: docs/dist
+
+  # Runs the hypium suite on the Oniro emulator, which devices-cli boots under
+  # KVM. It fails unless hypium reports every case passed.
+  test:
+    name: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The hosted runner has /dev/kvm but no system QEMU, and the runner
+      # process needs this rule to use KVM, as MapLibre Native FFI's CI does.
+      - name: Install QEMU and enable KVM
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes qemu-system-x86
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo udevadm settle --timeout=10
+          test -r /dev/kvm
+          test -w /dev/kvm
+      - uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
+        with:
+          cache: false
+      - run: mise run ffi:download
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - run: mise run test
 
   # Publishes the documentation site that the build job built from main. Pages
   # takes its build from GitHub Actions in the repository's settings.

@@ -67,15 +67,15 @@ sign_tool=(java -jar "$signing/hap-sign-tool.jar")
   -keyPwd "$password" -issuerKeyPwd "$password" -outForm certChain \
   -rootCaCertFile "$work/root-ca.cer" -subCaCertFile "$work/sub-ca.cer" \
   -outFile "$work/app.cer" >/dev/null
-# The template expired in 2024 and names two devices; a profile without a
-# device list installs on the emulator. Its development certificate is the
-# leaf of the chain, which comes first.
+# A debug profile must list the device's UDID on OpenHarmony 7.0, and the
+# emulator reports none, so the HAP carries a release profile, which lists no
+# devices. Its distribution certificate is the leaf of the chain, which comes
+# first. The template's validity has expired, so it gets a new one.
 jq --arg bundle "$bundle" --rawfile chain "$work/app.cer" '
   ($chain | split("-----BEGIN CERTIFICATE-----"))[1] as $leaf
   | .["bundle-info"]["bundle-name"] = $bundle
-  | .["bundle-info"]["development-certificate"] = ("-----BEGIN CERTIFICATE-----" + $leaf)
-  | .validity = {"not-before": 1600000000, "not-after": 2500000000}
-  | del(.["debug-info"])' "$signing/UnsgnedDebugProfileTemplate.json" >"$work/profile.json"
+  | .["bundle-info"]["distribution-certificate"] = ("-----BEGIN CERTIFICATE-----" + $leaf)
+  | .validity = {"not-before": 1600000000, "not-after": 2500000000}' "$signing/UnsgnedReleasedProfileTemplate.json" >"$work/profile.json"
 "${sign_tool[@]}" sign-profile -keyAlias "openharmony application profile release" \
   -signAlg SHA256withECDSA -mode localSign \
   -profileCertFile "$signing/OpenHarmonyProfileRelease.pem" \
