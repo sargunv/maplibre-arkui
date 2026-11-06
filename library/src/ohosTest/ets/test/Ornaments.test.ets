@@ -222,14 +222,14 @@ export default function ornamentsTest(): void {
       await eventually('the map\'s compass shows', async () => covered(await screenPixel(builtIn)) ? true : undefined);
     });
 
-    it('keeps the ornaments inside ornamentPadding', 0, async () => {
+    it('keeps the ornaments clear of the viewport insets', 0, async () => {
       testMap.compass = true;
       await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { bearing: 90 } });
       const driver = Driver.create();
       const needle = await untilFound('the compass shows', () => driver.findComponent(ON.type('Polygon')));
       const before = center(await needle.getBounds());
 
-      testMap.ornamentPadding = { top: 40, right: 60 };
+      testMap.viewportInsets = { top: 40, left: 0, bottom: 0, right: 60 };
       const after = await eventually('the compass moves', async () => {
         const moved = await driver.findComponent(ON.type('Polygon'));
         const point = center(await moved.getBounds());

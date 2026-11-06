@@ -1,12 +1,14 @@
 import {
   AnimationOptions,
   Camera as CameraPosition,
-  CameraFitUpdate,
+  CameraFitOptions,
   CameraOptions,
   cameraToOptions,
   CameraTransitionEnd,
   CameraTransitionOutcome,
   CameraUpdate,
+  CameraUpdateMode,
+  EdgeInsets,
   LatLng,
   LatLngBounds,
   MapHandle,
@@ -20,12 +22,40 @@ import geoLocationManager from '@ohos.geoLocationManager';
 
 import { GeoJsonGeometry } from './GeoJson';
 import { FollowBearing, FollowUserLocationOptions, course } from './location';
+import { logError } from './log';
 import { MapView } from './MapView';
 
 /** Options for a new `MapController`. */
 export interface MapControllerOptions {
   /** Where the camera starts. Fields it leaves out keep the map's defaults. */
   camera?: CameraOptions;
+}
+
+/**
+ * How `fitCameraToLatLngBounds()` and the other fit methods of `MapController`
+ * move the camera.
+ */
+export interface FitCameraOptions {
+  /** Whether the camera jumps, eases, or flies. Jumps by default. */
+  mode?: CameraUpdateMode;
+  /** How long the camera takes, its curve, and its end handler, unless it jumps. */
+  animation?: AnimationOptions;
+  /** The bearing of the camera, in degrees. Keeps the map's by default. */
+  bearing?: number;
+  /** The pitch of the camera, in degrees. Keeps the map's by default. */
+  pitch?: number;
+  /**
+   * Space, in vp, to keep between what the camera fits and the edges of the
+   * part of the map that the viewport insets and the camera padding leave.
+   * The camera keeps it only for the fit; it doesn't stay in the camera's
+   * padding.
+   */
+  fitPadding?: EdgeInsets;
+  /**
+   * The padding of the camera after the fit, which stays as `updateCamera()`
+   * sets it. Keeps the camera's padding by default.
+   */
+  cameraPadding?: EdgeInsets;
 }
 
 /**
@@ -42,6 +72,11 @@ export interface MapControllerOptions {
  * `pixelForLatLng()`, are observable too, and change with every frame the
  * camera moves. The camera methods need a map on screen whose FFI map is ready,
  * and reject without one.
+ *
+ * The camera's `padding` is the app's: the space, in vp, around the part of
+ * the map that the camera centers in. The map's `viewportInsets` add to it on
+ * the map, but never show in a camera that the controller reports, so a saved
+ * camera restores the same way under different insets.
  */
 @ObservedV2
 export class MapController {
@@ -78,6 +113,10 @@ export class MapController {
   private followOptions: FollowUserLocationOptions = {};
   // The zoom that the next move to follow the location takes.
   private followZoom: number | undefined = undefined;
+  // How many times the app has moved the camera, and how the last move ends
+  // the one before, so a fit that's still finding its camera gives way.
+  private moves: number = 0;
+  private lastMove: CameraTransitionOutcome = CameraTransitionOutcome.replaced;
 
   constructor(options?: MapControllerOptions) {
     this.startCamera = options?.camera;
@@ -120,8 +159,9 @@ export class MapController {
    * camera last came to rest.
    */
   getCamera(): CameraPosition | undefined {
-    const map = this.view?.map;
-    return map === undefined ? this.camera : map.getSnapshot().view.camera;
+    const view = this.view;
+    const map = view?.map;
+    return view === undefined || map === undefined ? this.camera : view.appCamera(map.getSnapshot().view.camera);
   }
 
   /**
@@ -131,7 +171,8 @@ export class MapController {
    * moves; read `camera` to update only when the camera comes to rest.
    */
   get frameCamera(): CameraPosition | undefined {
-    return this.frame?.camera;
+    const camera = this.frame?.camera;
+    return camera === undefined || this.view === undefined ? camera : this.view.appCamera(camera);
   }
 
   /**
@@ -164,7 +205,9 @@ export class MapController {
 
   /**
    * Moves the camera, at once or with an animation, as FFI's
-   * `MapHandle.updateCamera()` does.
+   * `MapHandle.updateCamera()` does. A `padding` replaces the camera's
+   * padding, inside the map's `viewportInsets`; without one, the camera keeps
+   * its padding. A `center` goes to the middle of what they leave.
    *
    * Resolves once the camera stops: with `CameraTransitionOutcome.completed`
    * when it got there, `cancelled` or `replaced` when
@@ -175,61 +218,54 @@ export class MapController {
   updateCamera(update: CameraUpdate): Promise<CameraTransitionOutcome> {
     return this.transition(update.animation, (map: MapHandle, animation: AnimationOptions) => map.updateCamera({
       mode: update.mode,
-      camera: update.camera,
+      camera: this.view?.mapCamera(update.camera),
       gesturePhase: update.gesturePhase,
       animation: animation,
     }));
   }
 
   /**
-   * Moves the camera so `bounds` fits in the map, as FFI's
-   * `MapHandle.fitCameraToLatLngBounds()` does. `update.fit.padding` keeps
-   * space between the bounds and the map's edges. Resolves as
-   * `updateCamera()` does.
+   * Moves the camera so `bounds` fits in the part of the map that the
+   * `viewportInsets`, the camera's padding, and `options.fitPadding` leave, as
+   * FFI's `MapHandle.cameraForLatLngBounds()` finds it. Resolves as
+   * `updateCamera()` does, and rejects when the padding leaves no room.
+   *
+   * ```ets
+   * controller.fitCameraToLatLngBounds(bounds, {
+   *   mode: CameraUpdateMode.ease,
+   *   fitPadding: { top: 24, left: 24, bottom: 24, right: 24 },
+   * });
+   * ```
    */
-  fitCameraToLatLngBounds(bounds: LatLngBounds, update: CameraFitUpdate): Promise<CameraTransitionOutcome> {
-    return this.transition(update.animation,
-      (map: MapHandle, animation: AnimationOptions) => map.fitCameraToLatLngBounds(bounds, {
-        mode: update.mode,
-        fit: update.fit,
-        animation: animation,
-      }));
+  fitCameraToLatLngBounds(bounds: LatLngBounds, options?: FitCameraOptions): Promise<CameraTransitionOutcome> {
+    return this.fit(options ?? {},
+      (map: MapHandle, fit: CameraFitOptions) => map.cameraForLatLngBounds(bounds, fit));
   }
 
   /**
-   * Moves the camera so `coordinates` fit in the map, as FFI's
-   * `MapHandle.fitCameraToLatLngs()` does. `coordinates` must not be empty.
-   * `update.fit.padding` keeps space between them and the map's edges.
-   * Resolves as `updateCamera()` does.
+   * Moves the camera so `coordinates` fit, as `fitCameraToLatLngBounds()`
+   * does, by FFI's `MapHandle.cameraForLatLngs()`. `coordinates` must not be
+   * empty.
    */
-  fitCameraToLatLngs(coordinates: LatLng[], update: CameraFitUpdate): Promise<CameraTransitionOutcome> {
-    return this.transition(update.animation,
-      (map: MapHandle, animation: AnimationOptions) => map.fitCameraToLatLngs(coordinates, {
-        mode: update.mode,
-        fit: update.fit,
-        animation: animation,
-      }));
+  fitCameraToLatLngs(coordinates: LatLng[], options?: FitCameraOptions): Promise<CameraTransitionOutcome> {
+    return this.fit(options ?? {},
+      (map: MapHandle, fit: CameraFitOptions) => map.cameraForLatLngs(coordinates, fit));
   }
 
   /**
-   * Moves the camera so `geometry` fits in the map, as FFI's
-   * `MapHandle.fitCameraToGeometry()` does. `geometry` is a GeoJSON geometry
-   * with at least one position, not a feature. `update.fit.padding` keeps
-   * space between it and the map's edges. Resolves as `updateCamera()` does.
+   * Moves the camera so `geometry` fits, as `fitCameraToLatLngBounds()` does,
+   * by FFI's `MapHandle.cameraForGeometry()`. `geometry` is a GeoJSON geometry
+   * with at least one position, not a feature.
    */
-  fitCameraToGeometry(geometry: GeoJsonGeometry, update: CameraFitUpdate): Promise<CameraTransitionOutcome> {
-    return this.transition(update.animation,
-      (map: MapHandle, animation: AnimationOptions) => map.fitCameraToGeometry(geometry, {
-        mode: update.mode,
-        fit: update.fit,
-        animation: animation,
-      }));
+  fitCameraToGeometry(geometry: GeoJsonGeometry, options?: FitCameraOptions): Promise<CameraTransitionOutcome> {
+    return this.fit(options ?? {},
+      (map: MapHandle, fit: CameraFitOptions) => map.cameraForGeometry(geometry, fit));
   }
 
   /** Stops every camera animation where it is, and a gesture's momentum. */
   async cancelCameraTransitions(): Promise<void> {
     const map = this.requireMap();
-    this.view?.takeOverCamera();
+    this.takeOverCamera(CameraTransitionOutcome.cancelled);
     await map.cancelCameraTransitions();
   }
 
@@ -251,7 +287,7 @@ export class MapController {
     this.followOptions = options ?? {};
     this.followZoom = options?.zoom;
     this.followingUserLocation = true;
-    this.view?.takeOverCamera();
+    this.takeOverCamera(CameraTransitionOutcome.replaced);
     this.view?.followUserLocation();
   }
 
@@ -301,7 +337,7 @@ export class MapController {
     }
     const map = view.map;
     if (map !== undefined) {
-      this.camera = map.getSnapshot().view.camera;
+      this.camera = view.appCamera(map.getSnapshot().view.camera);
     }
     this.view = undefined;
     this.styleLoaded = false;
@@ -327,14 +363,47 @@ export class MapController {
     return this.projection;
   }
 
+  // The app's camera change takes over from a gesture's momentum, and from a
+  // fit that's still finding its camera.
+  private takeOverCamera(outcome: CameraTransitionOutcome): void {
+    this.view?.takeOverCamera();
+    this.moves++;
+    this.lastMove = outcome;
+  }
+
+  // Finds the camera for a fit, then moves it there, unless the map leaves, or
+  // the app or the user moves the camera first.
+  private async fit(options: FitCameraOptions,
+    query: (map: MapHandle, fit: CameraFitOptions) => Promise<CameraOptions>): Promise<CameraTransitionOutcome> {
+    this.requireMap();
+    const view = this.view!;
+    this.takeOverCamera(CameraTransitionOutcome.replaced);
+    const moves = this.moves;
+    const gestures = view.gestureStarts;
+    const camera = await view.fitCamera(options, query);
+    if (camera === undefined || this.view !== view) {
+      return endEarly(options, CameraTransitionOutcome.closed);
+    }
+    if (this.moves !== moves) {
+      return endEarly(options, this.lastMove);
+    }
+    if (view.gestureStarts !== gestures) {
+      return endEarly(options, CameraTransitionOutcome.cancelled);
+    }
+    return this.transition(options.animation, (map: MapHandle, animation: AnimationOptions) => map.updateCamera({
+      mode: options.mode,
+      camera: camera,
+      animation: animation,
+    }));
+  }
+
   // Starts a camera change whose animation ends with FFI's end handler, and
   // resolves with how it ended. A jump runs the handler as soon as the camera
   // moves.
   private async transition(options: AnimationOptions | undefined,
     start: (map: MapHandle, animation: AnimationOptions) => Promise<Object>): Promise<CameraTransitionOutcome> {
     const map = this.requireMap();
-    // The app's camera change takes over from a gesture's momentum.
-    this.view?.takeOverCamera();
+    this.takeOverCamera(CameraTransitionOutcome.replaced);
     return new Promise<CameraTransitionOutcome>((resolve, reject) => {
       const appHandler = options?.endHandler?.callback;
       const animation: AnimationOptions = {
@@ -362,4 +431,15 @@ export class MapController {
     }
     return map;
   }
+}
+
+// Ends a fit that never moved the camera as FFI ends a camera change: through
+// the app's end handler, then the promise.
+function endEarly(options: FitCameraOptions, outcome: CameraTransitionOutcome): CameraTransitionOutcome {
+  try {
+    options.animation?.endHandler?.callback?.({ outcome: outcome, generation: BigInt(0) });
+  } catch (error) {
+    logError(`A camera transition's end handler threw: ${(error as Error).message}`);
+  }
+  return outcome;
 }

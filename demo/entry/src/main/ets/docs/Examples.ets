@@ -4,7 +4,11 @@
 // demo's "Guide examples" page shows them in tabs.
 
 import abilityAccessCtrl, { Permissions } from '@ohos.abilityAccessCtrl';
+import AbilityConstant from '@ohos.app.ability.AbilityConstant';
 import common from '@ohos.app.ability.common';
+import UIAbility from '@ohos.app.ability.UIAbility';
+import Want from '@ohos.app.ability.Want';
+import { AppStorageV2 } from '@ohos.arkui.StateManagement';
 import geoLocationManager from '@ohos.geoLocationManager';
 import image from '@ohos.multimedia.image';
 import sensor from '@ohos.sensor';
@@ -12,6 +16,7 @@ import util from '@ohos.util';
 
 import {
   addRuntimeEventListener,
+  CameraPosition,
   cameraToOptions,
   CameraTransitionOutcome,
   CameraUpdateMode,
@@ -236,7 +241,10 @@ struct CameraExample {
         Text(this.moving ? 'Moving' : `Zoom ${this.controller.camera?.zoom.toFixed(1) ?? '…'}`)
         // #endregion camera-observable
         Text(this.message)
-        Button('Fit Switzerland').onClick(() => this.fitSwitzerland())
+        Row({ space: 8 }) {
+          Button('Fit Switzerland').onClick(() => this.fitSwitzerland())
+          Button('Look ahead').onClick(() => this.lookAhead())
+        }
       }
       .margin({ bottom: 64 })
     }
@@ -246,7 +254,8 @@ struct CameraExample {
     // #region camera-fit
     this.controller.fitCameraToLatLngBounds(SWITZERLAND, {
       mode: CameraUpdateMode.ease,
-      fit: { padding: { top: 24, left: 24, bottom: 24, right: 24 } },
+      // Space around Switzerland for this fit only.
+      fitPadding: { top: 24, left: 24, bottom: 24, right: 24 },
       animation: { durationMs: 1000 },
     }).then((outcome: CameraTransitionOutcome) => {
       // A gesture or a later move can stop it first.
@@ -257,7 +266,93 @@ struct CameraExample {
     });
     // #endregion camera-fit
   }
+
+  private lookAhead(): void {
+    // #region camera-padding
+    // The camera centers in the map below its top 200 vp, which shows more of
+    // what lies ahead. The padding stays until a move or a fit changes it.
+    this.controller.updateCamera({
+      mode: CameraUpdateMode.ease,
+      camera: { padding: { top: 200, left: 0, bottom: 0, right: 0 } },
+      animation: { durationMs: 500 },
+    }).catch((error: Error) => {
+      this.message = error.message;
+    });
+    // #endregion camera-padding
+  }
 }
+
+@ComponentV2
+struct InsetsExample {
+  // #region viewport-insets
+  @Local panelHeight: number = 0;
+  private controller: MapController = new MapController({
+    camera: { center: { latitude: 48.8584, longitude: 2.2945 }, zoom: 14 },
+  });
+
+  build() {
+    Stack({ alignContent: Alignment.Bottom }) {
+      // The ornaments stay above the panel, and the camera centers there too.
+      MapLibreMap({
+        controller: this.controller,
+        style: STYLE,
+        scaleBarEnabled: true,
+        zoomButtonsEnabled: true,
+        viewportInsets: { top: 0, left: 0, bottom: this.panelHeight, right: 0 },
+      })
+      Column() {
+        Text('A panel over the map')
+      }
+      .width('100%')
+      .height(200)
+      .backgroundColor(Color.White)
+      .onAreaChange((oldArea: Area, newArea: Area) => {
+        this.panelHeight = newArea.height as number;
+      })
+    }
+  }
+  // #endregion viewport-insets
+}
+
+// Saving the camera
+
+// #region save-camera
+const SAVED_CAMERA = 'camera';
+
+// The system saves the ability's state as it takes the app to the background,
+// and hands it back if it ends the process and the user returns.
+export class CameraSavingAbility extends UIAbility {
+  onCreate(want: Want): void {
+    this.context.setRestoreEnabled(true);
+    const saved = want.parameters?.[SAVED_CAMERA];
+    if (typeof saved === 'string') {
+      const camera = JSON.parse(saved) as CameraPosition;
+      AppStorageV2.connect(MapController, () => new MapController({ camera: cameraToOptions(camera) }));
+    }
+  }
+
+  onSaveState(reason: AbilityConstant.StateType, wantParam: Record<string, Object>): AbilityConstant.OnSaveResult {
+    const camera = AppStorageV2.connect(MapController)?.getCamera();
+    if (camera !== undefined) {
+      wantParam[SAVED_CAMERA] = JSON.stringify(camera);
+    }
+    return AbilityConstant.OnSaveResult.ALL_AGREE;
+  }
+}
+
+// The page shows the controller in AppStorageV2, which the ability restored or
+// the page creates.
+@ComponentV2
+struct SavedCameraExample {
+  private controller: MapController = AppStorageV2.connect(MapController, () => new MapController({
+    camera: { center: { latitude: 48.8584, longitude: 2.2945 }, zoom: 14 },
+  }))!;
+
+  build() {
+    MapLibreMap({ controller: this.controller, style: STYLE })
+  }
+}
+// #endregion save-camera
 
 // The user's location
 
@@ -529,6 +624,12 @@ export struct DocExamples {
         TabContent() {
           CameraExample()
         }.tabBar('Camera')
+        TabContent() {
+          InsetsExample()
+        }.tabBar('Insets')
+        TabContent() {
+          SavedCameraExample()
+        }.tabBar('Saved camera')
         TabContent() {
           LocationExample()
         }.tabBar('Location')

@@ -21,8 +21,9 @@ as ArkTS.
 - Settings are interfaces named `<Thing>Options`, after what they configure,
   with optional fields only, and taken as object literals:
   `MapControllerOptions`, `MapGestureOptions`, `FollowUserLocationOptions`,
-  `SnapshotOptions`. Data that describes something is a plain noun with the
-  fields it needs: `MapContent`, `MapSource`, `MapLayer`, `MapImage`.
+  `FitCameraOptions`, `SnapshotOptions`. Data that describes something is a
+  plain noun with the fields it needs: `MapContent`, `MapSource`, `MapLayer`,
+  `MapImage`.
 - Events are `@Event` params named `on` and what happened: `onStyleLoaded`,
   `onCameraIdle`, `onMapError`, and `onGestureStart` / `onGestureEnd`, as
   ArkUI's `onScrollStart` / `onScrollStop` pair.
@@ -66,6 +67,10 @@ as ArkTS.
   view, read through `frameCamera` and the projection methods. Components read
   them in `@Computed` getters (`MapMarker.point`, `MapCompass.bearing`), so
   per-frame work stays in the components that ask for it.
+- The camera that the controller reads, reports, and takes is the app's. Its
+  `padding` is camera state that moves and fits set; the map's `viewportInsets`,
+  which describe the layout, add to it on the FFI map and never show in a camera
+  that the app reads or saves. A fit's `fitPadding` lasts for that fit only.
 - Data passed to a component is a value, not observed inside: `MapContent`,
   `MapGestureOptions`, `userLocation`. A new value is a change; the component
   compares it with the last one (content by ID, then by JSON or reference).
@@ -79,7 +84,9 @@ as ArkTS.
   `MapController.runtime`, `map`, and `renderSession`, documented with what not
   to do to them (release them, change the style through them).
 - Wrap only where ArkUI needs what FFI can't give: a component and its lifecycle
-  (`MapLibreMap`), observable state (`MapController`), ArkUI and Kit types
+  (`MapLibreMap`), observable state (`MapController`), camera padding apart from
+  the viewport insets, and fits whose margin doesn't stay in the camera (FFI
+  keeps a fit's padding, as MapLibre Native does), ArkUI and Kit types
   (`PixelMap` in `readPixelMap()` and `snapshot()`, Location Kit's `Location`),
   ownership that FFI gives one caller (the runtime's event handler, shared
   through `addRuntimeEventListener()`; each map's event mask, the union of the
@@ -162,9 +169,10 @@ These carry over from the
 [MapLibre Compose API guidelines](https://maplibre.org/maplibre-compose/api-guidelines/):
 nouns for types and verbs for functions; acronyms as words; style-spec terms;
 operators without arguments as functions; the same names for the same things
-across related calls; no answer as `undefined` (Compose's `null`), not an
-exception; unsurprising behavior over documented surprises; and docs that state
-the contract.
+across related calls; viewport insets apart from camera padding, and a fit's
+`fitPadding` and `cameraPadding`; no answer as `undefined` (Compose's `null`),
+not an exception; unsurprising behavior over documented surprises; and docs that
+state the contract.
 
 These don't:
 
