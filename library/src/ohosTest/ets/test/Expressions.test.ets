@@ -1,13 +1,11 @@
 import { describe, expect, it } from '@ohos/hypium';
 import {
-  StyleExpressionHandle, StyleExpressionInputs, StyleExpressionTypeKind
-} from '@maplibre/native-ffi';
-import {
   abs, add, all, any, call, cases, ceil, coalesce, concat, cubicBezier, divide, downcase, eq,
   Expression, exponential, featureState, floor, format, geometryType, get, globalState, gt, gte, has,
   heatmapDensity, id, image, interpolate, interpolateHcl, interpolateLab, JsonValue, linear,
   lineProgress, literal, lt, lte, match, max, min, mod, multiply, neq, not, pow, properties, rgb, rgba,
-  round, sqrt, step, subtract, toBoolean, toColor, toNumber, toString, upcase, zoom
+  round, sqrt, step, StyleExpressionHandle, StyleExpressionInputs, StyleExpressionTypeKind, subtract, toBoolean,
+  toColor, toNumber, toString, upcase, zoom
 } from '@maplibre/arkui';
 
 function point(properties: Record<string, JsonValue>): Record<string, JsonValue> {

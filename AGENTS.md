@@ -182,9 +182,11 @@ ohpm. To publish:
   builds but silently loses that content; have the item call a `@Builder`.
 - ets-loader only warns when code breaks the ArkTS rules, so `build-hap.sh`
   fails on the errors in its `ArkTSLinter_output.json`.
-- The library owns each runtime's one FFI event handler. Code that needs a
-  runtime's events, such as offline progress, uses `addRuntimeEventListener()`,
-  never `RuntimeHandle.setEventHandler()`.
+- The library owns each runtime's one FFI event handler and its maps' event
+  masks. Code that needs a runtime's events, such as offline progress, uses
+  `addRuntimeEventListener()`, with the map events it needs as flags, never
+  `RuntimeHandle.setEventHandler()` or `MapHandle.setEventMask()`. A listener
+  gets only the map events it asks for.
 - Request handlers, offline regions, and logs are FFI's API, re-exported from
   `Index.ets`; wrap them only where ArkUI needs it.
 - Test cases don't need the network, except the resource transform case, which

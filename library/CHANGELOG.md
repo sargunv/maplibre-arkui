@@ -8,9 +8,10 @@ backend packages aren't on ohpm yet.
 - `MapLibreMap`, a map that shows a style URL or document, resizes, and survives
   navigation, hidden pages, and the background.
 - `MapController`: an observable camera, style state, and attribution;
-  `updateCamera()` and `fitCameraToLatLngBounds()`, which resolve with how the
-  move ended; the frame's camera and projection, for content that follows the
-  map; and FFI's runtime, map, and render session.
+  `updateCamera()` and `fitCameraToLatLngBounds()`, `fitCameraToLatLngs()`, and
+  `fitCameraToGeometry()`, which resolve with how the move ended; the frame's
+  camera and projection, for content that follows the map; and FFI's runtime,
+  map, and render session.
 - Gestures: pan, pinch, twist, two-finger pitch, double tap, double tap and
   drag, and two-finger tap, with momentum and snapping to north; the mouse
   wheel, touchpad pinch, and keys; per-gesture switches and cooperative mode for
@@ -26,5 +27,7 @@ backend packages aren't on ohpm yet.
   `readPixelMap()` for style images.
 - `snapshot()`, a still image of a style, camera, and content.
 - The default runtime's cache lasts between launches, and
-  `addRuntimeEventListener()` reports offline download progress. FFI's style
-  API, request handlers, offline regions, and logs are re-exported.
+  `addRuntimeEventListener()` reports offline download progress and the map
+  events a listener asks for, which set the maps' event masks. FFI's style API,
+  request handlers, offline regions, and logs are re-exported, with the enums
+  and types that `MapHandle`'s methods take.

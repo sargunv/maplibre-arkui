@@ -39,6 +39,7 @@ import {
   readPixelMap,
   RuntimeEvent,
   RuntimeEventFlag,
+  RuntimeEventType,
   RuntimeHandle,
   setLogCallback,
   snapshot,
@@ -395,6 +396,15 @@ async function downloadParis(runtime: RuntimeHandle): Promise<void> {
   });
   await runtime.setOfflineRegionObserved(region.id, RuntimeEventFlag.offlineRegionStatusChanged);
   await runtime.setOfflineRegionDownloadState(region.id, OfflineRegionDownloadState.active);
+}
+
+function watchMissingImages(runtime: RuntimeHandle): void {
+  addRuntimeEventListener(runtime, (event: RuntimeEvent) => {
+    const payload = event.payload;
+    if (event.type === RuntimeEventType.mapStyleImageMissing && payload.kind === 'styleImage') {
+      console.warn(`The style needs the image ${payload.value.imageId}`);
+    }
+  }, RuntimeEventFlag.mapStyleImageMissing);
 }
 
 function takeLogs(): void {
