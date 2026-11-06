@@ -5,7 +5,7 @@ import geoLocationManager from '@ohos.geoLocationManager';
 
 import { MapController, MapLibreMap } from '@maplibre/arkui';
 
-import { LIBERTY } from './TwoMaps';
+import { LIBERTY, PANEL } from './common';
 
 // Location Kit asks for both: the user can grant only the approximate one.
 const PERMISSIONS: Permissions[] = ['ohos.permission.APPROXIMATELY_LOCATION', 'ohos.permission.LOCATION'];
@@ -106,10 +106,7 @@ export struct LocationDemo {
             .onChange((isOn: boolean) => isOn ? this.startSimulating() : this.stopSimulating())
           }
         }
-        .padding(12)
-        .margin({ left: 12, right: 12, bottom: 32 })
-        .borderRadius(16)
-        .backgroundColor('#e6ffffff')
+        .attributeModifier(PANEL)
       }
       .width('100%')
       .height('100%')

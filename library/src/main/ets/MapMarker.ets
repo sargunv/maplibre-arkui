@@ -2,14 +2,15 @@ import { LatLng, ScreenPoint } from '@maplibre/native-ffi';
 
 import { MapController } from './MapController';
 
+// What a trailing closure that the app leaves out builds.
 @Builder
-function noContent() {
+export function noContent() {
 }
 
 /**
  * ArkUI content pinned to a coordinate, which follows the map as its camera
- * moves. Place it in a `MapLibreMap`'s content, or anywhere else that has the
- * map's size and top-left corner:
+ * moves. Place it in a `MapLibreMap`'s overlays, its trailing closure, or
+ * anywhere else that has the map's size and top-left corner:
  *
  * ```ets
  * MapLibreMap({ controller: this.map, style: STYLE }) {

@@ -44,8 +44,8 @@ ohos_sdk_version = "6.1"
   "macos",
 ] }
 # mise has no registry entry for the OpenHarmony SDK, so it resolves through
-# the plugin in .mise/plugins, which the preinstall hook links. The plugin
-# unpacks the SDK with python3 from the host.
+# the plugin in [plugins]. The plugin unpacks the SDK with python3 from the
+# host.
 ohos-sdk = { version = "{{vars.ohos_sdk_version}}", os = ["linux", "macos"] }
 "http:oniro-emulator" = { version = "{{vars.ohos_sdk_version}}", url = "https://github.com/eclipse-oniro4openharmony/device_board_oniro/releases/download/v{{ version }}/oniro_emulator.zip", checksum = "sha256:a30e01f1b161e0fdcd91263f30f29cc92bfa49c1776d5ee2c46caefef055b2da", size = "1449068188", bin_path = ".", os = [
   "linux",
@@ -58,12 +58,11 @@ ohos-sdk = { version = "{{vars.ohos_sdk_version}}", os = ["linux", "macos"] }
   "macos",
 ] }
 
-# The ohos-sdk plugin link is global to mise, and FFI's checkouts link the same
-# plugin, so link it only when no checkout has. Relinking it here would leave a
-# dangling link once this worktree is removed.
+[plugins]
+ohos-sdk = "https://github.com/sargunv/mise-ohos-sdk#v0.1.0"
+
 [hooks]
-preinstall = ["sh scripts/link-ohos-sdk-plugin.sh"]
-postinstall = ["sh scripts/link-ohos-sdk-plugin.sh", "hk install --mise"]
+postinstall = ["hk install --mise"]
 
 [tasks.check]
 description = "Run every formatter and linter check."
@@ -94,38 +93,53 @@ description = "Pack the library into an OHPM source HAR in build/har."
 run = "scripts/pack-har.sh library build/har"
 
 [tasks."demo:build"]
-description = "Build and sign the demo HAP for the x64 emulator against the packed library and build/ffi."
+description = "Build and sign the demo HAP into build/demo/<abi> against the packed library and build/ffi."
+usage = '''
+flag "--abi <abi>" default="x86_64" help="The ABI of the native libraries: x86_64 for the Oniro emulator, arm64-v8a for most devices" {
+  choices "x86_64" "arm64-v8a"
+}
+'''
 depends = ["pack"]
 run = '''
-scripts/build-hap.sh demo/entry/src/main build/demo x86_64 \
+scripts/build-hap.sh demo/entry/src/main "build/demo/$usage_abi" "$usage_abi" \
   build/har/maplibre-arkui.har build/ffi/native-ffi.har build/ffi/native-ffi-opengl.har
 '''
 
 [tasks.demo]
-description = "Build the demo, then install and start it on this worktree's emulator or the device that --device names."
+description = "Build the demo for the device's ABI, then install and start it on this worktree's emulator or the device that --device names."
 usage = '''
 flag "--device <key>" help="The hdc connect key of the device, which defaults to this worktree's emulator"
 '''
-depends = ["demo:build"]
 run = '''
 device=${usage_device:-$(scripts/ohos-key.sh)}
-hdc -t "$device" install -r build/demo/entry.hap
+abi=$(scripts/device-abi.sh "$device")
+mise run demo:build --abi "$abi"
+hdc -t "$device" install -r "build/demo/$abi/entry.hap"
 hdc -t "$device" shell aa start -a EntryAbility -b org.maplibre.arkui.demo
 '''
 
 [tasks."test:build"]
-description = "Build and sign the library's hypium suite for the x64 emulator against the packed library and build/ffi."
+description = "Build and sign the library's hypium suite into build/test/<abi> against the packed library and build/ffi."
+usage = '''
+flag "--abi <abi>" default="x86_64" help="The ABI of the native libraries: x86_64 for the Oniro emulator, arm64-v8a for most devices" {
+  choices "x86_64" "arm64-v8a"
+}
+'''
 depends = ["pack"]
 run = '''
-scripts/build-hap.sh library/src/ohosTest build/test x86_64 \
+scripts/build-hap.sh library/src/ohosTest "build/test/$usage_abi" "$usage_abi" \
   build/har/maplibre-arkui.har build/ffi/native-ffi.har build/ffi/native-ffi-opengl.har \
   "$(mise where http:hypium)/package"
 '''
 
 [tasks.test]
-description = "Build the library's hypium suite and run it on this worktree's emulator or the device that --device names."
+description = "Build the library's hypium suite for the device's ABI and run it on this worktree's emulator or the device that --device names."
 usage = '''
 flag "--device <key>" help="The hdc connect key of the device, which defaults to this worktree's emulator"
 '''
-depends = ["test:build"]
-run = 'scripts/run-tests.sh "${usage_device:-$(scripts/ohos-key.sh)}" build/test/entry_test.hap'
+run = '''
+device=${usage_device:-$(scripts/ohos-key.sh)}
+abi=$(scripts/device-abi.sh "$device")
+mise run test:build --abi "$abi"
+scripts/run-tests.sh "$device" "build/test/$abi/entry_test.hap"
+'''

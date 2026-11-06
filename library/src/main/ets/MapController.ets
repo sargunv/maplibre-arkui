@@ -36,9 +36,9 @@ export interface MapControllerOptions {
  * time. When the map leaves the screen and comes back, such as after a
  * navigation, the new map starts where the old one left the camera.
  *
- * Its `camera`, `styleLoaded`, and `attributions` are observable, so a
- * component that reads them updates when they change. The map sets them; apps
- * only read them. `frameCamera` and the projection methods, such as
+ * Its `camera`, `styleLoaded`, `attributions`, and `followingUserLocation`
+ * are observable, so a component that reads them updates when they change.
+ * The map and the follow methods set them; apps only read them. `frameCamera` and the projection methods, such as
  * `pixelForLatLng()`, are observable too, and change with every frame the
  * camera moves. The camera methods need a map on screen whose FFI map is ready,
  * and reject without one.
@@ -320,12 +320,9 @@ export class MapController {
   // Starts a camera change whose animation ends with FFI's end handler, and
   // resolves with how it ended. A jump runs the handler as soon as the camera
   // moves.
-  private transition(options: AnimationOptions | undefined,
+  private async transition(options: AnimationOptions | undefined,
     start: (map: MapHandle, animation: AnimationOptions) => Promise<Object>): Promise<CameraTransitionOutcome> {
-    const map = this.view?.map;
-    if (map === undefined) {
-      return Promise.reject(new Error('No MapLibreMap shows this MapController'));
-    }
+    const map = this.requireMap();
     // The app's camera change takes over from a gesture's momentum.
     this.view?.takeOverCamera();
     return new Promise<CameraTransitionOutcome>((resolve, reject) => {

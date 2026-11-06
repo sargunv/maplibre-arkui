@@ -49,8 +49,10 @@ management V2 only, and FFI's API where it already reads as ArkTS.
   or `@Require`; `@Once` for the inputs that `MapLibreMap` binds to at creation
   (`controller`, `runtime`), while components that only read a controller take
   it as a `@Require @Param`; `@Event` for callbacks, with a no-op default;
-  `@BuilderParam` for trailing-closure content; `@Local` for the component's own
-  state. No V1 decorators, no AppStorage or LocalStorage.
+  `@BuilderParam` for trailing-closure content, named for what it holds
+  (`MapLibreMap.overlays`, since `content` is what the map draws, and
+  `MapMarker.content`); `@Local` for the component's own state. No V1
+  decorators, no AppStorage or LocalStorage.
 - A component follows a `@Param` change with `@Monitor`, which hands the new
   value to the imperative layer (`MapView`). Every declarative input has an
   imperative operation under it.

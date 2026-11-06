@@ -4,12 +4,9 @@ import geoLocationManager from '@ohos.geoLocationManager';
 import { MapGestureOptions, TAP_SLOP } from './gestures';
 import { MapContent } from './Content';
 import { MapController } from './MapController';
+import { noContent } from './MapMarker';
 import { MapView } from './MapView';
 import { MapAttribution, MapCompass, MapScaleBar, MapZoomButtons } from './Ornaments';
-
-@Builder
-function noContent() {
-}
 
 // Where the ornaments go in the map. ets-loader rejects `layoutGravity`, so
 // they align in a RelativeContainer.
@@ -57,9 +54,10 @@ const BOTTOM_END: LocalizedAlignRuleOptions = {
  * }
  * ```
  *
- * Its content, in the trailing closure, lies over the map in a `Stack` of the
- * map's size, under the map's ornaments. Pin it to coordinates with
- * `MapMarker`.
+ * Its `overlays`, the ArkUI content in the trailing closure, lie over the map
+ * in a `Stack` of the map's size, under the map's ornaments. Pin them to
+ * coordinates with `MapMarker`. What the map itself draws, such as GeoJSON in
+ * layers, is its `content`.
  */
 @ComponentV2
 export struct MapLibreMap {
@@ -106,7 +104,10 @@ export struct MapLibreMap {
    * UI that covers the map.
    */
   @Param ornamentPadding: Padding = {};
-  /** ArkUI content over the map, in a `Stack` of its size. */
+  /**
+   * ArkUI content over the map, in a `Stack` of its size, from the trailing
+   * closure. `content` is what the map draws itself.
+   */
   @BuilderParam overlays: () => void = noContent;
   /**
    * The user's location, which the map shows as a dot in a circle of its

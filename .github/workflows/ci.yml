@@ -61,7 +61,7 @@ jobs:
           name: packages
           path: |
             build/har/maplibre-arkui.har
-            build/demo/entry.hap
-            build/test/entry_test.hap
+            build/demo/x86_64/entry.hap
+            build/test/x86_64/entry_test.hap
           if-no-files-found: error
           retention-days: ${{ github.event_name == 'pull_request' && 1 || 30 }}

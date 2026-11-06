@@ -9,11 +9,12 @@ import {
 } from '@maplibre/arkui';
 
 import { DocExamples } from '../docs/Examples';
-import { Engine } from './Engine';
+import { LIBERTY, PANEL } from './common';
 import { LocationDemo } from './LocationDemo';
-import { StyleDemo } from './StyleDemo';
+import { RuntimeDemo } from './RuntimeDemo';
 import { ScrollingMap } from './ScrollingMap';
-import { LIBERTY, TwoMaps } from './TwoMaps';
+import { StyleDemo } from './StyleDemo';
+import { TwoMaps } from './TwoMaps';
 
 const SWITZERLAND: LatLngBounds = {
   southwest: { latitude: 45.82, longitude: 5.96 },
@@ -100,8 +101,8 @@ struct Index {
             Button('Two maps').margin(4).onClick(() => {
               this.stack.pushPathByName('two-maps', null);
             })
-            Button('Snapshots, offline').margin(4).onClick(() => {
-              this.stack.pushPathByName('engine', null);
+            Button('Runtime').margin(4).onClick(() => {
+              this.stack.pushPathByName('runtime', null);
             })
             Button('Style').margin(4).onClick(() => {
               this.stack.pushPathByName('style', null);
@@ -121,10 +122,7 @@ struct Index {
             })
           }
         }
-        .padding(12)
-        .margin({ left: 12, right: 12, bottom: 32 })
-        .borderRadius(16)
-        .backgroundColor('#e6ffffff')
+        .attributeModifier(PANEL)
         .onAreaChange((oldArea: Area, newArea: Area) => {
           this.panelHeight = (newArea.height as number) + 32;
         })
@@ -165,8 +163,8 @@ struct Index {
   pages(name: string) {
     if (name === 'two-maps') {
       TwoMaps()
-    } else if (name === 'engine') {
-      Engine()
+    } else if (name === 'runtime') {
+      RuntimeDemo()
     } else if (name === 'style') {
       StyleDemo()
     } else if (name === 'scrolling-map') {

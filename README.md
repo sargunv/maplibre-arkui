@@ -168,8 +168,8 @@ attribution. `scaleBarEnabled` and `zoomButtonsEnabled` add a scale bar and zoom
 buttons, and `ornamentPadding` keeps them all clear of app UI over the map. The
 ornaments follow dark mode.
 
-Content in the map's trailing closure lies over it, and `MapMarker` pins content
-to a coordinate:
+ArkUI content in the map's trailing closure, its `overlays`, lies over it, and
+`MapMarker` pins content to a coordinate:
 
 ```ets
 MapLibreMap({ controller: this.controller, style: STYLE, scaleBarEnabled: true }) {
@@ -531,6 +531,9 @@ mise run demo           # build the demo and start it on an emulator
 mise run test           # run the hypium suite on the emulator
 mise run check
 ```
+
+`mise run demo --device <key>` and `mise run test --device <key>` run on another
+device, such as DevEco Studio's emulator, with the HAP built for its ABI.
 
 [AGENTS.md](AGENTS.md) describes the layout, the tasks, how the build works
 without hvigor, and how to release.

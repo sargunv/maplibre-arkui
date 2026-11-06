@@ -27,9 +27,10 @@ import {
 } from '@maplibre/native-ffi';
 import geoLocationManager from '@ohos.geoLocationManager';
 
-import { ContentReconciler, MapContent } from './Content';
+import { ContentReconciler, loadStyle, MapContent } from './Content';
 import { GESTURE_ANIMATION_MS, GestureTarget, MapGestures, snapBearing } from './gestures';
 import { FOLLOW_MS, UserLocationLayer } from './location';
+import { logError } from './log';
 import { MapController } from './MapController';
 import {
   addRuntimeEventListener,
@@ -277,7 +278,7 @@ export class MapView extends XComponentController implements GestureTarget {
     this.targets = this.targets.then(async () => {
       await session?.release();
       map?.dispose();
-    }).catch((error: Error) => console.error(`MapLibre: ${error.message}`));
+    }).catch((error: Error) => logError(error.message));
   }
 
   private async createMap(runtime: RuntimeHandle): Promise<void> {
@@ -410,7 +411,7 @@ export class MapView extends XComponentController implements GestureTarget {
       }
     }, () => {
       // A style that fails to load reports mapLoadingFailed.
-    }).catch((error: Error) => console.error(`MapLibre: ${error.message}`));
+    }).catch((error: Error) => logError(error.message));
   }
 
   // The limits that the app leaves out keep the map's defaults, not the app's
@@ -489,19 +490,11 @@ export class MapView extends XComponentController implements GestureTarget {
   }
 
   private fail(error: Error): void {
-    console.error(`MapLibre: ${error.message}`);
+    logError(error.message);
     if (!this.disposed) {
       this.events.onMapError(error);
     }
   }
-}
-
-// A style that starts with `{` is a style document, and anything else is its
-// URL. It throws when the document isn't JSON, and the command completes once
-// the style is loaded.
-export function loadStyle(map: MapHandle, style: string): Promise<CommandCompletion> {
-  const trimmed = style.trim();
-  return trimmed.startsWith('{') ? map.setStyleJson(JSON.parse(trimmed)) : map.setStyleUrl(trimmed);
 }
 
 function boundOptions(bounds: CameraBounds): BoundOptions {

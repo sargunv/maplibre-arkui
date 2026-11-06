@@ -1,6 +1,7 @@
 // Map content as data: the sources, layers, and images that an app declares
 // for a MapLibreMap or a snapshot, and the reconciler that applies them to a
-// map's style. After MapLibre Compose's StyleReconciler, much simplified.
+// map's style. After MapLibre Compose's StyleReconciler, much simplified. Also
+// loadStyle(), which loads the style under the content, as both take it.
 
 import {
   CommandCompletion,
@@ -12,6 +13,7 @@ import {
 } from '@maplibre/native-ffi';
 
 import { Expression } from './Expressions';
+import { logError } from './log';
 
 /** Picks a layer of the base style, for `MapLayer.below`. */
 export type LayerPredicate = (layer: StyleLayerInfo) => boolean;
@@ -234,7 +236,7 @@ export class ContentReconciler {
     try {
       this.onError(error);
     } catch (thrown) {
-      console.error(`MapLibre: onMapError threw: ${(thrown as Error).message}`);
+      logError(`onMapError threw: ${(thrown as Error).message}`);
     }
   }
 
@@ -578,4 +580,12 @@ function layerJson(layer: MapLayer): Record<string, Object> {
     json['layout'] = layer.layout;
   }
   return json;
+}
+
+// A style that starts with `{` is a style document, and anything else is its
+// URL. It throws when the document isn't JSON, and the command completes once
+// the style is loaded.
+export function loadStyle(map: MapHandle, style: string): Promise<CommandCompletion> {
+  const trimmed = style.trim();
+  return trimmed.startsWith('{') ? map.setStyleJson(JSON.parse(trimmed)) : map.setStyleUrl(trimmed);
 }
