@@ -225,6 +225,11 @@ export class ContentReconciler {
     this.schedule();
   }
 
+  /** Settles once the passes that are running or waiting end. */
+  get applied(): Promise<void> {
+    return this.passes;
+  }
+
   /** A style has loaded, without any content. */
   styleLoaded(): Promise<void> {
     this.reset();

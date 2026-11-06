@@ -315,7 +315,8 @@ export class MapView extends XComponentController implements GestureTarget {
   }
 
   private newLocationLayer(scaleFactor: number): UserLocationLayer {
-    return new UserLocationLayer(scaleFactor, this.indicatorOptions, (error: Error) => this.fail(error));
+    return new UserLocationLayer(scaleFactor, this.indicatorOptions,
+      () => this.reconciler?.applied ?? Promise.resolve(), (error: Error) => this.fail(error));
   }
 
   setUserLocation(location: geoLocationManager.Location | undefined): void {
@@ -569,6 +570,7 @@ export class MapView extends XComponentController implements GestureTarget {
     }
     this.controller?.detach(this);
     this.reconciler?.styleUnloaded();
+    this.locationLayer.styleChanging();
     this.reconciler = undefined;
     this.created = undefined;
     this.map = undefined;

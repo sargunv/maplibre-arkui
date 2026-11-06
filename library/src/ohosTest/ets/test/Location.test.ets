@@ -78,6 +78,18 @@ async function drawnAt(latitude: number, longitude: number): Promise<void> {
   });
 }
 
+// A property of the indicator layer, as JSON.
+async function property(name: string): Promise<string> {
+  return JSON.stringify(await requireMap().getStyleLayerProperty(USER_LOCATION_LAYER, name));
+}
+
+// The name of an image property of the indicator layer, which the style
+// normalizes to an object with the name.
+async function imageName(name: string): Promise<string> {
+  const value = await requireMap().getStyleLayerProperty(USER_LOCATION_LAYER, name) as Record<string, Object>;
+  return value['name'] as string;
+}
+
 async function accuracyRadius(): Promise<number> {
   return await requireMap().getStyleLayerProperty(USER_LOCATION_LAYER, 'accuracy-radius') as number;
 }
@@ -403,17 +415,12 @@ export default function locationTest(): void {
       testMap.userLocation = fix(0, 0, 25, 3, 45);
       await drawnAt(0, 0);
       const map = requireMap();
-      // The style's normalized forms: colors as rgba() with premultiplied
-      // channels undone.
-      expect(await map.getStyleLayerProperty(USER_LOCATION_LAYER, 'accuracy-radius-color') as string)
-        .assertEqual('rgba(0,255,0,1)');
-      expect(await map.getStyleLayerProperty(USER_LOCATION_LAYER, 'accuracy-radius-border-color') as string)
-        .assertEqual('rgba(0,0,255,0.5)');
-      expect(await map.getStyleLayerProperty(USER_LOCATION_LAYER, 'top-image') as string)
-        .assertEqual('maplibre-arkui-user-location-dot');
-      expect(await map.getStyleLayerProperty(USER_LOCATION_LAYER, 'bearing-image') as string)
-        .assertEqual('custom-arrow');
-      expect(await map.getStyleLayerProperty(USER_LOCATION_LAYER, 'shadow-image') as string).assertEqual('');
+      // The style's normalized forms, as JSON.
+      expect(await property('accuracy-radius-color')).assertEqual('["rgba",0,255,0,1]');
+      expect(await property('accuracy-radius-border-color')).assertEqual('["rgba",0,0,255,0.5]');
+      expect(await imageName('top-image')).assertEqual('maplibre-arkui-user-location-dot');
+      expect(await imageName('bearing-image')).assertEqual('custom-arrow');
+      expect(await imageName('shadow-image')).assertEqual('');
       const ids = (await map.listStyleLayers()).map((layer: StyleLayerInfo) => layer.id);
       expect(ids.indexOf(USER_LOCATION_LAYER)).assertEqual(ids.indexOf('top') - 1);
 
@@ -429,19 +436,19 @@ export default function locationTest(): void {
       testMap.userLocationIndicator = {};
       await eventually('the default accuracy color', async () =>
         await map.getStyleLayer(USER_LOCATION_LAYER) !== undefined &&
-          (await map.getStyleLayerProperty(USER_LOCATION_LAYER, 'accuracy-radius-color') as string) !==
-            'rgba(0,255,0,1)' ? true : undefined);
-      expect(await map.getStyleLayerProperty(USER_LOCATION_LAYER, 'shadow-image') as string)
-        .assertEqual('maplibre-arkui-user-location-shadow');
+          await property('accuracy-radius-color') !== '["rgba",0,255,0,1]' ? true : undefined);
+      expect(await imageName('shadow-image')).assertEqual('maplibre-arkui-user-location-shadow');
       const after = (await map.listStyleLayers()).map((layer: StyleLayerInfo) => layer.id);
       expect(after[after.length - 1]).assertEqual(USER_LOCATION_LAYER);
     });
 
-    it('reports a layer to go under that the style doesn\'t have', 0, async () => {
+    it('goes above every layer when the style lacks the one to go under', 0, async () => {
       testMap.userLocationIndicator = { below: 'missing' };
       testMap.userLocation = fix(0, 0);
-      await until('the map reports it', () => testMap.errors.length > 0);
-      expect(await requireMap().getStyleLayer(USER_LOCATION_LAYER)).assertUndefined();
+      await drawnAt(0, 0);
+      const ids = (await requireMap().listStyleLayers()).map((layer: StyleLayerInfo) => layer.id);
+      expect(ids[ids.length - 1]).assertEqual(USER_LOCATION_LAYER);
+      expect(testMap.errors.length).assertEqual(0);
     });
   });
 }

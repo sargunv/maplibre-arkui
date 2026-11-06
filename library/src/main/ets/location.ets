@@ -77,10 +77,9 @@ export interface UserLocationIndicatorOptions {
    */
   shadowImage?: string;
   /**
-   * The ID of the layer, of the style or of `content`, that the indicator goes
-   * under. Above every layer by default. A layer that the style doesn't have
-   * is reported to `onMapError`, and the indicator stays out until the
-   * options change or a new style loads.
+   * The ID of the layer, of the style or of the map's `content`, that the
+   * indicator goes under. Without it, or when the style has no such layer as
+   * the indicator appears, the indicator goes above every layer.
    */
   below?: string;
 }
@@ -117,61 +116,72 @@ function arrowBearing(location: geoLocationManager.Location, heading: number | u
 }
 
 // The indicator layer of one map. A new style starts without it, so the view
-// adds it again as each style loads, and new options add it again.
+// adds it again as each style loads, and new options add it again. It goes in
+// after the content that the map is applying, so it can go under a layer of
+// that content.
 export class UserLocationLayer {
   private readonly density: number;
   private readonly fail: (error: Error) => void;
+  private readonly contentApplied: () => Promise<void>;
   private options: UserLocationIndicatorOptions;
+  private location: geoLocationManager.Location | undefined = undefined;
+  private heading: number | undefined = undefined;
   private loaded: boolean = false;
-  private added: boolean = false;
+  private state: LayerState = LayerState.none;
+  // Counts the adds and removals, so an add that waits stops once it's stale.
+  private changes: number = 0;
   private hasArrow: boolean = false;
 
-  constructor(density: number, options: UserLocationIndicatorOptions, fail: (error: Error) => void) {
+  constructor(density: number, options: UserLocationIndicatorOptions, contentApplied: () => Promise<void>,
+    fail: (error: Error) => void) {
     this.density = density;
     this.options = options;
+    this.contentApplied = contentApplied;
     this.fail = fail;
   }
 
   styleLoaded(map: MapHandle, location: geoLocationManager.Location | undefined, heading: number | undefined): void {
     this.loaded = true;
-    this.added = false;
+    this.state = LayerState.none;
+    this.changes++;
     this.draw(map, location, heading);
   }
 
+  // The style is going, or the map is.
   styleChanging(): void {
     this.loaded = false;
+    this.state = LayerState.none;
+    this.changes++;
   }
 
   // Takes new options, which the next draw applies.
   setOptions(map: MapHandle | undefined, options: UserLocationIndicatorOptions): void {
     this.options = options;
-    if (map !== undefined && this.loaded && this.added) {
-      this.added = false;
-      map.discarding.removeStyleLayer(USER_LOCATION_LAYER);
+    if (map !== undefined && this.loaded) {
+      this.remove(map);
     }
   }
 
   // Adds, moves, or removes the indicator. The style animates the move.
   draw(map: MapHandle, location: geoLocationManager.Location | undefined, heading: number | undefined): void {
+    this.location = location;
+    this.heading = heading;
     if (!this.loaded) {
       return;
     }
     if (location === undefined) {
-      if (this.added) {
-        this.added = false;
-        map.discarding.removeStyleLayer(USER_LOCATION_LAYER);
-      }
+      this.remove(map);
+      return;
+    }
+    if (this.state === LayerState.none) {
+      this.add(map);
+      return;
+    }
+    // An add that waits takes the latest location as it goes in.
+    if (this.state === LayerState.adding) {
       return;
     }
     const direction = arrowBearing(location, heading);
-    if (!this.added) {
-      this.added = true;
-      this.hasArrow = direction !== undefined;
-      this.addImages(map);
-      map.addStyleLayerJson(this.layerJson(location, direction), this.options.below ?? '')
-        .catch((error: Error) => this.fail(error));
-      return;
-    }
     map.discarding.setStyleLayerProperty(USER_LOCATION_LAYER, 'location', position(location));
     map.discarding.setStyleLayerProperty(USER_LOCATION_LAYER, 'accuracy-radius', location.accuracy);
     // A hidden arrow keeps its last bearing, so the next one eases from there.
@@ -182,6 +192,39 @@ export class UserLocationLayer {
       this.hasArrow = direction !== undefined;
       map.discarding.setStyleLayerProperty(USER_LOCATION_LAYER, 'bearing-image', this.arrow(direction));
     }
+  }
+
+  private remove(map: MapHandle): void {
+    if (this.state === LayerState.added) {
+      map.discarding.removeStyleLayer(USER_LOCATION_LAYER);
+    }
+    this.state = LayerState.none;
+    this.changes++;
+  }
+
+  // Adds the layer once the content in progress is in, under `below` if the
+  // style has it then, and above every layer otherwise.
+  private add(map: MapHandle): void {
+    this.state = LayerState.adding;
+    const change = ++this.changes;
+    const current = (): boolean => this.changes === change && this.loaded;
+    this.contentApplied().then(async () => {
+      const below = this.options.below;
+      const found = current() && below !== undefined && await map.getStyleLayer(below) !== undefined;
+      const location = this.location;
+      if (!current() || location === undefined) {
+        return;
+      }
+      const direction = arrowBearing(location, this.heading);
+      this.state = LayerState.added;
+      this.hasArrow = direction !== undefined;
+      this.addImages(map);
+      map.discarding.addStyleLayerJson(this.layerJson(location, direction), found ? below : '');
+    }).catch((error: Error) => {
+      if (current()) {
+        this.fail(error);
+      }
+    });
   }
 
   // The default images that the options leave in place, in their color.
@@ -225,6 +268,13 @@ export class UserLocationLayer {
     };
     return { 'id': USER_LOCATION_LAYER, 'type': 'location-indicator', 'layout': layout, 'paint': paint };
   }
+}
+
+enum LayerState {
+  none,
+  // Waiting for the content to go in first.
+  adding,
+  added,
 }
 
 // The layer's location is latitude, longitude, and altitude, unlike GeoJSON.
