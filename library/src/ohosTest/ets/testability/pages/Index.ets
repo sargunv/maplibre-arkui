@@ -115,7 +115,7 @@ struct Index {
       scaleBarEnabled: testMap.scaleBarEnabled,
       zoomButtonsEnabled: testMap.zoomButtons,
       attributionEnabled: testMap.attribution,
-      ornamentPadding: testMap.ornamentPadding,
+      viewportInsets: testMap.viewportInsets,
       onStyleLoaded: () => {
         testMap.styleLoads++;
       },

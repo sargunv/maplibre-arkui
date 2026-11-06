@@ -1,6 +1,6 @@
 ---
 title: Requests, offline regions, and logs
-description: Rewrite and serve requests, download offline regions, and take MapLibre's logs, with MapLibre Native FFI's API.
+description: Rewrite and serve requests, download offline regions, take MapLibre's logs, and choose when MapLibre uses the network.
 ---
 
 import { Code } from "@astrojs/starlight/components";
@@ -38,6 +38,20 @@ MapLibre logs to hilog with the tag `MapLibreNative`. To take the logs, set a
 callback with <Api of="setLogCallback" display="setLogCallback()" />:
 
 <Code code={region(examples, "logs")} lang="ts" />
+
+## Connectivity
+
+While the device has no network, MapLibre starts no requests and shows what its
+cache and offline regions hold; the requests wait until the device connects
+again. To follow the device, the library needs
+`ohos.permission.GET_NETWORK_INFO` (see
+[Getting started](/maplibre-arkui/getting-started/)); without it, MapLibre
+always tries the network. To keep maps offline, or online, whatever the device
+does, set a mode with
+<Api of="setConnectivityMode" display="setConnectivityMode()" />. The mode
+applies to every runtime of the app.
+
+<Code code={region(examples, "connectivity")} lang="ts" />
 
 [MapLibre Native FFI]: https://maplibre.org/maplibre-native-ffi/
 

@@ -28,7 +28,9 @@ peer dependencies. The backend's version must be the facade's, which this
 package's `oh-package.json5` names; `ohpm list` shows it.
 
 An app that loads styles or tiles from the network requests
-`ohos.permission.INTERNET` in its `module.json5`.
+`ohos.permission.INTERNET` in its `module.json5`, and
+`ohos.permission.GET_NETWORK_INFO`, so that maps follow the device's
+connectivity.
 
 ## Quick start
 

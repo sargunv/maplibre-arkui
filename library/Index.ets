@@ -2,12 +2,13 @@
 
 export { MapLibreMap } from './src/main/ets/MapLibreMap';
 export { MapController } from './src/main/ets/MapController';
-export type { MapControllerOptions } from './src/main/ets/MapController';
+export type { FitCameraOptions, MapControllerOptions } from './src/main/ets/MapController';
 export type { MapGestureOptions } from './src/main/ets/gestures';
 export { FollowBearing } from './src/main/ets/location';
 export type { FollowUserLocationOptions } from './src/main/ets/location';
 export { addRuntimeEventListener, getDefaultRuntime, removeRuntimeEventListener } from './src/main/ets/runtime';
 export type { RuntimeEventListener } from './src/main/ets/runtime';
+export { ConnectivityMode, getConnectivityMode, setConnectivityMode } from './src/main/ets/connectivity';
 export { snapshot } from './src/main/ets/Snapshot';
 export type {
   FeatureClickHandler,
@@ -35,8 +36,6 @@ export type {
   AnimationOptions,
   BoundOptions,
   Camera as CameraPosition,
-  CameraFitOptions,
-  CameraFitUpdate,
   CameraOptions,
   CameraTransitionEnd,
   CameraUpdate,
@@ -49,7 +48,8 @@ export type {
 export * from './src/main/ets/Expressions';
 
 // The FFI API for requests, offline regions, events, and logs, which apps call
-// on a runtime.
+// on a runtime. FFI's `setNetworkStatus()` isn't here: `setConnectivityMode()`
+// sets the status.
 export {
   CacheDatabaseOperation,
   CameraChangeMode,
@@ -73,7 +73,6 @@ export {
   RuntimeEventType,
   setLogAsyncSeverityMask,
   setLogCallback,
-  setNetworkStatus,
   TileOperation,
   UrlMatchFlag,
 } from '@maplibre/native-ffi';
@@ -138,6 +137,8 @@ export {
 export type {
   CameraBounds,
   CameraDelta,
+  CameraFitOptions,
+  CameraFitUpdate,
   CameraQueryResult,
   CanonicalTileId,
   CommandCompletion,

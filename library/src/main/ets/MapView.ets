@@ -8,10 +8,14 @@ import {
   Camera as CameraPosition,
   CameraBounds,
   CameraDelta,
+  CameraFitOptions,
+  CameraOptions,
   CameraQueryResult,
   CameraTransitionOutcome,
   CameraUpdateMode,
   CommandCompletion,
+  EdgeInsets,
+  LatLng,
   LogicalSize,
   MapHandle,
   MapMode,
@@ -35,7 +39,8 @@ import { ContentReconciler, loadStyle, MapClickEvent, MapContent, MapLayer } fro
 import { GESTURE_ANIMATION_MS, GestureTarget, MapGestures, snapBearing } from './gestures';
 import { FOLLOW_MS, UserLocationLayer } from './location';
 import { logError } from './log';
-import { MapController } from './MapController';
+import { FitCameraOptions, MapController } from './MapController';
+import { addInsets, NO_INSETS, sameInsets, subtractInsets, withoutInsets, withPadding } from './padding';
 import {
   addRuntimeEventListener,
   addRuntimeMap,
@@ -84,6 +89,8 @@ export class MapView extends XComponentController implements GestureTarget {
   private disposed: boolean = false;
   // How many times the app has moved the camera, which ends a gesture's say.
   private cameraTakeovers: number = 0;
+  // How many gestures the user has started, which end a fit's say.
+  gestureStarts: number = 0;
   // The map from when it's created, which the view disposes.
   private created: MapHandle | undefined = undefined;
   private style: string = '';
@@ -97,6 +104,9 @@ export class MapView extends XComponentController implements GestureTarget {
   private userLocation: geoLocationManager.Location | undefined = undefined;
   private userHeading: number | undefined = undefined;
   private readonly locationLayer: UserLocationLayer;
+  // The component's viewportInsets, which the map's camera padding includes on
+  // top of the app's.
+  private insets: EdgeInsets = NO_INSETS;
 
   // The component's latest size, its latest surface, and the surface that the
   // session renders to. A surface ID is the one the component reports.
@@ -176,6 +186,83 @@ export class MapView extends XComponentController implements GestureTarget {
     this.applyBounds();
   }
 
+  // The map keeps the app's camera padding inside the new insets, and its
+  // center, which moves to the middle of what they leave.
+  setViewportInsets(insets: EdgeInsets): void {
+    const previous = this.insets;
+    if (sameInsets(previous, insets)) {
+      return;
+    }
+    this.insets = insets;
+    const map = this.map;
+    if (map !== undefined) {
+      const padding = subtractInsets(map.getSnapshot().view.camera.padding, previous);
+      map.discarding.updateCamera({ mode: CameraUpdateMode.jump, camera: { padding: addInsets(insets, padding) } });
+    }
+  }
+
+  // The map's camera as the app sees it, without the insets.
+  appCamera(camera: CameraPosition): CameraPosition {
+    return withoutInsets(camera, this.insets);
+  }
+
+  // The app's camera options as the map takes them, with the insets around the
+  // app's padding. Options without padding keep the map's.
+  mapCamera(camera: CameraOptions | undefined): CameraOptions | undefined {
+    const padding = camera?.padding;
+    return camera === undefined || padding === undefined ? camera : withPadding(camera, addInsets(this.insets, padding));
+  }
+
+  // The camera that fits what `query` finds, as the map takes it. FFI's fit
+  // keeps its padding as the camera's, so the query fits inside the margin too,
+  // and the camera then centers the same view inside the insets and the camera
+  // padding alone. Undefined when the map leaves first.
+  async fitCamera(options: FitCameraOptions,
+    query: (map: MapHandle, fit: CameraFitOptions) => Promise<CameraOptions>): Promise<CameraOptions | undefined> {
+    const map = this.map;
+    if (map === undefined) {
+      return undefined;
+    }
+    let cameraPadding = options.cameraPadding;
+    if (cameraPadding === undefined) {
+      // In command order, so it includes padding that the app set just before,
+      // inside the insets that the map had then.
+      const insets = this.insets;
+      const current = await map.getCamera();
+      if (this.map !== map) {
+        return undefined;
+      }
+      cameraPadding = subtractInsets(current.camera.padding, insets);
+    }
+    // A layout change during the query leaves a different part of the map to
+    // fit in, so the fit asks again.
+    let insets: EdgeInsets;
+    let fitPadding: EdgeInsets;
+    let fitted: CameraOptions;
+    do {
+      insets = this.insets;
+      fitPadding = addInsets(addInsets(insets, cameraPadding), options.fitPadding ?? NO_INSETS);
+      fitted = await query(map, { padding: fitPadding, bearing: options.bearing, pitch: options.pitch });
+      if (this.map !== map) {
+        return undefined;
+      }
+    } while (this.insets !== insets);
+    const padding = addInsets(insets, cameraPadding);
+    const view = map.getSnapshot().view;
+    const projection = MapProjectionHandle.create(view);
+    let center: LatLng;
+    try {
+      projection.setCamera(withPadding(fitted, fitPadding));
+      center = projection.latLngForPixel({
+        x: (view.extent.width + padding.left - padding.right) / 2,
+        y: (view.extent.height + padding.top - padding.bottom) / 2,
+      });
+    } finally {
+      projection.release();
+    }
+    return withPadding(fitted, padding, center);
+  }
+
   setUserLocation(location: geoLocationManager.Location | undefined): void {
     this.userLocation = location;
     this.drawUserLocation(false);
@@ -234,6 +321,7 @@ export class MapView extends XComponentController implements GestureTarget {
 
   // The user takes the camera from the location it follows.
   gestureStarted(): void {
+    this.gestureStarts++;
     const controller = this.controller;
     if (controller !== undefined && controller.map === this.map) {
       controller.stopFollowingUserLocation();
@@ -423,10 +511,13 @@ export class MapView extends XComponentController implements GestureTarget {
     addRuntimeMap(runtime, map, (error: Error) => this.fail(error));
     // The controller takes camera changes from here on, and the map runs
     // commands in order, so they follow the starting camera.
-    const startCamera = controller.attach(this);
-    if (startCamera !== undefined) {
-      map.discarding.updateCamera({ mode: CameraUpdateMode.jump, camera: startCamera });
-    }
+    // The insets go around the start camera's padding, or the map's, which is
+    // none.
+    const startCamera: CameraOptions = controller.attach(this) ?? {};
+    map.discarding.updateCamera({
+      mode: CameraUpdateMode.jump,
+      camera: withPadding(startCamera, addInsets(this.insets, startCamera.padding ?? NO_INSETS)),
+    });
     this.applyBounds();
     this.applyStyle();
     this.retarget();
@@ -475,7 +566,8 @@ export class MapView extends XComponentController implements GestureTarget {
     }).catch((error: Error) => this.fail(error));
   }
 
-  private cameraIdle(camera: CameraPosition): void {
+  private cameraIdle(mapCamera: CameraPosition): void {
+    const camera = this.appCamera(mapCamera);
     const controller = this.controller;
     if (controller !== undefined && controller.map === this.map) {
       controller.camera = camera;

@@ -40,7 +40,8 @@ struct Index {
   @Local stack: NavPathStack = new NavPathStack();
   @Local showMap: boolean = true;
   @Local message: string = '';
-  // The panel's height, which the map keeps its ornaments above.
+  // The panel's height, which the map keeps its ornaments and the camera's
+  // center above.
   @Local panelHeight: number = 0;
   @Local gesturing: boolean = false;
   private map: MapController = new MapController({
@@ -56,7 +57,7 @@ struct Index {
             style: LIBERTY,
             scaleBarEnabled: true,
             zoomButtonsEnabled: true,
-            ornamentPadding: { bottom: this.panelHeight },
+            viewportInsets: { top: 0, left: 0, bottom: this.panelHeight, right: 0 },
             onMapError: (error: Error) => {
               this.message = error.message;
             },
@@ -205,7 +206,9 @@ struct Index {
   private fit(): void {
     this.report(this.map.fitCameraToLatLngBounds(SWITZERLAND, {
       mode: CameraUpdateMode.ease,
-      fit: { padding: { top: 48, left: 24, bottom: 240, right: 24 }, bearing: 0, pitch: 0 },
+      fitPadding: { top: 24, left: 24, bottom: 24, right: 24 },
+      bearing: 0,
+      pitch: 0,
       animation: { durationMs: 1500 },
     }));
   }
@@ -219,8 +222,6 @@ struct Index {
         zoom: 5,
         bearing: 0,
         pitch: 0,
-        // Centers the camera above the panel.
-        padding: { top: 0, left: 0, bottom: this.panelHeight, right: 0 },
       },
       animation: { durationMs: 5000 },
     }));

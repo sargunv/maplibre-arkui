@@ -1,4 +1,4 @@
-import { BoundOptions, Camera as CameraPosition, RuntimeHandle } from '@maplibre/native-ffi';
+import { BoundOptions, Camera as CameraPosition, EdgeInsets, RuntimeHandle } from '@maplibre/native-ffi';
 import geoLocationManager from '@ohos.geoLocationManager';
 
 import { MapGestureOptions, TAP_SLOP } from './gestures';
@@ -7,6 +7,7 @@ import { MapController } from './MapController';
 import { noContent } from './MapMarker';
 import { MapView } from './MapView';
 import { MapAttribution, MapCompass, MapScaleBar, MapZoomButtons } from './Ornaments';
+import { NO_INSETS } from './padding';
 
 // Where the ornaments go in the map. ets-loader rejects `layoutGravity`, so
 // they align in a RelativeContainer.
@@ -106,10 +107,22 @@ export struct MapLibreMap {
    */
   @Param attributionEnabled: boolean = true;
   /**
-   * Space between the map's edges and its ornaments, so they stay clear of app
-   * UI that covers the map.
+   * The edges of the map, in vp, that the app's own UI covers, such as a
+   * bottom sheet. The map's ornaments stay clear of them, and they add to the
+   * camera's padding, so a camera move centers its target in the part of the
+   * map that the user sees. They never show in the camera that `controller`
+   * reports. When they change, the camera's center moves to the middle of
+   * what they leave.
+   *
+   * ```ets
+   * MapLibreMap({
+   *   controller: this.map,
+   *   style: STYLE,
+   *   viewportInsets: { top: 0, left: 0, bottom: this.sheetHeight, right: 0 },
+   * })
+   * ```
    */
-  @Param ornamentPadding: Padding = {};
+  @Param viewportInsets: EdgeInsets = NO_INSETS;
   /**
    * ArkUI content over the map, in a `Stack` of its size, from the trailing
    * closure. `content` is what the map draws itself.
@@ -187,6 +200,7 @@ export struct MapLibreMap {
     this.view.gestures.options = this.gestures;
     this.view.setUserLocation(this.userLocation);
     this.view.setUserHeading(this.userHeading);
+    this.view.setViewportInsets(this.viewportInsets);
     this.view.start(this.controller, this.runtime, this.style, this.content, this.cameraBounds);
   }
 
@@ -212,6 +226,11 @@ export struct MapLibreMap {
   @Monitor('gestures')
   gesturesChanged(): void {
     this.view.gestures.options = this.gestures;
+  }
+
+  @Monitor('viewportInsets')
+  viewportInsetsChanged(): void {
+    this.view.setViewportInsets(this.viewportInsets);
   }
 
   @Monitor('userLocation')
@@ -289,7 +308,12 @@ export struct MapLibreMap {
       }
       .width('100%')
       .height('100%')
-      .padding(this.ornamentPadding)
+      .padding({
+        top: this.viewportInsets.top,
+        left: this.viewportInsets.left,
+        bottom: this.viewportInsets.bottom,
+        right: this.viewportInsets.right,
+      })
       .hitTestBehavior(HitTestMode.Transparent)
     }
     .width('100%')
