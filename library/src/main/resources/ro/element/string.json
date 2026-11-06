@@ -1,0 +1,12 @@
+{
+  "string": [
+    {
+      "name": "maplibre_attribution",
+      "value": "Atribuire hartă"
+    },
+    {
+      "name": "maplibre_compass",
+      "value": "Busolă"
+    }
+  ]
+}

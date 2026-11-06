@@ -1,0 +1,12 @@
+{
+  "string": [
+    {
+      "name": "maplibre_attribution",
+      "value": "Viitamine kaardi õiguste omanikule"
+    },
+    {
+      "name": "maplibre_compass",
+      "value": "Kompass"
+    }
+  ]
+}

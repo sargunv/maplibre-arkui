@@ -49,6 +49,9 @@ export class BareSurface extends XComponentController {
   }
 }
 
+// What the test map draws over itself: see TestMap.overlay.
+export type TestOverlay = 'none' | 'omitted' | 'default' | 'full' | 'attributionOnly';
+
 @ObservedV2
 export class TestMap {
   // The map is on the page while this is true. The suites that need no map
@@ -56,23 +59,37 @@ export class TestMap {
   @Trace shown: boolean = false;
   @Trace style: string = STYLE;
   @Trace cameraBounds: BoundOptions | undefined = undefined;
-  // A scale bar in these units, and a marker at this coordinate. Content that
-  // moves with the camera, the compass too, makes the emulator's llvmpipe
-  // crash more often, so only the cases that need them turn them on.
+  // Which overlay the map draws: none of its own but what the flags below
+  // add, a preset in its block besides them, or, with 'omitted', no trailing
+  // closure at all. Content that moves with the camera makes the emulator's
+  // llvmpipe crash more often, so only the cases that need it turn it on.
+  @Trace overlay: TestOverlay = 'none';
+  // A MapScaleBar in these units, with this maxWidth when a case sets it.
   @Trace scaleBar: ScaleBarUnits | undefined = undefined;
-  // The scale bar's maxWidth, and the marker's anchor, when a case sets them.
   @Trace scaleBarMaxWidth: number | undefined = undefined;
-  @Trace marker: LatLng | undefined = undefined;
-  @Trace markerAnchor: Position | undefined = undefined;
+  // A MapDisappearingScaleBar, and how long it stays.
+  @Trace disappearingScaleBarMs: number | undefined = undefined;
+  // A MapDisappearingCompassButton at the overlay's top end, and how long it
+  // stays when a case sets it.
   @Trace compass: boolean = false;
-  // A MapCompass of the case's own, alwaysShown, at the map's top start.
+  @Trace compassMs: number | undefined = undefined;
+  // A MapCompassButton at the overlay's top start.
   @Trace alwaysShownCompass: boolean = false;
-  // The map's own ornaments, besides the compass.
-  @Trace scaleBarEnabled: boolean = false;
   @Trace zoomButtons: boolean = false;
-  @Trace attribution: boolean = true;
+  @Trace attribution: boolean = false;
   @Trace viewportInsets: EdgeInsets = NO_INSETS;
   @Trace interactions: MapInteractionOptions = {};
+  // A box placed at this coordinate, by this alignment when a case sets it.
+  @Trace placedAt: LatLng | undefined = undefined;
+  @Trace placedAtAlignment: Alignment | undefined = undefined;
+  // A box placed towards this coordinate, and the angles it reported.
+  @Trace placedTowards: LatLng | undefined = undefined;
+  placedTowardsAngles: number[] = [];
+  // A MapPointerPinButton towards this coordinate, and how often it was tapped.
+  @Trace pointerPin: LatLng | undefined = undefined;
+  pointerPinTaps: number = 0;
+  // The padding of the Stack that holds the placements.
+  @Trace placementPadding: number = 0;
   @Trace userLocation: geoLocationManager.Location | undefined = undefined;
   @Trace userHeading: number | undefined = undefined;
   // The map is 300 vp tall at the top of a Scroll while this is true, and fills
@@ -124,7 +141,8 @@ export class TestMap {
     controller.stopFollowingUserLocation();
     // A map that took another runtime, or that another map shared the page
     // with, starts again.
-    if (this.runtime !== undefined || this.secondMap || !this.firstMap || this.height !== '100%') {
+    if (this.runtime !== undefined || this.secondMap || !this.firstMap || this.height !== '100%' ||
+      this.overlay === 'omitted') {
       this.shown = false;
       await until('the map leaves', () => controller.map === undefined);
       this.runtime = undefined;
@@ -137,17 +155,24 @@ export class TestMap {
     this.consumeClicks = false;
     this.throwOnError = false;
     this.cameraBounds = undefined;
+    this.overlay = 'none';
     this.scaleBar = undefined;
     this.scaleBarMaxWidth = undefined;
-    this.marker = undefined;
-    this.markerAnchor = undefined;
+    this.disappearingScaleBarMs = undefined;
     this.compass = false;
+    this.compassMs = undefined;
     this.alwaysShownCompass = false;
-    this.scaleBarEnabled = false;
     this.zoomButtons = false;
-    this.attribution = true;
+    this.attribution = false;
     this.viewportInsets = NO_INSETS;
     this.interactions = {};
+    this.placedAt = undefined;
+    this.placedAtAlignment = undefined;
+    this.placedTowards = undefined;
+    this.placedTowardsAngles = [];
+    this.pointerPin = undefined;
+    this.pointerPinTaps = 0;
+    this.placementPadding = 0;
     this.userLocation = undefined;
     this.userHeading = undefined;
     this.content = undefined;

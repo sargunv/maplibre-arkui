@@ -1,11 +1,20 @@
 import {
   CameraPosition,
   LatLng,
+  MapAttributionButton,
+  MapAttributionOnlyOverlay,
   MapClickEvent,
-  MapCompass,
+  MapCompassButton,
+  MapDefaultOverlay,
+  MapDisappearingCompassButton,
+  MapDisappearingScaleBar,
+  MapFullOverlay,
   MapLibreMap,
-  MapMarker,
+  MapPlacedAt,
+  MapPlacedTowards,
+  MapPointerPinButton,
   MapScaleBar,
+  MapZoomButtons,
   ScaleBarUnits,
 } from '@maplibre/arkui';
 
@@ -18,47 +27,159 @@ struct Index {
     testMap.context = this.getUIContext();
   }
 
-  // A box whose bottom center the map pins to the coordinate, unless a case
-  // sets its anchor.
+  // A box at the coordinate, by its center unless a case sets the alignment.
+  // The builders read the test map themselves, since a builder's arguments
+  // don't update it.
   @Builder
-  marker(coordinate: LatLng) {
-    if (testMap.markerAnchor === undefined) {
-      MapMarker({ controller: testMap.controller, coordinate: coordinate }) {
-        this.markerBox()
+  placedAt() {
+    if (testMap.placedAtAlignment === undefined) {
+      MapPlacedAt({ coordinate: testMap.placedAt! }) {
+        this.box('placed-at')
       }
     } else {
-      MapMarker({ controller: testMap.controller, coordinate: coordinate, anchor: testMap.markerAnchor }) {
-        this.markerBox()
+      MapPlacedAt({ coordinate: testMap.placedAt!, alignment: testMap.placedAtAlignment }) {
+        this.box('placed-at')
       }
     }
   }
 
   @Builder
-  markerBox() {
+  placedTowards() {
+    MapPlacedTowards({
+      coordinate: testMap.placedTowards!,
+      onAngleChange: (angle: number) => {
+        testMap.placedTowardsAngles.push(angle);
+      },
+    }) {
+      this.box('placed-towards')
+    }
+  }
+
+  @Builder
+  pointerPin() {
+    MapPointerPinButton({
+      coordinate: testMap.pointerPin!,
+      onTap: () => {
+        testMap.pointerPinTaps++;
+      },
+    }) {
+      Column()
+        .id('pin-content')
+        .width(24)
+        .height(24)
+        .backgroundColor(Color.Red)
+    }
+  }
+
+  @Builder
+  box(id: string) {
     Column()
-      .id('marker')
+      .id(id)
       .width(20)
       .height(10)
       .backgroundColor(Color.Red)
   }
 
-  // It reads the units itself, since a builder's arguments don't update it.
   @Builder
   scaleBar() {
     if (testMap.scaleBarMaxWidth === undefined) {
-      MapScaleBar({ controller: testMap.controller, units: testMap.scaleBar ?? ScaleBarUnits.metric })
+      MapScaleBar({ units: testMap.scaleBar ?? ScaleBarUnits.metric })
     } else {
-      MapScaleBar({
-        controller: testMap.controller,
-        units: testMap.scaleBar ?? ScaleBarUnits.metric,
-        maxWidth: testMap.scaleBarMaxWidth,
-      })
+      MapScaleBar({ units: testMap.scaleBar ?? ScaleBarUnits.metric, maxWidth: testMap.scaleBarMaxWidth })
     }
   }
 
   @Builder
-  alwaysShownCompass() {
-    MapCompass({ controller: testMap.controller, alwaysShown: true })
+  disappearingScaleBar() {
+    MapDisappearingScaleBar({ units: ScaleBarUnits.metric, visibilityDurationMs: testMap.disappearingScaleBarMs ?? 3000 })
+  }
+
+  @Builder
+  compass() {
+    if (testMap.compassMs === undefined) {
+      MapDisappearingCompassButton()
+    } else {
+      MapDisappearingCompassButton({ visibilityDurationMs: testMap.compassMs })
+    }
+  }
+
+  // The flags' controls: the compass at the top end, the zoom buttons in the
+  // middle of the end edge, and the attribution at the bottom end.
+  @Builder
+  controls() {
+    Stack({ alignContent: Alignment.TopEnd }) {
+      if (testMap.compass) {
+        this.compass()
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .padding(8)
+    .hitTestBehavior(HitTestMode.Transparent)
+    Stack({ alignContent: Alignment.End }) {
+      if (testMap.zoomButtons) {
+        MapZoomButtons()
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .padding(8)
+    .hitTestBehavior(HitTestMode.Transparent)
+    Stack({ alignContent: Alignment.BottomEnd }) {
+      if (testMap.attribution) {
+        MapAttributionButton()
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .padding(8)
+    .hitTestBehavior(HitTestMode.Transparent)
+  }
+
+  @Builder
+  preset() {
+    if (testMap.overlay === 'default') {
+      MapDefaultOverlay()
+    } else if (testMap.overlay === 'full') {
+      MapFullOverlay()
+    } else if (testMap.overlay === 'attributionOnly') {
+      MapAttributionOnlyOverlay()
+    }
+  }
+
+  @Builder
+  overlays() {
+    this.preset()
+    this.controls()
+    Column() {
+      if (testMap.scaleBar !== undefined) {
+        this.scaleBar()
+      }
+      if (testMap.disappearingScaleBarMs !== undefined) {
+        this.disappearingScaleBar()
+      }
+      if (testMap.alwaysShownCompass) {
+        MapCompassButton()
+      }
+    }
+    .padding(8)
+    .alignItems(HorizontalAlign.Start)
+    .hitTestBehavior(HitTestMode.Transparent)
+    Stack() {
+      if (testMap.placedAt !== undefined) {
+        this.placedAt()
+      }
+      if (testMap.placedTowards !== undefined) {
+        this.placedTowards()
+      }
+      if (testMap.pointerPin !== undefined) {
+        this.pointerPin()
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .padding(testMap.placementPadding)
+    .hitTestBehavior(HitTestMode.Transparent)
   }
 
   build() {
@@ -107,66 +228,61 @@ struct Index {
 
   @Builder
   map() {
-    MapLibreMap({
-      controller: testMap.controller,
-      style: testMap.style,
-      content: testMap.content,
-      cameraBounds: testMap.cameraBounds,
-      runtime: testMap.runtime,
-      interactions: testMap.interactions,
-      userLocation: testMap.userLocation,
-      userHeading: testMap.userHeading,
-      compassEnabled: testMap.compass,
-      scaleBarEnabled: testMap.scaleBarEnabled,
-      zoomButtonsEnabled: testMap.zoomButtons,
-      attributionEnabled: testMap.attribution,
-      viewportInsets: testMap.viewportInsets,
-      onStyleLoaded: () => {
-        testMap.styleLoads++;
-      },
-      onCameraIdle: (camera: CameraPosition) => {
-        testMap.cameraIdles.push(camera);
-      },
-      onMapError: (error: Error) => {
-        testMap.errors.push(error.message);
-        if (testMap.throwOnError) {
-          throw new Error('the app handler failed');
-        }
-      },
-      onGestureStart: () => {
-        testMap.gestureStarts++;
-        testMap.onGestureStart();
-      },
-      onGestureEnd: () => {
-        testMap.gestureEnds++;
-        testMap.onGestureEnd();
-      },
-      onMapClick: (event: MapClickEvent): boolean => testMap.click('click', event, testMap.consumeClicks),
-      onMapLongClick: (event: MapClickEvent): boolean => testMap.click('long click', event, testMap.consumeClicks),
-      onUnhandledClick: (event: MapClickEvent) => {
-        testMap.click('unhandled', event, false);
-      },
-    }) {
-      if (testMap.scaleBar !== undefined) {
-        this.scaleBar()
-      }
-      if (testMap.marker !== undefined) {
-        this.marker(testMap.marker)
-      }
-      if (testMap.alwaysShownCompass) {
-        this.alwaysShownCompass()
+    if (testMap.overlay === 'omitted') {
+      MapLibreMap({
+        controller: testMap.controller,
+        style: testMap.style,
+        viewportInsets: testMap.viewportInsets,
+        onStyleLoaded: () => {
+          testMap.styleLoads++;
+        },
+      })
+    } else {
+      MapLibreMap({
+        controller: testMap.controller,
+        style: testMap.style,
+        content: testMap.content,
+        cameraBounds: testMap.cameraBounds,
+        runtime: testMap.runtime,
+        interactions: testMap.interactions,
+        userLocation: testMap.userLocation,
+        userHeading: testMap.userHeading,
+        viewportInsets: testMap.viewportInsets,
+        onStyleLoaded: () => {
+          testMap.styleLoads++;
+        },
+        onCameraIdle: (camera: CameraPosition) => {
+          testMap.cameraIdles.push(camera);
+        },
+        onMapError: (error: Error) => {
+          testMap.errors.push(error.message);
+          if (testMap.throwOnError) {
+            throw new Error('the app handler failed');
+          }
+        },
+        onGestureStart: () => {
+          testMap.gestureStarts++;
+          testMap.onGestureStart();
+        },
+        onGestureEnd: () => {
+          testMap.gestureEnds++;
+          testMap.onGestureEnd();
+        },
+        onMapClick: (event: MapClickEvent): boolean => testMap.click('click', event, testMap.consumeClicks),
+        onMapLongClick: (event: MapClickEvent): boolean => testMap.click('long click', event, testMap.consumeClicks),
+        onUnhandledClick: (event: MapClickEvent) => {
+          testMap.click('unhandled', event, false);
+        },
+      }) {
+        this.overlays()
       }
     }
   }
 
-  // The second map shows the same controller, without ornaments.
+  // The second map shows the same controller, without controls.
   @Builder
   secondMap() {
-    MapLibreMap({
-      controller: testMap.controller,
-      style: STYLE,
-      compassEnabled: false,
-      attributionEnabled: false,
-    })
+    MapLibreMap({ controller: testMap.controller, style: STYLE }) {
+    }
   }
 }

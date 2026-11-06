@@ -1,0 +1,12 @@
+{
+  "string": [
+    {
+      "name": "maplibre_attribution",
+      "value": "Atrybucja mapy"
+    },
+    {
+      "name": "maplibre_compass",
+      "value": "Kompas"
+    }
+  ]
+}

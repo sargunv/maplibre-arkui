@@ -1,0 +1,12 @@
+{
+  "string": [
+    {
+      "name": "maplibre_attribution",
+      "value": "Kaart attributie"
+    },
+    {
+      "name": "maplibre_compass",
+      "value": "Kompas"
+    }
+  ]
+}

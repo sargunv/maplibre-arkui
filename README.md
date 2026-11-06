@@ -8,10 +8,10 @@ An ArkUI library for [MapLibre Native] on HarmonyOS and OpenHarmony, built on
 the ArkTS bindings of [MapLibre Native FFI]. It is a cousin of [MapLibre
 Compose]. The package, `@maplibre/arkui`, has a `MapLibreMap` component that
 moves with touch, mouse, touchpad, and keyboard gestures, a `MapController` that
-reads and moves its camera, ornaments, markers made of ArkUI content, the user's
-location, map content that the app declares from its state, style expressions,
-and snapshots. It passes on FFI's style API, request handlers, offline regions,
-and logs as they are.
+reads and moves its camera, localized controls, ArkUI content placed on
+coordinates, the user's location, map content that the app declares from its
+state, style expressions, and snapshots. It passes on FFI's style API, request
+handlers, offline regions, and logs as they are.
 
 It's a preview, and it isn't on [ohpm] yet: it waits for FFI to publish its
 packages there ([#26]).
@@ -67,9 +67,9 @@ struct MapPage {
 ```
 
 The library uses state management V2 only: put it in `@ComponentV2` structs. The
-[documentation] goes on from here: the map and its camera, gestures, ornaments
-and markers, map content and expressions, the style API, the user's location,
-snapshots, requests, offline regions, and logs.
+[documentation] goes on from here: the map and its camera, gestures, controls
+and ArkUI content, map content and expressions, the style API, the user's
+location, snapshots, requests, offline regions, and logs.
 
 ## Developing
 

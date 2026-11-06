@@ -1,0 +1,69 @@
+---
+title: Controls and ArkUI content
+description: Choose the map's controls, add your own, and place ArkUI content on coordinates.
+---
+
+import { Code } from "@astrojs/starlight/components";
+import Api from "../../components/Api.astro";
+import { region } from "../../snippets";
+
+import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
+
+<Api of="MapLibreMap" /> draws ArkUI content over the map from its trailing
+closure, its overlay. Without a closure, it draws
+<Api of="MapDefaultOverlay" />: a scale bar and a compass along the top edge,
+and the MapLibre logo and an attribution button along the bottom edge. The scale
+bar shows for a moment as the zoom changes, and the compass while the map is
+rotated or tilted. The controls follow dark mode, and their labels and
+accessibility text are in the app's language.
+
+## Choose a preset
+
+Put a preset in the closure to choose the controls.
+<Api of="MapFullOverlay" /> adds zoom buttons to the default controls, for users
+with a mouse and for accessibility. <Api of="MapAttributionOnlyOverlay" /> keeps
+only the logo and the attribution button.
+
+<Code code={region(examples, "overlay-preset")} lang="ts" />
+
+An empty closure draws nothing. The sources' terms usually require their
+attribution, so show the controller's `attributions` elsewhere:
+
+<Code code={region(examples, "overlay-none")} lang="ts" />
+
+The presets keep their controls clear of the map's `viewportInsets`, as
+[the camera](/maplibre-arkui/camera/#keep-the-camera-clear-of-your-ui)
+describes.
+
+## Add your own controls
+
+The closure lays out its children in a `Stack` the size of the map. Each control
+is a component that finds its map wherever it is in the closure, so it needs no
+controller: <Api of="MapCompassButton" />, <Api of="MapZoomButtons" />,
+<Api of="MapScaleBar" />, <Api of="MapAttributionButton" />,
+<Api of="MapLibreLogo" />, and the ones that show only while they matter,
+<Api of="MapDisappearingCompassButton" /> and
+<Api of="MapDisappearingScaleBar" />. Lay them out as you would any ArkUI
+component, and let touches between them through to the map with
+`hitTestBehavior(HitTestMode.Transparent)`:
+
+<Code code={region(examples, "overlay-custom")} lang="ts" />
+
+## Pin content to a coordinate
+
+<Api of="MapPlacedAt" /> puts its content on a coordinate and moves it with the
+map. Its `alignment` picks the point of the content that sits on the
+coordinate; `Alignment.Bottom` stands a label on it:
+
+<Code code={region(examples, "placed-at")} lang="ts" />
+
+## Point to a coordinate off the screen
+
+<Api of="MapPointerPinButton" /> shows a pin on an oval inside the map that
+points towards a coordinate off the screen, and hides while the coordinate is
+inside the oval. Pad its parent to move the oval in from the map's edges:
+
+<Code code={region(examples, "placed-towards")} lang="ts" />
+
+To draw your own pointer, put it in <Api of="MapPlacedTowards" />, whose
+`onAngleChange` gives the direction to turn it.

@@ -1,0 +1,12 @@
+{
+  "string": [
+    {
+      "name": "maplibre_attribution",
+      "value": "انتساب نقشه"
+    },
+    {
+      "name": "maplibre_compass",
+      "value": "قطب‌نما"
+    }
+  ]
+}

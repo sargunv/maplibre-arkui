@@ -1,0 +1,12 @@
+{
+  "string": [
+    {
+      "name": "maplibre_attribution",
+      "value": "Admháil Léarscáile"
+    },
+    {
+      "name": "maplibre_compass",
+      "value": "Compás"
+    }
+  ]
+}

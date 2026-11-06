@@ -48,7 +48,7 @@ export default defineConfig({
             { label: "The map", slug: "map" },
             { label: "The camera", slug: "camera" },
             { label: "Gestures", slug: "gestures" },
-            { label: "Ornaments and markers", slug: "ornaments" },
+            { label: "Controls and ArkUI content", slug: "controls" },
             { label: "Map content", slug: "content" },
             { label: "The style API", slug: "style" },
             { label: "The user's location", slug: "location" },

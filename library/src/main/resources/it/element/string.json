@@ -1,0 +1,12 @@
+{
+  "string": [
+    {
+      "name": "maplibre_attribution",
+      "value": "Attribuzione della mappa"
+    },
+    {
+      "name": "maplibre_compass",
+      "value": "Bussola"
+    }
+  ]
+}

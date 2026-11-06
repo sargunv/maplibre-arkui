@@ -1,0 +1,12 @@
+{
+  "string": [
+    {
+      "name": "maplibre_attribution",
+      "value": "Térkép-attribúció"
+    },
+    {
+      "name": "maplibre_compass",
+      "value": "Iránytű"
+    }
+  ]
+}

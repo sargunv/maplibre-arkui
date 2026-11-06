@@ -13,8 +13,13 @@ as ArkTS.
 ## Naming
 
 - Components are `@ComponentV2` structs named with nouns that start with `Map`:
-  `MapLibreMap`, `MapMarker`, `MapCompass`, `MapScaleBar`, `MapAttribution`,
-  `MapZoomButtons`.
+  `MapLibreMap`, `MapCompassButton`, `MapScaleBar`, `MapAttributionButton`,
+  `MapZoomButtons`, `MapLibreLogo`. A control that shows only while it matters
+  starts with `MapDisappearing` (`MapDisappearingScaleBar`), and an overlay
+  preset ends in `Overlay` (`MapDefaultOverlay`), after MapLibre Compose's
+  names. A component that places its content, standing in for one of Compose's
+  placement modifiers, takes the modifier's name: `MapPlacedAt`,
+  `MapPlacedTowards`.
 - A handle that the app creates and passes to a component is a class named
   `<Thing>Controller`, passed as `controller`, as ArkUI's `Scroller`,
   `TextController`, and `XComponentController` are: `MapController`.
@@ -33,10 +38,10 @@ as ArkTS.
   `onKeyEvent` does: `onMapClick` and `MapLayer.onClick`. An event of one part
   of the settings is a function-typed field of its options, named the same way
   (`MovementOptions.onStart`).
-- A flag that shows an ornament ends in `Enabled` (`compassEnabled`), as does a
-  part's on switch in its options (`MovementOptions.enabled`); other flags are
-  adjectives or the names of what they turn on (`alwaysShown`, `cooperative`). A
-  choice among a few behaviors is an enum named for what it picks
+- A part's on switch in its options ends in `Enabled`
+  (`MovementOptions.enabled`); other flags are adjectives or the names of what
+  they turn on (`cooperative`). The map shows controls through its overlay, not
+  flags. A choice among a few behaviors is an enum named for what it picks
   (`WheelAction`).
 - Functions are verbs or the noun they make: `snapshot()`, `readPixelMap()`,
   `getDefaultRuntime()`, `addRuntimeEventListener()`. Expression functions take
@@ -60,12 +65,20 @@ as ArkTS.
 
 - Components use state management V2 only: `@Param` for inputs, with a default
   or `@Require`; `@Once` for the inputs that `MapLibreMap` binds to at creation
-  (`controller`, `runtime`), while components that only read a controller take
-  it as a `@Require @Param`; `@Event` for callbacks, with a no-op default;
+  (`controller`, `runtime`); `@Event` for callbacks, with a no-op default;
   `@BuilderParam` for trailing-closure content, named for what it holds
   (`MapLibreMap.overlays`, since `content` is what the map draws, and
-  `MapMarker.content`); `@Local` for the component's own state. No V1
+  `MapPlacedAt.content`); `@Local` for the component's own state. No V1
   decorators, no AppStorage or LocalStorage.
+- Params don't take names that ArkUI's universal attributes and events use,
+  which a custom component can't redeclare: `overlay`, `size`, `onClick`. A
+  pin's tap is `onTap`.
+- The controls and placements in a map's overlay find the map themselves, as
+  Compose's do through `LocalMapState`, so they take no controller. ArkUI's
+  `@Consumer` can't find it: it looks up the components that own it, and the app
+  owns what it writes in the map's trailing closure. So the map tags its root
+  node, and each control walks up the frame nodes from its own root node once
+  that attaches. Outside a map, a control draws nothing.
 - A component follows a `@Param` change with `@Monitor`, which hands the new
   value to the imperative layer (`MapView`). Every declarative input has an
   imperative operation under it.
@@ -74,8 +87,8 @@ as ArkTS.
   `followingUserLocation`. The map sets them; apps read them.
 - Values that change every frame live in one private traced field, the frame's
   view, read through `frameCamera` and the projection methods. Components read
-  them in `@Computed` getters (`MapMarker.point`, `MapCompass.bearing`), so
-  per-frame work stays in the components that ask for it.
+  them in `@Computed` getters (`MapPlacedAt.point`, `MapCompassButton.bearing`),
+  so per-frame work stays in the components that ask for it.
 - The camera that the controller reads, reports, and takes is the app's. Its
   `padding` is camera state that moves and fits set; the map's `viewportInsets`,
   which describe the layout, add to it on the FFI map and never show in a camera
@@ -174,6 +187,20 @@ as ArkTS.
   demo build compiles and the site build cuts out by name. `mise run check`
   matches the READMEs' examples against those files.
 
+## Resources and localization
+
+- Text that the controls show or read out comes from the HAR's resources, in
+  `library/src/main/resources`, through `$r('app.string.maplibre_…')`. The build
+  merges them into the app's, so each name starts with `maplibre_`, and an app's
+  resource of the same name wins, which lets an app change a label.
+- The strings start from MapLibre Compose's translations, in OpenHarmony's
+  qualifier directories (`zh` for Simplified Chinese, `zh_Hant` for
+  Traditional).
+- Numbers with units format with `@ohos.intl` in the app's language, as the
+  scale bar's do, rather than with unit strings.
+- Colors and system icons are `sys.*` resources, so the controls follow dark
+  mode.
+
 ## Compared with MapLibre Compose
 
 These carry over from the
@@ -206,7 +233,12 @@ These don't:
 - Compose's composable rules (`Modifier` first, `remember*`, `XState` holders,
   `CompositionLocal`, `@Stable`) map to ArkUI's own idioms above: attributes on
   the component, a controller the app creates, `@Param` / `@Event`, and
-  `@ObservedV2`.
+  `@ObservedV2`. ArkUI has no custom modifiers, so Compose's `placedAt` and
+  `placedTowards` are components that wrap their content, and
+  `PlacedTowardsState` is `MapPlacedTowards.onAngleChange`.
+- The controls' styles: Compose's base controls draw in fixed colors, with a
+  Material 3 module for themed ones. Here the controls draw with the system's
+  `sys.*` colors, so they follow dark mode, and take no style params.
 - Compose throws feature exceptions (`MapSnapshotException`); this library
   rejects promises with FFI's or plain errors, and reports the rest to
   `onMapError`.
@@ -216,13 +248,12 @@ These don't:
 ## Follow-ups from the audit
 
 The audit for the first preview fixed small gaps (missing docs on content,
-marker, and ornament members; `{@link}` tags; `FollowLocationOptions`, now
+marker, and control members; `{@link}` tags; `FollowLocationOptions`, now
 `FollowUserLocationOptions`). These are larger:
 
 - `MapController` has public methods that only the map calls (`attach()`,
   `detach()`, `showFrame()`, `followCamera()`), marked "Internal:". A
   module-private registry could hide them.
-- The ornaments' accessibility labels are English until the HAR has resources.
 - Open names that are plain strings (`MapLayer.type`, `GeoJsonGeometry.type`)
   could become string-literal unions once static ArkTS is checked
   ([#28](https://github.com/sargunv/maplibre-arkui/issues/28)).

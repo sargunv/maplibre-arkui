@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Packs a compiled OpenHarmony module into a HAP and signs it for debugging.
 #
-#   scripts/pack-hap.sh <module-dir> <modules.abc> <libs-dir> <hap>
+#   scripts/pack-hap.sh <resources-dir> <modules.abc> <libs-dir> <hap>
 #
-# <module-dir> holds the module's module.json and resources, and <libs-dir> a
-# directory of native libraries for each ABI. restool compiles the resources,
-# app_packing_tool packs them with <modules.abc> and the libraries, and
+# <resources-dir> holds the module.json, resources, and resources.index that
+# restool compiled, and <libs-dir> a directory of native libraries for each
+# ABI. app_packing_tool packs them with <modules.abc> and the libraries, and
 # hap-sign-tool signs the HAP with the OpenHarmony SDK's debug signing material,
 # for the bundle that module.json names. The signed HAP is <hap>.
 #
@@ -15,8 +15,8 @@
 # tools itself. It comes from MapLibre Native FFI's tools/ohos/pack-hap.
 set -euo pipefail
 
-usage="usage: scripts/pack-hap.sh <module-dir> <modules.abc> <libs-dir> <hap>"
-module=${1:?$usage}
+usage="usage: scripts/pack-hap.sh <resources-dir> <modules.abc> <libs-dir> <hap>"
+compiled="$(cd "${1:?$usage}" && pwd)"
 # The packing tool runs in a directory of its own, so it takes absolute paths.
 abc="$(cd "$(dirname "${2:?$usage}")" && pwd)/$(basename "$2")"
 libs="$(cd "${3:?$usage}" && pwd)"
@@ -24,30 +24,27 @@ hap=${4:?$usage}
 sdk="$(dirname "${OHOS_SDK_NATIVE:?OHOS_SDK_NATIVE must name the OpenHarmony native SDK}")"
 tools="$sdk/toolchains"
 signing="$tools/lib"
-for tool in "$tools/restool" "$signing/app_packing_tool.jar" "$signing/hap-sign-tool.jar"; do
+for tool in "$signing/app_packing_tool.jar" "$signing/hap-sign-tool.jar"; do
   if [[ ! -e "$tool" ]]; then
     echo "error: the OpenHarmony SDK has no $tool; reinstall it with mise -E ohos install --force ohos-sdk" >&2
     exit 1
   fi
 done
-bundle=$(jq -er .app.bundleName "$module/module.json")
+bundle=$(jq -er .app.bundleName "$compiled/module.json")
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-mkdir -p "$work/compiled" "$work/pack"
-
-"$tools/restool" -i "$module" -o "$work/compiled" -p "$bundle" \
-  -r "$work/compiled/ResourceTable.h" -f >/dev/null
+mkdir -p "$work/pack"
 
 # The packing tool empties its working directory when it exits, so it runs in
 # a directory of its own.
 (
   cd "$work/pack"
   java -jar "$signing/app_packing_tool.jar" --mode hap --force true \
-    --json-path "$work/compiled/module.json" \
+    --json-path "$compiled/module.json" \
     --ets-path "$abc" \
     --lib-path "$libs" \
-    --resources-path "$work/compiled/resources" \
-    --index-path "$work/compiled/resources.index" \
+    --resources-path "$compiled/resources" \
+    --index-path "$compiled/resources.index" \
     --out-path "$work/unsigned.hap" >/dev/null
 )
 

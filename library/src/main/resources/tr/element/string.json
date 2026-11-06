@@ -1,0 +1,12 @@
+{
+  "string": [
+    {
+      "name": "maplibre_attribution",
+      "value": "Harita atıfları"
+    },
+    {
+      "name": "maplibre_compass",
+      "value": "Pusula"
+    }
+  ]
+}
