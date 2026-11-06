@@ -793,6 +793,18 @@ export default function gesturesTest(): void {
       expectNear(camera.offsetY(), 200, 1e-6);
     });
 
+    it('finishes a step before the same key moves another way with Shift', 0, async () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      gestures.keyDown(KeyCode.KEYCODE_DPAD_LEFT, false);
+      gestures.keyUp(KeyCode.KEYCODE_DPAD_LEFT);
+      gestures.keyDown(KeyCode.KEYCODE_DPAD_LEFT, true);
+      gestures.keyUp(KeyCode.KEYCODE_DPAD_LEFT);
+      await until('the steps end', () => camera.ends === 1);
+      expectNear(camera.offsetX(), 100, 1e-6);
+      expectNear(camera.bearing(), 15, 1e-6);
+    });
+
     it('adds the keys that are held, so opposite ones cancel', 0, async () => {
       const camera = new Recorder();
       const gestures = new MapGestures(camera);

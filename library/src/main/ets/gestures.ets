@@ -304,6 +304,9 @@ export class MapGestures {
   // time of the last frame they moved in.
   private readonly keys: Map<number, HeldKey> = new Map<number, HeldKey>();
   private keyTime: number = -1;
+  // Released keys that finish their step after the key went down again with
+  // another movement take negative IDs from this count, apart from key codes.
+  private finishingKeys: number = 0;
 
   constructor(target: GestureTarget) {
     this.target = target;
@@ -670,15 +673,21 @@ export class MapGestures {
    */
   keyDown(code: number, shift: boolean): boolean {
     const held = this.keys.get(code);
-    if (held !== undefined) {
-      // Pressed again before its step finished: it moves a step more.
-      if (held.released) {
-        held.released = false;
-        held.progress -= 1;
-      }
+    if (held !== undefined && !held.released) {
       return true;
     }
     const key = this.keyStep(code, shift);
+    if (held !== undefined) {
+      // Pressed again before its step finished: the same movement moves a step
+      // more, and another one, as Shift makes, moves once the step finishes.
+      if (key !== undefined && sameStep(held, key)) {
+        held.released = false;
+        held.progress -= 1;
+        return true;
+      }
+      this.keys.delete(code);
+      this.keys.set(-1 - this.finishingKeys++, held);
+    }
     if (key === undefined) {
       return false;
     }
@@ -1324,6 +1333,10 @@ export function snapBearing(bearing: number, targets: number[]): number | undefi
     }
   }
   return nearest === undefined || nearest === 0 ? undefined : bearing - nearest;
+}
+
+function sameStep(a: HeldKey, b: HeldKey): boolean {
+  return a.x === b.x && a.y === b.y && a.zoom === b.zoom && a.bearing === b.bearing && a.pitch === b.pitch;
 }
 
 function enabled(movement: MovementOptions | undefined): boolean {
