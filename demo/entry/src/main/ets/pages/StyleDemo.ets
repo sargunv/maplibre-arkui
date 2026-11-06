@@ -7,12 +7,15 @@ import {
   cases,
   CommandCompletion,
   eq,
+  FeatureClickHandler,
   featureState,
   FeatureStateSelector,
   GeoJsonFeature,
   GeoJsonFeatureCollection,
   geometryType,
   get,
+  LatLng,
+  MapClickEvent,
   MapContent,
   MapController,
   MapLayer,
@@ -68,31 +71,35 @@ const PARIS: GeoJsonFeatureCollection = {
   ],
 };
 
-const QUERIED = ['paris-pins', 'paris-places', 'paris-walk', 'paris-park'];
 const PARK_COLORS = ['#66bb6a', '#ffa726', '#ab47bc'];
 
 // Paint that reads the feature's `selected` state, which a tap sets.
 const SELECTED = toBoolean(featureState('selected'));
 const SELECTED_STATE: Record<string, Object> = { 'selected': true };
 
-// Under the base style's labels, so they draw over it.
-function parkLayer(color: string): MapLayer {
+// Under the base style's labels, so they draw over it. Each layer's features
+// handle a click with `onClick`.
+function parkLayer(color: string, onClick: FeatureClickHandler): MapLayer {
   return {
     id: 'paris-park', type: 'fill', source: 'paris', filter: eq(geometryType(), 'Polygon'),
     paint: { 'fill-color': cases([[SELECTED, '#2e7d32']], color), 'fill-opacity': 0.6 },
     below: (layer: StyleLayerInfo) => layer.type === 'symbol',
+    onClick: onClick,
   };
 }
 
-function walkLayer(): MapLayer {
+// The line is thin, so a click 8 vp beside it counts.
+function walkLayer(onClick: FeatureClickHandler): MapLayer {
   return {
     id: 'paris-walk', type: 'line', source: 'paris', filter: eq(geometryType(), 'LineString'),
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: { 'line-color': '#5e35b1', 'line-width': cases([[SELECTED, 9]], 5) },
+    onClick: onClick,
+    hitPadding: 8,
   };
 }
 
-function placesLayer(): MapLayer {
+function placesLayer(onClick: FeatureClickHandler): MapLayer {
   return {
     id: 'paris-places', type: 'circle', source: 'paris', filter: eq(geometryType(), 'Point'),
     paint: {
@@ -102,28 +109,31 @@ function placesLayer(): MapLayer {
       'circle-stroke-width': cases([[SELECTED, 4]], 2),
       'circle-stroke-color': cases([[SELECTED, '#e53935']], '#ffffff'),
     },
+    onClick: onClick,
   };
 }
 
 // A pin from the app's resources over each monument.
-function pinsLayer(): MapLayer {
+function pinsLayer(onClick: FeatureClickHandler): MapLayer {
   return {
     id: 'paris-pins', type: 'symbol', source: 'paris',
     filter: all(eq(geometryType(), 'Point'), eq(get('kind'), 'monument')),
     layout: { 'icon-image': 'pin', 'icon-anchor': 'bottom', 'icon-allow-overlap': true },
+    onClick: onClick,
   };
 }
 
-// The n-th point that the Add button adds, on a spiral around the park.
-function addedPoint(n: number): GeoJsonFeature {
+// The n-th point that the app adds: at `coordinate`, or on a spiral around
+// the park.
+function addedPoint(n: number, coordinate?: LatLng): GeoJsonFeature {
   const angle = n * 2.4;
   const distance = 0.003 + 0.0006 * n;
+  const position = coordinate === undefined ?
+    [2.2995 + distance * 1.5 * Math.cos(angle), 48.8551 + distance * Math.sin(angle)] :
+    [coordinate.longitude, coordinate.latitude];
   return {
     type: 'Feature', id: 100 + n, properties: { 'name': `Point ${n + 1}`, 'kind': 'added' },
-    geometry: {
-      type: 'Point',
-      coordinates: [2.2995 + distance * 1.5 * Math.cos(angle), 48.8551 + distance * Math.sin(angle)],
-    },
+    geometry: { type: 'Point', coordinates: position },
   };
 }
 
@@ -147,7 +157,8 @@ function loadPin(context: UIContext): PremultipliedRgba8Image {
 // A map whose content comes from the page's state: a GeoJSON source, layers
 // styled with expressions, and an icon from the app's resources. The buttons
 // change the state, and the map applies the change, in each base style. A tap
-// sets feature state on the feature it finds, through FFI.
+// on a feature selects it with feature state, through FFI, and a long press
+// adds a point.
 @ComponentV2
 export struct StyleDemo {
   @Local style: string = LIBERTY;
@@ -155,23 +166,30 @@ export struct StyleDemo {
   @Local parkColor: number = 0;
   @Local added: GeoJsonFeature[] = [];
   @Local preview: image.PixelMap | undefined = undefined;
-  @Local message: string = 'Tap a place, the walk, or the park';
+  @Local message: string = 'Tap a place, the walk, or the park; long press to add a point';
   private controller: MapController = new MapController({
     camera: { center: { latitude: 48.8570, longitude: 2.2965 }, zoom: 13.6 },
   });
   private pin: PremultipliedRgba8Image = loadPin(this.getUIContext());
   private selected: FeatureStateSelector | undefined = undefined;
+  // The layers are on top of each other, so the topmost feature under a click
+  // takes it, and the layers under it don't get it.
+  private onFeatureClick: FeatureClickHandler = (features: RenderedFeature[], event: MapClickEvent): boolean => {
+    this.select(features[0], event);
+    return true;
+  };
 
   // What the map draws over its style. It changes when the state it reads
   // does, and the map changes only what differs.
   @Computed
   get content(): MapContent {
     const places: GeoJsonFeatureCollection = { type: 'FeatureCollection', features: PARIS.features.concat(this.added) };
-    const layers: MapLayer[] = [parkLayer(PARK_COLORS[this.parkColor]), walkLayer()];
+    const layers: MapLayer[] = [parkLayer(PARK_COLORS[this.parkColor], this.onFeatureClick),
+      walkLayer(this.onFeatureClick)];
     if (this.placesShown) {
-      layers.push(placesLayer());
+      layers.push(placesLayer(this.onFeatureClick));
     }
-    layers.push(pinsLayer());
+    layers.push(pinsLayer(this.onFeatureClick));
     return {
       sources: [{ id: 'paris', json: { 'type': 'geojson', 'data': places } }],
       layers: layers,
@@ -193,10 +211,15 @@ export struct StyleDemo {
           onMapError: (error: Error) => {
             this.message = error.message;
           },
+          // A click that no feature took clears the selection.
+          onUnhandledClick: (event: MapClickEvent) => {
+            this.select(undefined, event);
+          },
+          onMapLongClick: (event: MapClickEvent): boolean => {
+            this.added = this.added.concat([addedPoint(this.added.length, event.coordinate)]);
+            return true;
+          },
         })
-          .onClick((event: ClickEvent) => {
-            this.select(event.x, event.y);
-          })
         if (this.preview !== undefined) {
           Image(this.preview)
             .width(160)
@@ -258,23 +281,17 @@ export struct StyleDemo {
     }
   }
 
-  // A click's point is in vp from the map's top-left corner, as the render
-  // session's queries take it.
-  private async select(x: number, y: number): Promise<void> {
+  // Selects the feature that a click hit, or nothing.
+  private async select(hit: RenderedFeature | undefined, event: MapClickEvent): Promise<void> {
     const map = this.controller.map;
-    const session = this.controller.renderSession;
-    if (map === undefined || session === undefined) {
+    if (map === undefined) {
       return;
     }
     try {
-      const hits = await session.queryRenderedFeatures({ kind: 'point', value: { x: x, y: y } },
-        { layerIds: QUERIED });
-      const where = `at ${x.toFixed(0)}, ${y.toFixed(0)} vp`;
-      const hit: RenderedFeature | undefined = hits.length > 0 ? hits[0] : undefined;
+      const where = `at ${event.x.toFixed(0)}, ${event.y.toFixed(0)} vp`;
       const feature = hit?.feature as GeoJsonFeature | undefined;
       this.message = hit === undefined ? `Nothing here ${where}` :
-        `${feature?.properties?.['name']} in ${hit.layerId} ${where}` +
-          (hits.length > 1 ? `, over ${hits.length - 1} more` : '');
+        `${feature?.properties?.['name']} in ${hit.layerId} ${where}`;
 
       // The map compares feature IDs as text.
       const next: FeatureStateSelector | undefined = hit === undefined || feature?.id === undefined ? undefined :

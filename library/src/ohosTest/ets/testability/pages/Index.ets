@@ -1,6 +1,7 @@
 import {
   CameraPosition,
   LatLng,
+  MapClickEvent,
   MapCompass,
   MapLibreMap,
   MapMarker,
@@ -134,6 +135,11 @@ struct Index {
       onGestureEnd: () => {
         testMap.gestureEnds++;
         testMap.onGestureEnd();
+      },
+      onMapClick: (event: MapClickEvent): boolean => testMap.click('click', event, testMap.consumeClicks),
+      onMapLongClick: (event: MapClickEvent): boolean => testMap.click('long click', event, testMap.consumeClicks),
+      onUnhandledClick: (event: MapClickEvent) => {
+        testMap.click('unhandled', event, false);
       },
     }) {
       if (testMap.scaleBar !== undefined) {

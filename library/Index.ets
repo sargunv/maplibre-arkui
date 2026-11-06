@@ -10,7 +10,15 @@ export { addRuntimeEventListener, getDefaultRuntime, removeRuntimeEventListener 
 export type { RuntimeEventListener } from './src/main/ets/runtime';
 export { ConnectivityMode, getConnectivityMode, setConnectivityMode } from './src/main/ets/connectivity';
 export { snapshot } from './src/main/ets/Snapshot';
-export type { LayerPredicate, MapContent, MapImage, MapLayer, MapSource } from './src/main/ets/Content';
+export type {
+  FeatureClickHandler,
+  LayerPredicate,
+  MapClickEvent,
+  MapContent,
+  MapImage,
+  MapLayer,
+  MapSource,
+} from './src/main/ets/Content';
 export type { SnapshotOptions } from './src/main/ets/Snapshot';
 
 // The FFI types that the API takes and returns, so apps needn't depend on FFI

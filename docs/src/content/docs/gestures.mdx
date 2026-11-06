@@ -20,3 +20,25 @@ and the plain wheel to a scrolling parent (see <Api of="MapGestureOptions" />):
 
 Content over the map that handles its own gestures, such as a button, keeps
 them.
+
+## Clicks
+
+A tap is a click, and a long press or a right click is a long click. The map's
+`onMapClick` or `onMapLongClick` gets it first, and returns `true` to consume
+it. Then the layers of the [content](/maplibre-arkui/content/) with features
+under it get it, from the top layer down, until a layer's `onClick` or
+`onLongClick` returns `true`. A click that nothing consumed goes to
+`onUnhandledClick`:
+
+<Code code={region(examples, "map-click")} lang="ts" />
+
+A layer's handler gets the layer's features under the click, as FFI's query
+returns them, and the click's point and coordinate (see <Api of="MapClickEvent" />). `hitPadding`
+widens what counts as under the click, so small circles and thin lines are
+easier to tap:
+
+<Code code={region(examples, "layer-click")} lang="ts" />
+
+While zoom is on, a tap waits 300 ms for a second tap, so a double tap zooms
+without a click. Clicks reach the handlers whichever gestures `gestures` turns
+off.

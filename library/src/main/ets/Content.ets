@@ -6,8 +6,10 @@
 import {
   CommandCompletion,
   GeoJsonSourceDataHandle,
+  LatLng,
   MapHandle,
   PremultipliedRgba8Image,
+  RenderedFeature,
   StyleImageOptions,
   StyleLayerInfo,
 } from '@maplibre/native-ffi';
@@ -17,6 +19,24 @@ import { logError } from './log';
 
 /** Picks a layer of the base style, for `MapLayer.below`. */
 export type LayerPredicate = (layer: StyleLayerInfo) => boolean;
+
+/** Where the user clicked a map. */
+export interface MapClickEvent {
+  /** The click's distance from the map's left edge, in vp, as feature queries take it. */
+  x: number;
+  /** The click's distance from the map's top edge, in vp. */
+  y: number;
+  /** The coordinate under the click. */
+  coordinate: LatLng;
+}
+
+/**
+ * Handles a click on a layer's features: those under the click, in the order
+ * that FFI's `queryRenderedFeatures()` returns them. It returns `true` to
+ * consume the click, so the layers under it and `onUnhandledClick` don't get
+ * it, or `false` to pass it on.
+ */
+export type FeatureClickHandler = (features: RenderedFeature[], event: MapClickEvent) => boolean;
 
 /**
  * What a map draws on top of its base style: sources, the layers that draw
@@ -60,7 +80,8 @@ export interface MapSource {
 }
 
 /**
- * A layer, as the style spec writes it, and where it goes.
+ * A layer, as the style spec writes it, where it goes, and what a click on its
+ * features does.
  *
  * ```ets
  * const park: MapLayer = {
@@ -72,6 +93,8 @@ export interface MapSource {
  *
  * A change to `paint`, `layout`, `filter`, or the zoom range changes the layer
  * in place, and a change to `type`, `source`, or `sourceLayer` replaces it.
+ * The map compares neither the handlers nor `hitPadding`; it uses those of
+ * the latest content.
  */
 export interface MapLayer {
   /** The layer's ID, unique in the content and the base style. */
@@ -101,6 +124,22 @@ export interface MapLayer {
    * the same layer keep their order in `MapContent.layers`.
    */
   below?: string | LayerPredicate;
+  /**
+   * Handles a click on the layer's features. After `MapLibreMap.onMapClick`
+   * passes a click, the layers with features under it get it from the top
+   * layer down, until one consumes it.
+   */
+  onClick?: FeatureClickHandler;
+  /**
+   * Handles a long click on the layer's features, a long press or a right
+   * click, as `onClick` does a click, after `MapLibreMap.onMapLongClick`.
+   */
+  onLongClick?: FeatureClickHandler;
+  /**
+   * How far from a click, in vp, the layer's features count as under it, so
+   * small circles and thin lines are easier to tap. Defaults to 0.
+   */
+  hitPadding?: number;
 }
 
 /** An image for symbol layers' `icon-image` and patterns, such as from `readPixelMap()`. */
@@ -184,6 +223,32 @@ export class ContentReconciler {
   /** The map is loading another style, or going away. */
   styleUnloaded(): void {
     this.reset();
+  }
+
+  /** Counts the styles that the map has loaded or started to. */
+  get styleGeneration(): number {
+    return this.generation;
+  }
+
+  /**
+   * The content's layers in the style that handle a click, or a long click
+   * if `long`, from the top layer down, as the style orders them.
+   */
+  clickableLayers(long: boolean): MapLayer[] {
+    const handlers = new Map<string, MapLayer>();
+    for (const layer of this.content?.layers ?? []) {
+      if ((long ? layer.onLongClick : layer.onClick) !== undefined && this.layers.has(layer.id)) {
+        handlers.set(layer.id, layer);
+      }
+    }
+    const clickable: MapLayer[] = [];
+    for (let i = this.stack.length - 1; i >= 0; i--) {
+      const layer = handlers.get(this.stack[i]);
+      if (layer !== undefined) {
+        clickable.push(layer);
+      }
+    }
+    return clickable;
   }
 
   private reset(): void {

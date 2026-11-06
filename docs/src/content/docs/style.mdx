@@ -12,8 +12,9 @@ import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw"
 For everything else, the style API is MapLibre Native FFI's: `controller.map`, a
 <Api of="MapHandle" />, adds and changes sources, layers, images, and feature
 state, and `controller.renderSession`, a <Api of="RenderSessionHandle" />,
-queries features. A click's point is in vp from the map's corner, as queries
-take it:
+queries features, such as the base style's near a click. A click's point is in
+vp from the map's corner, as queries take it. The content's own layers take
+[clicks](/maplibre-arkui/gestures/#clicks) without a query.
 
 <Code code={region(examples, "query-click")} lang="ts" />
 

@@ -43,7 +43,8 @@ them with complex code.
 - Don't run `power-shell suspend` on the emulator: `hdc shell` hangs until it's
   released.
 - The webpack build that compiles ArkTS doesn't rewrite `@kit.*` imports, so
-  import `@ohos.*` modules. It omits some built-in components, such as
+  import `@ohos.*` modules, and it emits invalid code for a renamed import
+  (`import { A as B }`) from one. It omits some built-in components, such as
   `NodeContainer` and `ContentSlot`. In a `ForEach` item, a custom component's
   trailing closure is silently dropped; have the item call a `@Builder`.
 - ArkUI reserves the name `Camera`, so import FFI's as `CameraPosition`.

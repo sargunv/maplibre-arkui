@@ -1,3 +1,4 @@
+import clicksTest from './Clicks.test';
 import connectivityTest from './Connectivity.test';
 import contentTest from './Content.test';
 import expressionsTest from './Expressions.test';
@@ -22,6 +23,7 @@ export default function testsuite(): void {
   styleTest();
   ornamentsTest();
   gestureInputTest();
+  clicksTest();
   contentTest();
   locationTest();
 }
