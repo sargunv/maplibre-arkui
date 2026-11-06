@@ -57,13 +57,6 @@ function arrowBearing(location: geoLocationManager.Location, heading: number | u
   return heading ?? course(location);
 }
 
-// `bearing` turned by whole turns to be within half a turn of `from`, so the
-// layer's transition, which eases the number, turns the short way across
-// north.
-function nearestTurn(bearing: number, from: number): number {
-  return bearing + 360 * Math.round((from - bearing) / 360);
-}
-
 // The indicator layer of one map. A new style starts without it, so the view
 // adds it again as each style loads.
 export class UserLocationLayer {
@@ -71,8 +64,6 @@ export class UserLocationLayer {
   private loaded: boolean = false;
   private added: boolean = false;
   private hasArrow: boolean = false;
-  // The bearing last set on the layer.
-  private bearing: number = 0;
 
   constructor(density: number) {
     this.density = density;
@@ -104,7 +95,6 @@ export class UserLocationLayer {
     if (!this.added) {
       this.added = true;
       this.hasArrow = direction !== undefined;
-      this.bearing = direction ?? 0;
       setImage(map, DOT_IMAGE, dotImage(this.density), this.density);
       setImage(map, ARROW_IMAGE, arrowImage(this.density), this.density);
       map.discarding.addStyleLayerJson(layerJson(location, direction));
@@ -114,8 +104,7 @@ export class UserLocationLayer {
     map.discarding.setStyleLayerProperty(USER_LOCATION_LAYER, 'accuracy-radius', location.accuracy);
     // A hidden arrow keeps its last bearing, so the next one eases from there.
     if (direction !== undefined) {
-      this.bearing = nearestTurn(direction, this.bearing);
-      map.discarding.setStyleLayerProperty(USER_LOCATION_LAYER, 'bearing', this.bearing);
+      map.discarding.setStyleLayerProperty(USER_LOCATION_LAYER, 'bearing', direction);
     }
     if (this.hasArrow !== (direction !== undefined)) {
       this.hasArrow = direction !== undefined;

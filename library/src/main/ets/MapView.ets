@@ -169,31 +169,33 @@ export class MapView extends XComponentController implements GestureTarget {
 
   setUserLocation(location: geoLocationManager.Location | undefined): void {
     this.userLocation = location;
-    this.drawUserLocation();
+    this.drawUserLocation(false);
   }
 
+  // A compass reports many times a second, so a new heading moves the camera
+  // only while it turns with the heading, and other camera changes last.
   setUserHeading(heading: number | undefined): void {
     this.userHeading = heading;
-    this.drawUserLocation();
+    this.drawUserLocation(true);
   }
 
-  private drawUserLocation(): void {
+  private drawUserLocation(headingChanged: boolean): void {
     const map = this.map;
     if (map !== undefined) {
       this.locationLayer.draw(map, this.userLocation, this.userHeading);
-      this.followUserLocation();
+      this.followUserLocation(headingChanged);
     }
   }
 
   // Moves the camera to the user's location while the controller follows it.
-  followUserLocation(): void {
+  followUserLocation(headingChanged: boolean = false): void {
     const map = this.map;
     const location = this.userLocation;
     const controller = this.controller;
     if (map === undefined || location === undefined || controller === undefined || controller.map !== map) {
       return;
     }
-    const camera = controller.followCamera(location, this.userHeading);
+    const camera = controller.followCamera(location, this.userHeading, headingChanged);
     if (camera !== undefined) {
       map.discarding.updateCamera({
         mode: CameraUpdateMode.ease,

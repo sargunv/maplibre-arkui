@@ -191,13 +191,6 @@ export default function locationTest(): void {
       await eventually('the arrow turns to the course', async () =>
         await arrowBearing() === 180 ? true : undefined);
 
-      // The arrow turns the short way across north: from 350 to 370, not
-      // back to 10.
-      testMap.userHeading = 350;
-      await eventually('the arrow turns to 350', async () => await arrowBearing() === 350 ? true : undefined);
-      testMap.userHeading = 10;
-      await eventually('the arrow turns past north', async () => await arrowBearing() === 370 ? true : undefined);
-
       // At rest again without a heading, the arrow goes.
       testMap.userHeading = undefined;
       testMap.userLocation = fix(0, 0);
@@ -221,6 +214,16 @@ export default function locationTest(): void {
       testMap.userLocation = fix(5.1, 6.1, 10, 3, 90);
       await until('the camera reaches the location', () => restsAt(5.1, 6.1));
       expectNear(camera().bearing, 60, 0.001);
+
+      // While it follows without the heading, a new heading leaves a camera
+      // change that the app makes.
+      map.followUserLocation({ bearing: FollowBearing.course });
+      await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { center: { latitude: 5.2, longitude: 6.2 } } });
+      testMap.userHeading = 120;
+      await eventually('the arrow turns to the heading', async () =>
+        await arrowBearing() === 120 ? true : undefined);
+      await frames(30);
+      expect(restsAt(5.2, 6.2)).assertTrue();
     });
 
     it('follows from the start a map that appears after the app asks', 0, async () => {

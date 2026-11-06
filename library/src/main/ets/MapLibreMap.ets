@@ -121,7 +121,7 @@ export struct MapLibreMap {
    * The direction that the device faces, in degrees clockwise from north,
    * which the arrow on `userLocation` points to while it's set, in place of
    * the course. Pass each heading that the compass reports, as for
-   * `userLocation`. The arrow turns the short way to each new heading.
+   * `userLocation`.
    */
   @Param userHeading: number | undefined = undefined;
   /**
