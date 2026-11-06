@@ -1,5 +1,6 @@
 // What the maps of an app share: the default runtime, the frame pacer, and the
-// event listeners of each runtime.
+// event listeners of each runtime. The first use of a runtime starts following
+// the device's connectivity.
 
 import {
   FramePacerHandle,
@@ -12,6 +13,7 @@ import {
 } from '@maplibre/native-ffi';
 import application from '@ohos.app.ability.application';
 
+import { followConnectivity } from './connectivity';
 import { logError } from './log';
 
 /** Takes one event of a runtime or of one of its maps. */
@@ -48,6 +50,7 @@ const liveMaps: Map<bigint, LiveMap[]> = new Map();
  * with `addRuntimeEventListener()` instead.
  */
 export function getDefaultRuntime(): Promise<RuntimeHandle> {
+  followConnectivity();
   if (defaultRuntime === undefined) {
     const created = createDefaultRuntime();
     defaultRuntime = created;
@@ -175,6 +178,7 @@ export function getFramePacer(): FramePacerHandle {
 function registrationsOf(runtime: RuntimeHandle): Registration[] {
   let found = listeners.get(runtime.id);
   if (found === undefined) {
+    followConnectivity();
     const created: Registration[] = [];
     found = created;
     listeners.set(runtime.id, created);

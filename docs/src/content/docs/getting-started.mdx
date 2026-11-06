@@ -25,11 +25,18 @@ and the demo from the repository (see
 [Build from source](/maplibre-arkui/development/)).
 
 An app that loads styles or tiles from the network requests the internet
-permission in its `module.json5`:
+permission in its `module.json5`, and the network information permission, so
+that maps wait for a connection instead of failing their requests while the
+device is offline:
 
 ```json5
-"requestPermissions": [{ "name": "ohos.permission.INTERNET" }]
+"requestPermissions": [
+  { "name": "ohos.permission.INTERNET" },
+  { "name": "ohos.permission.GET_NETWORK_INFO" }
+]
 ```
+
+Both install with the app, without a dialog.
 
 ## Quick start
 

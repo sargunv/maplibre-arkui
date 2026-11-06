@@ -13,6 +13,7 @@ import {
 import display from '@ohos.display';
 import image from '@ohos.multimedia.image';
 
+import { followConnectivity } from './connectivity';
 import { ContentReconciler, loadStyle, MapContent } from './Content';
 import { logError } from './log';
 import { getDefaultRuntime } from './runtime';
@@ -67,6 +68,7 @@ export interface SnapshotOptions {
  * image holds only the map: show the style's attribution with it.
  */
 export async function snapshot(options: SnapshotOptions): Promise<image.PixelMap> {
+  followConnectivity();
   const runtime = options.runtime ?? await getDefaultRuntime();
   const scaleFactor = options.scaleFactor ?? display.getDefaultDisplaySync().densityPixels;
   const map = runtime.createMap({

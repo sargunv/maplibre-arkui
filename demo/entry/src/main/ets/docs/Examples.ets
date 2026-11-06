@@ -15,6 +15,7 @@ import {
   cameraToOptions,
   CameraTransitionOutcome,
   CameraUpdateMode,
+  ConnectivityMode,
   eq,
   FollowBearing,
   GeoJsonFeature,
@@ -42,6 +43,7 @@ import {
   RuntimeEventFlag,
   RuntimeEventType,
   RuntimeHandle,
+  setConnectivityMode,
   setLogCallback,
   snapshot,
   StyleLayerInfo,
@@ -478,6 +480,13 @@ async function downloadParis(runtime: RuntimeHandle): Promise<void> {
   await runtime.setOfflineRegionDownloadState(region.id, OfflineRegionDownloadState.active);
   // #endregion offline
 }
+
+// #region connectivity
+// An app setting that keeps maps to the cache and offline regions.
+function setMapsUseNetwork(allowed: boolean): void {
+  setConnectivityMode(allowed ? ConnectivityMode.automatic : ConnectivityMode.forceOffline);
+}
+// #endregion connectivity
 
 function watchMissingImages(runtime: RuntimeHandle): void {
   // #region map-events
