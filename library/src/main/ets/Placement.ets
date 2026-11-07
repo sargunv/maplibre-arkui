@@ -6,6 +6,7 @@
 
 import { LatLng, ScreenPoint } from './Geometry';
 import { isRtl } from './Insets';
+import { callHandler } from './log';
 import { controlKey, findScope, MapScope } from './scope';
 
 // What a trailing closure that the app leaves out builds.
@@ -60,9 +61,9 @@ function frameOf(area: Area): Frame {
 
 // Where `coordinate` is in the frame on screen, in vp from the top-left corner
 // of `frame`, which is somewhere over the map.
-function pointIn(scope: MapScope, frame: Frame, coordinate: LatLng): ScreenPoint | undefined {
-  const point = scope.controller.viewport?.project(coordinate);
-  if (point === undefined) {
+function pointIn(scope: MapScope | undefined, frame: Frame | undefined, coordinate: LatLng): ScreenPoint | undefined {
+  const point = scope?.controller.viewport?.project(coordinate);
+  if (scope === undefined || frame === undefined || point === undefined) {
     return undefined;
   }
   return { x: point.x - (frame.x - scope.origin.x), y: point.y - (frame.y - scope.origin.y) };
@@ -74,38 +75,41 @@ function pointIn(scope: MapScope, frame: Frame, coordinate: LatLng): ScreenPoint
  *
  * ```ets
  * MaplibreMap({ controller: this.map, style: STYLE }) {
- *   MapDefaultOverlay()
- *   MapPlacedAt({ coordinate: { latitude: 48.8566, longitude: 2.3522 }, alignment: Alignment.Bottom }) {
+ *   DefaultControls()
+ *   Marker({ coordinate: { latitude: 48.8566, longitude: 2.3522 }, alignment: Alignment.Bottom }) {
  *     Text('Paris')
  *   }
  * }
  * ```
  *
- * It fills its parent and passes touches outside its content through to the
- * map. Its content hides until the map shows a frame, and while it's entirely
+ * It fills its parent, so universal attributes chained on it apply to that
+ * whole region, and it passes touches outside its content through to the map.
+ * Its content hides until the map shows a frame, and while it's entirely
  * outside the wrapper. The content moves in the ArkUI frame after the map
- * draws, so it can trail the map by a frame.
+ * draws, so it can trail the map by a frame. Anywhere but a map's overlay, it
+ * logs an error and draws nothing.
  */
 @ComponentV2
-export struct MapPlacedAt {
-  @Local scope: MapScope = new MapScope();
-  private readonly nodeId: string = controlKey();
+export struct Marker {
   /** Where the content goes. A new value moves it. */
   @Require @Param coordinate: LatLng;
   /**
    * The point of the content that sits on the coordinate. The default is its
    * center; `Alignment.Bottom` stands it on the coordinate, as for a pin.
+   * Start and end follow the direction of the app's language, not a
+   * `.direction()` on an ancestor.
    */
   @Param alignment: Alignment = Alignment.Center;
   /** The content, in the trailing closure. */
   @BuilderParam content: () => void = noContent;
+  @Local scope: MapScope | undefined = undefined;
+  private readonly nodeId: string = controlKey();
   @Local frame: Frame | undefined = undefined;
   @Local contentSize: SizeOptions = { width: 0, height: 0 };
 
   @Computed
   get point(): ScreenPoint | undefined {
-    const frame = this.frame;
-    return frame === undefined ? undefined : pointIn(this.scope, frame, this.coordinate);
+    return pointIn(this.scope, this.frame, this.coordinate);
   }
 
   @Computed
@@ -148,9 +152,18 @@ export struct MapPlacedAt {
     })
     .id(this.nodeId)
     .onAttach(() => {
-      this.scope = findScope(this.getUIContext(), this.nodeId);
+      this.scope = findScope(this.getUIContext(), this.nodeId, 'Marker');
     })
   }
+}
+
+/** What `OffscreenMarker.onAngleChange` reports. */
+export interface OffscreenMarkerAngleEvent {
+  /**
+   * The direction from the oval's center towards the coordinate, in degrees
+   * clockwise from up: at least 0, and less than 360.
+   */
+  angle: number;
 }
 
 // Where content placed towards a coordinate goes: a point on the edge of the
@@ -194,38 +207,43 @@ function ovalCrossing(width: number, height: number, target: ScreenPoint): Towar
  * inside it.
  *
  * Place it in a `MaplibreMap`'s overlay; pad its parent to move the oval in
- * from the map's edges. `onAngleChange` gives the direction towards the
- * coordinate, to turn the content with it, as `MapPointerPinButton` does.
+ * from the map's edges. It fills its parent, so universal attributes chained
+ * on it apply to that whole region. Anywhere but a map's overlay, it logs an
+ * error and draws nothing. `onAngleChange` gives the direction towards the
+ * coordinate, to turn the content with it, as `PointerPinButton` does.
  */
 @ComponentV2
-export struct MapPlacedTowards {
-  @Local scope: MapScope = new MapScope();
-  private readonly nodeId: string = controlKey();
+export struct OffscreenMarker {
   /** The coordinate that the content points towards. */
   @Require @Param coordinate: LatLng;
+  /**
+   * The direction towards the coordinate changed. It's called as the content
+   * first shows, and as the direction changes, on the UI thread. The marker
+   * logs what it throws.
+   */
+  @Event onAngleChange: (event: OffscreenMarkerAngleEvent) => void = (event: OffscreenMarkerAngleEvent) => {
+  };
   /** The content, in the trailing closure. */
   @BuilderParam content: () => void = noContent;
-  /**
-   * The direction from the oval's center towards the coordinate changed, in
-   * degrees clockwise from up, from 0 to 360. It's called as the content
-   * shows, and as it moves.
-   */
-  @Event onAngleChange: (angle: number) => void = (angle: number) => {
-  };
+  @Local scope: MapScope | undefined = undefined;
+  private readonly nodeId: string = controlKey();
   @Local frame: Frame | undefined = undefined;
+  // The angle that onAngleChange last reported.
+  private reportedAngle: number = NaN;
 
   @Computed
   get towards(): Towards | undefined {
     const frame = this.frame;
-    const point = frame === undefined ? undefined : pointIn(this.scope, frame, this.coordinate);
+    const point = pointIn(this.scope, frame, this.coordinate);
     return frame === undefined || point === undefined ? undefined : ovalCrossing(frame.width, frame.height, point);
   }
 
   @Monitor('towards')
   towardsChanged(): void {
-    const towards = this.towards;
-    if (towards !== undefined) {
-      this.onAngleChange(towards.angle);
+    const angle = this.towards?.angle;
+    if (angle !== undefined && angle !== this.reportedAngle) {
+      this.reportedAngle = angle;
+      callHandler('onAngleChange', () => this.onAngleChange({ angle: angle }));
     }
   }
 
@@ -246,7 +264,7 @@ export struct MapPlacedTowards {
     })
     .id(this.nodeId)
     .onAttach(() => {
-      this.scope = findScope(this.getUIContext(), this.nodeId);
+      this.scope = findScope(this.getUIContext(), this.nodeId, 'OffscreenMarker');
     })
   }
 
@@ -263,41 +281,79 @@ export struct MapPlacedTowards {
 const PIN_SIZE = 64;
 const PIN_ROUND_SIZE = PIN_SIZE * 48 / 76;
 
+// Sets a button's accessibility text to a ResourceStr, which
+// `accessibilityText()` takes only as a string or as a Resource.
+class AccessibilityLabel implements AttributeModifier<ButtonAttribute> {
+  private readonly label: ResourceStr;
+
+  constructor(label: ResourceStr) {
+    this.label = label;
+  }
+
+  applyNormalAttribute(instance: ButtonAttribute): void {
+    if (typeof this.label === 'string') {
+      instance.accessibilityText(this.label);
+    } else {
+      instance.accessibilityText(this.label as Resource);
+    }
+  }
+}
+
 /**
  * A button shaped like a map pin, on the edge of the map towards a coordinate
- * off the screen, which `MapPlacedTowards` places. The pin turns to point at
+ * off the screen, which `OffscreenMarker` places. The pin turns to point at
  * the coordinate, and its content, such as a 24 vp icon, stays upright in its
  * round part. It hides while the coordinate is on the screen.
  *
  * ```ets
- * MapPointerPinButton({
+ * PointerPinButton({
  *   coordinate: PARIS,
- *   onTap: () => this.map.updateCamera({ center: PARIS }, { mode: CameraTransitionMode.EASE }),
+ *   label: 'Paris',
+ *   onPinClick: () => this.map.updateCamera({ center: PARIS }, { mode: CameraTransitionMode.EASE }),
  * }) {
  *   Image($r('sys.media.ohos_ic_public_location')).width(24).height(24)
  * }
  * ```
+ *
+ * Place it in a `MaplibreMap`'s overlay. It fills its parent, as
+ * `OffscreenMarker` does. Anywhere but a map's overlay, it logs an error and
+ * draws nothing.
  */
 @ComponentV2
-export struct MapPointerPinButton {
+export struct PointerPinButton {
   /** The coordinate that the pin points at. */
   @Require @Param coordinate: LatLng;
+  /** What the pin leads to, which screen readers read as the button's text. */
+  @Require @Param label: ResourceStr;
+  /** The user clicked the pin. Called on the UI thread; the button logs what it throws. */
+  @Event onPinClick: () => void = () => {
+  };
   /** The content, in the trailing closure. */
   @BuilderParam content: () => void = noContent;
-  /** The user tapped the pin. */
-  @Event onTap: () => void = () => {
-  };
+  @Local scope: MapScope | undefined = undefined;
+  private readonly nodeId: string = controlKey();
   @Local angle: number = 0;
 
   build() {
-    MapPlacedTowards({
-      coordinate: this.coordinate,
-      onAngleChange: (angle: number) => {
-        this.angle = angle;
-      },
-    }) {
-      this.pin()
+    Stack() {
+      if (this.scope !== undefined) {
+        OffscreenMarker({
+          coordinate: this.coordinate,
+          onAngleChange: (event: OffscreenMarkerAngleEvent) => {
+            this.angle = event.angle;
+          },
+        }) {
+          this.pin()
+        }
+      }
     }
+    .width('100%')
+    .height('100%')
+    .hitTestBehavior(HitTestMode.Transparent)
+    .id(this.nodeId)
+    .onAttach(() => {
+      this.scope = findScope(this.getUIContext(), this.nodeId, 'PointerPinButton');
+    })
   }
 
   @Builder
@@ -325,6 +381,7 @@ export struct MapPointerPinButton {
     .height(PIN_SIZE)
     .padding(0)
     .backgroundColor(Color.Transparent)
-    .onClick(() => this.onTap())
+    .attributeModifier(new AccessibilityLabel(this.label))
+    .onClick(() => callHandler('onPinClick', () => this.onPinClick()))
   }
 }

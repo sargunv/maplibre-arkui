@@ -192,15 +192,16 @@ export type {
   UrlQueryParameter,
 } from '@maplibre/native-ffi';
 
-export { MapAttributionOnlyOverlay, MapDefaultOverlay, MapFullOverlay } from './src/main/ets/Overlay';
+export { AttributionControls, DefaultControls, FullControls } from './src/main/ets/Overlay';
 export {
-  MapAttributionButton,
-  MapCompassButton,
-  MapDisappearingCompassButton,
-  MapDisappearingScaleBar,
-  MapLibreLogo,
-  MapScaleBar,
-  MapZoomButtons,
+  AttributionButton,
+  CompassButton,
+  DisappearingCompassButton,
+  DisappearingScaleBar,
+  MaplibreLogo,
+  ScaleBar,
   ScaleBarUnits,
+  ZoomButtons,
 } from './src/main/ets/Controls';
-export { MapPlacedAt, MapPlacedTowards, MapPointerPinButton } from './src/main/ets/Placement';
+export { Marker, OffscreenMarker, PointerPinButton } from './src/main/ets/Placement';
+export type { OffscreenMarkerAngleEvent } from './src/main/ets/Placement';

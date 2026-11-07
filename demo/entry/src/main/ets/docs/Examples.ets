@@ -17,14 +17,18 @@ import util from '@ohos.util';
 
 import {
   addRuntimeEventListener,
+  AttributionControls,
   CameraPosition,
   CameraTransitionMode,
+  CompassButton,
   ConnectivityMode,
   ContentError,
+  DefaultControls,
   eq,
   FeatureClickEvent,
   FollowBearing,
   fp,
+  FullControls,
   GeoJsonFeature,
   GeoJsonFeatureCollection,
   get,
@@ -39,27 +43,22 @@ import {
   LogSeverity,
   LogSeverityFlag,
   LatLng,
-  MapAttributionOnlyOverlay,
   MapClickEvent,
-  MapCompassButton,
   MapContent,
   MapController,
-  MapDefaultOverlay,
   MapError,
-  MapFullOverlay,
   MaplibreMap,
-  MapPlacedAt,
-  MapPointerPinButton,
-  MapScaleBar,
-  MapZoomButtons,
+  Marker,
   match,
   OfflineRegionDefinition,
   OfflineRegionDownloadState,
+  PointerPinButton,
   RenderedFeature,
   RuntimeEvent,
   RuntimeEventFlag,
   RuntimeEventType,
   RuntimeHandle,
+  ScaleBar,
   setConnectivityMode,
   setLogCallback,
   snapshot,
@@ -67,6 +66,7 @@ import {
   UrlMatchFlag,
   WheelAction,
   zoom,
+  ZoomButtons,
 } from '@maplibre/arkui';
 
 const STYLE = 'https://tiles.openfreemap.org/styles/liberty';
@@ -256,7 +256,7 @@ struct PresetExample {
   build() {
     // #region overlay-preset
     MaplibreMap({ style: STYLE, controller: this.controller }) {
-      MapFullOverlay()
+      FullControls()
     }
     // #endregion overlay-preset
   }
@@ -291,11 +291,11 @@ struct CustomControlsExample {
   build() {
     // #region overlay-custom
     MaplibreMap({ style: STYLE, controller: this.controller }) {
-      MapAttributionOnlyOverlay()
+      AttributionControls()
       Column({ space: 8 }) {
-        MapCompassButton()
-        MapZoomButtons()
-        MapScaleBar()
+        CompassButton()
+        ZoomButtons()
+        ScaleBar()
       }
       .width('100%')
       .padding(16)
@@ -313,8 +313,8 @@ struct PlacedAtExample {
   build() {
     // #region placed-at
     MaplibreMap({ style: STYLE, controller: this.controller }) {
-      MapDefaultOverlay()
-      MapPlacedAt({ coordinate: PARIS_CENTER, alignment: Alignment.Bottom }) {
+      DefaultControls()
+      Marker({ coordinate: PARIS_CENTER, alignment: Alignment.Bottom }) {
         Text('Paris')
           .padding(6)
           .margin({ bottom: 4 })
@@ -335,12 +335,13 @@ struct PlacedTowardsExample {
   build() {
     // #region placed-towards
     MaplibreMap({ style: STYLE, controller: this.controller }) {
-      MapDefaultOverlay()
+      DefaultControls()
       // The pin moves along an oval 48 vp in from the map's edges.
       Stack() {
-        MapPointerPinButton({
+        PointerPinButton({
           coordinate: PARIS_CENTER,
-          onTap: () => {
+          label: 'Paris',
+          onPinClick: () => {
             this.controller.updateCamera({ center: PARIS_CENTER }, { mode: CameraTransitionMode.FLY })
               .catch((error: Error) => console.error(error.message));
           },
@@ -453,7 +454,7 @@ struct InsetsExample {
         controller: this.controller,
         viewportInsets: { bottom: this.panelHeight },
       }) {
-        MapFullOverlay()
+        FullControls()
       }
       Column() {
         Text('A panel over the map')

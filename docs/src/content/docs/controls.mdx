@@ -10,19 +10,20 @@ import { region } from "../../snippets";
 import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
 
 <Api of="MaplibreMap" /> draws ArkUI content over the map from its trailing
-closure, its overlay. Without a closure, it draws
-<Api of="MapDefaultOverlay" />: a scale bar and a compass along the top edge,
-and the MapLibre logo and an attribution button along the bottom edge. The scale
-bar shows for a moment as the zoom changes, and the compass while the map is
-rotated or tilted. The controls follow dark mode, and their labels and
-accessibility text are in the app's language.
+closure, its overlay. Without a closure, it draws <Api of="DefaultControls" />:
+a scale bar and a compass along the top edge, and the MapLibre logo and an
+attribution button along the bottom edge. The scale bar shows for a moment as
+the zoom changes, and the compass while the map is rotated or tilted. The
+controls follow dark mode, and their labels and accessibility text are in the
+app's language. They come from the library's resources, whose names start with
+`maplibre_`; those names aren't part of the API and can change.
 
 ## Choose a preset
 
 Put a preset in the closure to choose the controls.
-<Api of="MapFullOverlay" /> adds zoom buttons to the default controls, for users
-with a mouse and for accessibility. <Api of="MapAttributionOnlyOverlay" /> keeps
-only the logo and the attribution button.
+<Api of="FullControls" /> adds zoom buttons to the default controls, for users
+with a mouse and for accessibility. <Api of="AttributionControls" /> keeps only
+the logo and the attribution button.
 
 <Code code={region(examples, "overlay-preset")} lang="ts" />
 
@@ -39,31 +40,37 @@ describes.
 
 The closure lays out its children in a `Stack` the size of the map. Each control
 is a component that finds its map wherever it is in the closure, so it needs no
-controller: <Api of="MapCompassButton" />, <Api of="MapZoomButtons" />,
-<Api of="MapScaleBar" />, <Api of="MapAttributionButton" />,
-<Api of="MapLibreLogo" />, and the ones that show only while they matter,
-<Api of="MapDisappearingCompassButton" /> and
-<Api of="MapDisappearingScaleBar" />. Lay them out as you would any ArkUI
-component, and let touches between them through to the map with
-`hitTestBehavior(HitTestMode.Transparent)`:
+controller: <Api of="CompassButton" />, <Api of="ZoomButtons" />,
+<Api of="ScaleBar" />, <Api of="AttributionButton" />,
+<Api of="MaplibreLogo" />, and the ones that show only while they matter,
+<Api of="DisappearingCompassButton" /> and <Api of="DisappearingScaleBar" />.
+Lay them out as you would any ArkUI component, and let touches between them
+through to the map with `hitTestBehavior(HitTestMode.Transparent)`:
 
 <Code code={region(examples, "overlay-custom")} lang="ts" />
 
+The controls, presets, and markers work only in the closure. ArkUI draws the
+builders of `bindSheet`, `bindPopup`, and `bindContextMenu` outside the map,
+even when they're attached to a component in the closure, so those don't count
+as the overlay. Outside it, a control logs an error that names it and draws
+nothing. The logo is the exception: it works anywhere.
+
 ## Pin content to a coordinate
 
-<Api of="MapPlacedAt" /> puts its content on a coordinate and moves it with the
-map. Its `alignment` picks the point of the content that sits on the
-coordinate; `Alignment.Bottom` stands a label on it:
+<Api of="Marker" /> puts its content on a coordinate and moves it with the map.
+Its `alignment` picks the point of the content that sits on the coordinate;
+`Alignment.Bottom` stands a label on it:
 
 <Code code={region(examples, "placed-at")} lang="ts" />
 
 ## Point to a coordinate off the screen
 
-<Api of="MapPointerPinButton" /> shows a pin on an oval inside the map that
-points towards a coordinate off the screen, and hides while the coordinate is
-inside the oval. Pad its parent to move the oval in from the map's edges:
+<Api of="PointerPinButton" /> shows a pin on an oval inside the map that points
+towards a coordinate off the screen, and hides while the coordinate is inside
+the oval. Its `label` is what screen readers read for it. Pad its parent to move
+the oval in from the map's edges:
 
 <Code code={region(examples, "placed-towards")} lang="ts" />
 
-To draw your own pointer, put it in <Api of="MapPlacedTowards" />, whose
+To draw your own pointer, put it in <Api of="OffscreenMarker" />, whose
 `onAngleChange` gives the direction to turn it.

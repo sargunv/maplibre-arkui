@@ -1,13 +1,13 @@
 import {
   CameraTransitionMode,
+  FullControls,
   LatLng,
   LatLngBounds,
   MapController,
   MapError,
-  MapFullOverlay,
   MaplibreMap,
-  MapPlacedAt,
-  MapPointerPinButton,
+  Marker,
+  PointerPinButton,
 } from '@maplibre/arkui';
 
 import { DocExamples } from '../docs/Examples';
@@ -76,13 +76,14 @@ struct Index {
               this.cityLabel(city)
             }, (city: City) => city.name)
             // The controls stay clear of the viewport insets.
-            MapFullOverlay()
+            FullControls()
             // A pin that points home once the Eiffel Tower is off the screen,
             // on an oval above the panel.
             Stack() {
-              MapPointerPinButton({
+              PointerPinButton({
                 coordinate: EIFFEL_TOWER,
-                onTap: () => this.goHome(),
+                label: 'Eiffel Tower',
+                onPinClick: () => this.goHome(),
               }) {
                 Image($r('sys.media.ohos_ic_public_location'))
                   .width(24)
@@ -156,7 +157,7 @@ struct Index {
   // A label with the city's name, whose bottom tip is on the city.
   @Builder
   cityLabel(city: City) {
-    MapPlacedAt({ coordinate: city.coordinate, alignment: Alignment.Bottom }) {
+    Marker({ coordinate: city.coordinate, alignment: Alignment.Bottom }) {
       this.label(city.name)
     }
   }

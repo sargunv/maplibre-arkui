@@ -11,7 +11,7 @@ import { controllerState, MapController } from './MapController';
 import { MapError } from './MapError';
 import { UserLocationIndicatorOptions } from './location';
 import { MapView } from './MapView';
-import { defaultOverlay } from './Overlay';
+import { defaultControls } from './Overlay';
 import { Insets } from './Insets';
 import { closeScope, MapScope, openScope } from './scope';
 
@@ -40,8 +40,8 @@ import { closeScope, MapScope, openScope } from './scope';
  *     controller: this.map,
  *     onError: (error: MapError) => console.error(error.message),
  *   }) {
- *     MapDefaultOverlay()
- *     MapPlacedAt({ coordinate: { latitude: 48.8584, longitude: 2.2945 } }) {
+ *     DefaultControls()
+ *     Marker({ coordinate: { latitude: 48.8584, longitude: 2.2945 } }) {
  *       Text('Eiffel Tower')
  *     }
  *   }
@@ -50,8 +50,8 @@ import { closeScope, MapScope, openScope } from './scope';
  *
  * Its `overlays`, the ArkUI content in the trailing closure, lie over the map
  * in a `Stack` of the map's size. Without a trailing closure, the map draws
- * `MapDefaultOverlay`; an empty one draws nothing. The library's controls and
- * placements, such as `MapCompassButton` and `MapPlacedAt`, find the map
+ * `DefaultControls`; an empty one draws nothing. The library's controls and
+ * markers, such as `CompassButton` and `Marker`, find the map
  * anywhere in the overlay. What the map itself draws, such as GeoJSON in
  * layers, is its `content`.
  *
@@ -208,12 +208,12 @@ export struct MaplibreMap {
   };
   /**
    * ArkUI content over the map, in a `Stack` of its size, from the trailing
-   * closure: by default, `MapDefaultOverlay`. `content` is what the map draws
+   * closure: by default, `DefaultControls`. `content` is what the map draws
    * itself.
    */
-  @BuilderParam overlays: () => void = defaultOverlay;
+  @BuilderParam overlays: () => void = defaultControls;
 
-  // What the controls and placements in the overlay find the map by.
+  // What the controls and markers in the overlay find the map by.
   private scope: MapScope = openScope();
 
   // The app's handlers, which never throw into the view.

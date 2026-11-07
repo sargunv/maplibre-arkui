@@ -117,7 +117,7 @@ export class MapController {
   /**
    * The attribution of the style's sources, as HTML, without repeats, in the
    * order the style lists them. Empty until the style loads. Show it, or a
-   * `MapAttributionButton` in the map's overlay, as the sources' terms
+   * `AttributionButton` in the map's overlay, as the sources' terms
    * require. Observable.
    */
   get attributions(): string[] {

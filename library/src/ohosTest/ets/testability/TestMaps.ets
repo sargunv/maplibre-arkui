@@ -66,16 +66,16 @@ export class TestMap {
   // closure at all. Content that moves with the camera makes the emulator's
   // llvmpipe crash more often, so only the cases that need it turn it on.
   @Trace overlay: TestOverlay = 'none';
-  // A MapScaleBar in these units, with this maxWidth when a case sets it.
+  // A ScaleBar in these units, with this maxWidth when a case sets it.
   @Trace scaleBar: ScaleBarUnits | undefined = undefined;
   @Trace scaleBarMaxWidth: number | undefined = undefined;
-  // A MapDisappearingScaleBar, and how long it stays.
+  // A DisappearingScaleBar, and how long it stays.
   @Trace disappearingScaleBarMs: number | undefined = undefined;
-  // A MapDisappearingCompassButton at the overlay's top end, and how long it
+  // A DisappearingCompassButton at the overlay's top end, and how long it
   // stays when a case sets it.
   @Trace compass: boolean = false;
   @Trace compassMs: number | undefined = undefined;
-  // A MapCompassButton at the overlay's top start.
+  // A CompassButton at the overlay's top start.
   @Trace alwaysShownCompass: boolean = false;
   @Trace zoomButtons: boolean = false;
   @Trace attribution: boolean = false;
@@ -87,7 +87,7 @@ export class TestMap {
   // A box placed towards this coordinate, and the angles it reported.
   @Trace placedTowards: LatLng | undefined = undefined;
   placedTowardsAngles: number[] = [];
-  // A MapPointerPinButton towards this coordinate, and how often it was tapped.
+  // A PointerPinButton towards this coordinate, and how often it was tapped.
   @Trace pointerPin: LatLng | undefined = undefined;
   pointerPinTaps: number = 0;
   // The padding of the Stack that holds the placements.

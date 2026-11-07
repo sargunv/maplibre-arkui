@@ -7,8 +7,8 @@ on [MapLibre Native FFI]:
   gestures, with localized controls that follow dark mode: a compass, scale bar,
   attribution, logo, and zoom buttons, in presets or placed by the app
 - `MapController`, which reads and moves the camera, with observable state
-- `MapPlacedAt` and `MapPointerPinButton`, ArkUI content pinned to a coordinate,
-  or pointing to one off the screen
+- `Marker` and `PointerPinButton`, ArkUI content pinned to a coordinate, or
+  pointing to one off the screen
 - The user's location from Location Kit, and a camera that follows it
 - Map content (sources, layers, and images) declared as data from the app's
   state, and functions that build style expressions
