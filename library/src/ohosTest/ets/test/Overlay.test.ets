@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
 import { CameraUpdateMode, LatLng, ScaleBarUnits, ScreenPoint } from '@maplibre/arkui';
 import { Component, Driver, MatchPattern, ON, On, Point, Rect as Bounds } from '@ohos.UiTest';
+import { BusinessError } from '@ohos.base';
 
 import { STYLE, testMap, TestOverlay } from '../testability/TestMaps';
 import {
@@ -101,7 +102,15 @@ function placedVisible(id: string): boolean {
 }
 
 async function bounds(id: string): Promise<Bounds | undefined> {
-  return (await Driver.create().findComponent(ON.id(id)))?.getBounds();
+  try {
+    return await (await Driver.create().findComponent(ON.id(id)))?.getBounds();
+  } catch (error) {
+    // Layout can replace the component between the lookup and the read.
+    if ((error as BusinessError).code === 17000004) {
+      return undefined;
+    }
+    throw error as Error;
+  }
 }
 
 // Waits until the box with `id` has the point that `corner` picks on

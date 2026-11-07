@@ -125,7 +125,9 @@ const ARROW_DISTANCE = 13;
 // Whether the indicator's blue is on screen `dx`, `dy` vp from the map's
 // center, over the white background of the case's style.
 async function blueAt(dx: number, dy: number): Promise<boolean> {
-  return (await screenPixel(offset(await mapCenter(), dx, dy)))[0] < 120;
+  const pixel = await screenPixel(offset(await mapCenter(), dx, dy));
+  const blue = rgb(DOT_COLOR);
+  return pixel.every((channel: number, index: number) => near(channel, blue[index], 16));
 }
 
 export default function locationTest(): void {

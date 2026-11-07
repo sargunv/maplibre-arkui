@@ -17,7 +17,7 @@ hdc=(hdc -t "$device")
 # A day, so a long run doesn't sleep. A reboot restores the default.
 "${hdc[@]}" shell power-shell timeout -o 86400000 >/dev/null
 layout=/data/local/tmp/wake-device-layout.json
-if "${hdc[@]}" shell "uitest dumpLayout -p $layout >/dev/null && grep -q screenlock $layout && echo locked" |
+if "${hdc[@]}" shell "uitest dumpLayout -p $layout >/dev/null && grep -qi screenlock $layout && echo locked" |
   grep -q locked; then
   # From near the bottom to near the top of the screen, in its own pixels.
   size=$("${hdc[@]}" shell hidumper -s RenderService -a screen | grep -o 'physical resolution=[0-9]*x[0-9]*' | head -1)

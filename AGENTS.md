@@ -37,8 +37,9 @@ code.
 - FFI's CI keeps the packages `mise run ffi:download` fetches for 30 days. Move
   the pin to a newer FFI main commit whose CI run has them before then, or CI
   breaks.
-- A test run that ends without hypium's tally crashed. Don't retry it: find the
-  crash in the device's fault log (`/data/log/faultlog/faultlogger/`).
+- A test run that ends without hypium's tally didn't finish. Don't retry it:
+  inspect the device's freeze reports (`/data/log/eventlog/`) and crash logs
+  (`/data/log/faultlog/faultlogger/`).
 - On DevEco Studio's emulator, the OpenGL driver crashes the app during some
   full test runs (maplibre-native-ffi#1728). It corrupts memory when a map's
   surface goes away while the emulator still shows it, so the app dies later,

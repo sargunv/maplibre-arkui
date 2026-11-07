@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Packs a compiled OpenHarmony module into a HAP and signs it for debugging.
+# Packs a compiled OpenHarmony module into a HAP and signs it for local development.
 #
 #   scripts/pack-hap.sh <resources-dir> <modules.abc> <libs-dir> <hap>
 #
 # <resources-dir> holds the module.json, resources, and resources.index that
 # restool compiled, and <libs-dir> a directory of native libraries for each
 # ABI. app_packing_tool packs them with <modules.abc> and the libraries, and
-# hap-sign-tool signs the HAP with the OpenHarmony SDK's debug signing material,
+# hap-sign-tool signs the HAP with the OpenHarmony SDK's release signing material,
 # for the bundle that module.json names. The signed HAP is <hap>.
 #
 # DevEco Studio does these steps through hvigor. Its packages are on the
@@ -50,8 +50,8 @@ mkdir -p "$work/pack"
 
 # The SDK ships signing keys and an unsigned profile template but no
 # application certificate. The SDK's application CA issues one for the
-# release key, the template becomes this bundle's debug profile with no
-# device list, and the profile key signs it.
+# release key, the template becomes this bundle's release profile, and the
+# profile key signs it.
 password=123456
 keystore="$signing/OpenHarmony.p12"
 for alias in root:"openharmony application root ca" sub:"openharmony application ca"; do

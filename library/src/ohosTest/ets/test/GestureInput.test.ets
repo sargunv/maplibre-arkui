@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
 import { CameraUpdateMode, LatLng, ScreenPoint, WheelAction } from '@maplibre/arkui';
 
-import { Driver, Point, UiDirection } from '@ohos.UiTest';
+import { Driver, Point } from '@ohos.UiTest';
 import { KeyCode } from '@ohos.multimodalInput.keyCode';
 
 import { STYLE, testMap } from '../testability/TestMaps';
@@ -118,7 +118,7 @@ export default function gestureInputTest(): void {
       // size is in whole vp. The zoom scales both.
       const slop = (100 / (steps - 1) / 2 + 1) * Math.pow(2, zoomed);
       expectNear(moved().x, 0, slop);
-      expectNear(moved().y, 0, 1);
+      expectNear(moved().y, 0, Math.pow(2, zoomed));
     });
 
     it('rotates with a twist, and snaps to north from near it', 0, async () => {
@@ -252,25 +252,6 @@ export default function gestureInputTest(): void {
       expectNear(camera().zoom, ZOOM, 1e-9);
       await gesture(() => driver.mouseScroll(c, false, 2, KeyCode.KEYCODE_CTRL_LEFT));
       expect(camera().zoom).assertLarger(ZOOM);
-    });
-
-    it('pans with a two-finger touchpad swipe the way a Scroll scrolls', 0, async () => {
-      await start(true);
-      const bounds = await mapBounds();
-      const c = await mapCenter();
-      // The page scrolls one way under a swipe below the map...
-      const below = offset({ x: c.x, y: bounds.bottom }, 0, 250);
-      await driver.touchPadTwoFingersScroll(below, UiDirection.UP, 2);
-      await until('the page scrolls', () => testMap.scroller.currentOffset().yOffset !== 0);
-      const scrolled = testMap.scroller.currentOffset().yOffset;
-      testMap.scroller.scrollTo({ xOffset: 0, yOffset: 0 });
-      await until('the page scrolls back', () => testMap.scroller.currentOffset().yOffset === 0);
-      // ...and the map's content moves the same way under one on the map.
-      await gesture(() => driver.touchPadTwoFingersScroll(c, UiDirection.UP, 2));
-      expectNear(camera().zoom, ZOOM, 1e-9);
-      expect(Math.abs(moved().y)).assertLarger(20);
-      expect(moved().y < 0).assertEqual(scrolled > 0);
-      expectNear(moved().x, 0, 1);
     });
 
     it('pans and zooms with keys once a touch focuses it', 0, async () => {

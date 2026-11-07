@@ -203,12 +203,12 @@ checksum = "sha256:d38bd5e5a2ddce6bbb5ce45e46e208337da4d51fffe611e567fd32073d643
 url = "https://nodejs.org/dist/v26.13.0/node-v26.13.0-darwin-arm64.tar.gz"
 
 [[tools.ohos-sdk]]
-version = "6.1"
+version = "7.0"
 backend = "vfox:ohos-sdk"
-specifiers = ["6.1"]
+specifiers = ["7.0"]
 
 [tools.ohos-sdk."platforms.linux-x64"]
-url = "https://repo.huaweicloud.com/openharmony/os/6.1-Release/ohos-sdk-windows_linux-public.tar.gz"
+url = "https://repo.huaweicloud.com/openharmony/os/7.0-Release/ohos-sdk-windows_linux-public.tar.gz"
 
 [tools.ohos-sdk."platforms.macos-arm64"]
-url = "https://repo.huaweicloud.com/openharmony/os/6.1-Release/L2-SDK-MAC-M1-PUBLIC.tar.gz"
+url = "https://repo.huaweicloud.com/openharmony/os/7.0-Release/L2-SDK-MAC-M1-PUBLIC.tar.gz"
