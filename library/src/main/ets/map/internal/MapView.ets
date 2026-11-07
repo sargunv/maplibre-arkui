@@ -556,11 +556,12 @@ export class MapView extends XComponentController implements GestureTarget, Runt
   }
 
   // The camera leaves rest as the gesture starts, after onGestureStart, or
-  // the gesture takes over the move under way.
+  // the gesture takes over the move under way, unless the app's move in
+  // onGestureStart ended the gesture.
   gestureStarted(): void {
     this.gestureStarts++;
     this.events.onGestureStart();
-    if (!this.disposed) {
+    if (!this.disposed && !this.gestures.idle) {
       this.cameraMovedBy(CameraMoveReason.GESTURE);
     }
   }
@@ -605,13 +606,14 @@ export class MapView extends XComponentController implements GestureTarget, Runt
     if (map === undefined) {
       return;
     }
-    map.getCamera().then((result: CameraQueryResult) => {
+    // The snapshot includes the commands before the query once it answers.
+    map.getCamera().then(() => {
       const snapshot = map.getSnapshot();
       if (this.map !== map || !this.gestures.idle || snapshot.transitionInProgress) {
         return;
       }
       if (this.cameraTakeovers !== takeovers || !this.followUserLocation()) {
-        this.cameraIdle(result.camera, snapshot);
+        this.cameraIdle(snapshot.view.camera, snapshot);
       }
     }).catch((error: Error) => this.fail(error));
   }
@@ -849,7 +851,7 @@ export class MapView extends XComponentController implements GestureTarget, Runt
       const payload = event.payload;
       if (payload.kind === 'styleImage') {
         const id = payload.value.imageId;
-        this.missingImages.missing(id, this.reconciler?.ownsImage(id) === true);
+        this.missingImages.missing(id, event.generation, this.reconciler?.ownsImage(id) === true);
       }
     } else if (event.type === RuntimeEventType.mapSourceChanged) {
       // A source's attribution can arrive after the style, with its TileJSON.
@@ -948,7 +950,7 @@ export class MapView extends XComponentController implements GestureTarget, Runt
     // The style is loaded once its document parses, unless another has
     // replaced it by then. The content goes on before the app hears of it.
     const current = (): boolean => this.loading === loading && this.map === map;
-    loading.then(async () => {
+    loading.then(async (completion: CommandCompletion) => {
       if (current()) {
         await this.reconciler?.styleLoaded();
       }
@@ -965,7 +967,7 @@ export class MapView extends XComponentController implements GestureTarget, Runt
         this.events.onStyleLoaded();
         // Above what the content and the app added as the style loaded.
         this.locationLayer.styleLoaded(map, this.userLocation, this.userHeading);
-        this.missingImages.styleLoaded(loaded);
+        this.missingImages.styleLoaded(loaded, completion.generation);
       }
     }, () => {
       // A style that fails to load reports mapLoadingFailed.

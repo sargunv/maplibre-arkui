@@ -9,17 +9,26 @@ import { reservedId } from '../../style/internal/StyleCommands';
 import { MapError } from '../MapError';
 import { StyleImageMissingEvent } from '../StyleImageMissingEvent';
 
+// An image that the style lacked as it loaded, with the map's generation when
+// the map said so.
+interface WaitingImage {
+  id: string;
+  generation: bigint;
+}
+
 export class MissingImages {
   private readonly ask: (event: StyleImageMissingEvent) => Promise<StyleImage | undefined>;
   private readonly onError: (error: Error) => void;
   // The loaded style, which the app's images go to, as the style API adds
-  // them.
+  // them, and the map's generation as it loaded: what the map says before
+  // then is about the last style.
   private style: LoadedStyle | undefined = undefined;
+  private generation: bigint = BigInt(0);
   private readonly api: StyleApi = new StyleApi(() => this.style);
-  // The IDs that the map has asked for, or waits to, in the current style,
-  // and those that it lacked before the style loaded.
+  // The IDs that the map has asked for in the current style, and those that
+  // it lacked as it loaded.
   private asked: Set<string> = new Set<string>();
-  private waiting: string[] = [];
+  private waiting: WaitingImage[] = [];
 
   constructor(ask: (event: StyleImageMissingEvent) => Promise<StyleImage | undefined>,
     onError: (error: Error) => void) {
@@ -34,26 +43,28 @@ export class MissingImages {
     this.waiting = [];
   }
 
-  // The style has loaded, and the app has heard of it, so the map asks for
-  // the images that the style lacked as it loaded.
-  styleLoaded(style: LoadedStyle): void {
+  // The style has loaded at the map's `generation`, and the app has heard of
+  // it, so the map asks for the images that the style lacked as it loaded.
+  styleLoaded(style: LoadedStyle, generation: bigint): void {
     this.style = style;
+    this.generation = generation;
     const waiting = this.waiting;
     this.waiting = [];
-    waiting.forEach((id: string) => this.request(style, id));
+    waiting.forEach((image: WaitingImage) => this.missing(image.id, image.generation, false));
   }
 
-  // The style lacks the image `id`. The content's images and the library's
-  // are on their way, so the map doesn't ask for them.
-  missing(id: string, ownedByContent: boolean): void {
-    if (ownedByContent || reservedId(id) || this.asked.has(id)) {
+  // The style lacks the image `id`, as of the map's `generation`. The
+  // content's images and the library's are on their way, so the map doesn't
+  // ask for them.
+  missing(id: string, generation: bigint, ownedByContent: boolean): void {
+    if (ownedByContent || reservedId(id)) {
       return;
     }
-    this.asked.add(id);
     const style = this.style;
     if (style === undefined) {
-      this.waiting.push(id);
-    } else {
+      this.waiting.push({ id: id, generation: generation });
+    } else if (generation >= this.generation && !this.asked.has(id)) {
+      this.asked.add(id);
       this.request(style, id);
     }
   }
