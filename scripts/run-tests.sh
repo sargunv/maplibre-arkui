@@ -25,10 +25,10 @@ watchdog=
 # outlives this script and can stop a later run's app.
 trap 'touch "$work/finished"; [[ -z $watchdog ]] || wait "$watchdog"; rm -rf "$work"' EXIT
 report="$work/report.txt"
-# If the app dies or a case never settles, `aa test` waits forever. A watchdog
-# ends the run when the app's process has been gone for 10 seconds, or never
-# appeared in the first 30, or at a deadline, after dumping the app's thread
-# stacks, as MapLibre Native FFI's runner does.
+# If the app dies, never starts, or a case never settles, `aa test` waits
+# forever. A watchdog ends the run when the app's process has been gone for 10
+# seconds, or never appeared in the first 30, or at a deadline, after dumping
+# the app's thread stacks, as MapLibre Native FFI's runner does.
 deadline=${MAPLIBRE_ARKUI_TEST_TIMEOUT:-1800}
 # The app's process is the one whose whole command line is the bundle name.
 # pidof found no process on Oniro 7.0 in CI, so match the command line instead.
@@ -52,8 +52,10 @@ app_pid() {
       gone=$((gone + 1))
     fi
   done
-  if ((gone >= 2)); then
+  if ((gone >= 2)) && [[ $seen == true ]]; then
     echo "error: $bundle exited before the suite finished; stopping the run" >&2
+  elif ((gone >= 2)); then
+    echo "error: $bundle didn't start; stopping the run. A locked screen keeps it from starting." >&2
   else
     echo "error: the run took longer than $deadline seconds; stopping $bundle" >&2
     pid=$(app_pid)
@@ -62,13 +64,18 @@ app_pid() {
     fi
     "${hdc[@]}" shell aa force-stop "$bundle" >/dev/null 2>&1 || true
   fi
-  "${hdc[@]}" shell "pkill -f 'aa test -b $bundle'" >/dev/null 2>&1 || true
+  # `aa test` ends when the app is force-stopped, but waits forever when the
+  # app never starts, and the device won't let its shell user kill it, so stop
+  # the client here.
+  kill "$(<"$work/client.pid")" 2>/dev/null || true
 ) &
 watchdog=$!
-# hypium fails a case that doesn't settle within the per-case timeout.
-"${hdc[@]}" shell aa test -b "$bundle" -m "$module" \
-  -s unittest /ets/testrunner/OpenHarmonyTestRunner -s timeout 60000 |
-  tr -d '\r' | tee "$report"
+# hypium fails a case that doesn't settle within the per-case timeout. The
+# client records its process ID for the watchdog, which may stop it.
+# shellcheck disable=SC2016
+sh -c 'echo $$ >"$0"; exec "$@"' "$work/client.pid" "${hdc[@]}" shell aa test \
+  -b "$bundle" -m "$module" -s unittest /ets/testrunner/OpenHarmonyTestRunner \
+  -s timeout 60000 | tr -d '\r' | tee "$report" || true
 touch "$work/finished"
 
 tally=$(grep -o 'Tests run: [0-9]*, Failure: [0-9]*, Error: [0-9]*, Pass: [0-9]*, Ignore: [0-9]*' "$report" | tail -1 || true)
