@@ -129,11 +129,11 @@ export default function runtimeTest(): void {
     });
 
     it('lists the style\'s source attributions with a snapshot', 0, async () => {
-      const style = styleDocument('{"version":8,"sources":{' +
-        '"a":{"type":"geojson","data":{"type":"FeatureCollection","features":[]},"attribution":"<b>A</b>"},' +
-        '"b":{"type":"geojson","data":{"type":"FeatureCollection","features":[]},"attribution":"B"},' +
-        '"c":{"type":"geojson","data":{"type":"FeatureCollection","features":[]},"attribution":"<b>A</b>"}},' +
-        '"layers":[]}');
+      // No layer draws the sources, so the map requests none of their tiles.
+      const source = (attribution: string): string =>
+        `{"type":"vector","tiles":["https://tiles.invalid/{z}/{x}/{y}.pbf"],"attribution":"${attribution}"}`;
+      const style = styleDocument(`{"version":8,"sources":{"a":${source('<b>A</b>')},"b":${source('B')},` +
+        `"c":${source('<b>A</b>')}},"layers":[]}`);
       const snapshot = await renderSnapshot({ style: style, width: 16, height: 16, pixelRatio: 1 });
       await snapshot.image.release();
       expect(snapshot.attributions.join()).assertEqual('<b>A</b>,B');
