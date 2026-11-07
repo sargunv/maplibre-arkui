@@ -64,10 +64,10 @@ export interface PaddingMetrics {
 export function checkPadding(padding: Padding | LocalizedPadding, what: string): PaddingMetrics {
   const sides = physicalSides(padding);
   return {
-    top: checkSide(sides[0], what, padding),
-    left: checkSide(sides[1], what, padding),
-    bottom: checkSide(sides[2], what, padding),
-    right: checkSide(sides[3], what, padding),
+    top: checkSide(sides[0], what),
+    left: checkSide(sides[1], what),
+    bottom: checkSide(sides[2], what),
+    right: checkSide(sides[3], what),
   };
 }
 
@@ -87,7 +87,7 @@ export function paddingInVpOrZero(padding: Padding | LocalizedPadding, what: str
   const sides = physicalSides(padding);
   const inVp = (side: Side): number => {
     try {
-      return lengthInVp(checkSide(side, what, padding), scales);
+      return lengthInVp(checkSide(side, what), scales);
     } catch (error) {
       report(error as Error);
       return 0;
@@ -115,7 +115,7 @@ function physicalSides(padding: Padding | LocalizedPadding): Side[] {
 // string without a unit, is in vp.
 const LENGTH = /^([-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?)(px|vp|fp|lpx|%)?$/i;
 
-function checkSide(side: Side, what: string, padding: Padding | LocalizedPadding): LengthMetrics {
+function checkSide(side: Side, what: string): LengthMetrics {
   let metrics: LengthMetrics | undefined = undefined;
   if (side === undefined) {
     metrics = LengthMetrics.vp(0);
@@ -135,9 +135,17 @@ function checkSide(side: Side, what: string, padding: Padding | LocalizedPadding
   if (metrics === undefined || !Number.isFinite(metrics.value) || metrics.value < 0 ||
     metrics.unit === LengthUnit.PERCENT) {
     throw new Error(`Each side of ${what} must be a finite length of at least 0, not a percentage: ` +
-      `${JSON.stringify(padding)}`);
+      describeSide(side));
   }
   return metrics;
+}
+
+// A side as the app wrote it. JSON would write NaN as null.
+function describeSide(side: Side): string {
+  if (side instanceof LengthMetrics) {
+    return `${side.value} in LengthUnit ${side.unit}`;
+  }
+  return typeof side === 'number' || typeof side === 'string' ? `${side}` : JSON.stringify(side);
 }
 
 function parseLength(text: string): LengthMetrics | undefined {

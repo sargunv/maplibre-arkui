@@ -94,7 +94,7 @@ export function checkLatLng(coordinate: LatLng, what: string): void {
   if (!Number.isFinite(coordinate.latitude) || coordinate.latitude < -90 || coordinate.latitude > 90 ||
     !Number.isFinite(coordinate.longitude)) {
     throw new Error(`${what} must have a finite latitude from -90 to 90 and a finite longitude: ` +
-      `${JSON.stringify(coordinate)}`);
+      `${coordinate.latitude}, ${coordinate.longitude}`);
   }
 }
 
@@ -166,7 +166,9 @@ export function checkBounds(bounds: LatLngBounds): void {
   checkLatLng(bounds.northeast, 'The bounds\' northeast');
   if (bounds.southwest.latitude > bounds.northeast.latitude ||
     bounds.southwest.longitude > bounds.northeast.longitude) {
-    throw new Error(`The bounds' southwest must be south and west of its northeast: ${JSON.stringify(bounds)}`);
+    throw new Error('The bounds\' southwest must be south and west of its northeast: ' +
+      `${bounds.southwest.latitude}, ${bounds.southwest.longitude} and ` +
+      `${bounds.northeast.latitude}, ${bounds.northeast.longitude}`);
   }
 }
 
@@ -186,8 +188,7 @@ export function checkGeometry(geometry: GeoJsonGeometry): void {
   }
   for (const position of positions) {
     if (position.length < 2) {
-      throw new Error(`Each position of the geometry to fit must have a longitude and a latitude: ` +
-        `${JSON.stringify(position)}`);
+      throw new Error(`Each position of the geometry to fit must have a longitude and a latitude: [${position}]`);
     }
     checkLatLng({ latitude: position[1], longitude: position[0] }, 'Each position of the geometry to fit');
   }

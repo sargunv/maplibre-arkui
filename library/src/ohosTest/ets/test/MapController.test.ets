@@ -262,6 +262,8 @@ export default function mapControllerTest(): void {
       expect(() => map.updateCamera({ padding: { left: -10 } })).assertThrowError('-10');
       expect(() => map.updateCamera({ padding: { left: 60 }, zoom: NaN })).assertThrowError('NaN');
       expect(() => map.updateCamera({ padding: { left: '10%' } })).assertThrowError('10%');
+      expect(() => map.updateCamera({ padding: { left: NaN } })).assertThrowError('NaN');
+      expect(() => map.updateCamera({ center: { latitude: NaN, longitude: 0 } })).assertThrowError('NaN');
       expect(() => map.updateCamera({ zoom: 2 }, { durationMs: -1 })).assertThrowError('-1');
       await nextFrame();
       expectPadding(camera().padding, padding);
