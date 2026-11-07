@@ -475,7 +475,12 @@ export function rgba(red: ExpressionInput, green: ExpressionInput, blue: Express
   return call('rgba', red, green, blue, alpha);
 }
 
-/** The style's image named `name`, for `icon-image` or a `format()` section. */
+/**
+ * The style's image named `name`, for `icon-image` or a `format()` section.
+ *
+ * Its name clashes with `@ohos.multimedia.image`, the module of a `StyleImage`'s
+ * `PixelMap`, so a file that uses both imports one under another name.
+ */
 export function image(name: ExpressionInput): Expression {
   return call('image', name);
 }

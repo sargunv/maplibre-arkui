@@ -68,10 +68,6 @@ import {
   WheelAction,
   zoom,
 } from '@maplibre/arkui';
-// #region content-image-import
-// The DSL's image() under another name, since PixelMap's module is `image`.
-import { image as imageExpression } from '@maplibre/arkui';
-// #endregion content-image-import
 
 const STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 const API_KEY = 'not-a-real-key';
@@ -155,7 +151,7 @@ struct ContentExample {
         },
         {
           id: 'monuments', type: 'symbol', source: 'places', filter: eq(get('kind'), 'monument'),
-          layout: { 'icon-image': imageExpression('pin'), 'icon-anchor': 'bottom', 'icon-allow-overlap': true },
+          layout: { 'icon-image': 'pin', 'icon-anchor': 'bottom', 'icon-allow-overlap': true },
         },
         {
           id: 'names', type: 'symbol', source: 'places',
