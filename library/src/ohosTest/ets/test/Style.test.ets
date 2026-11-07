@@ -449,7 +449,7 @@ export default function styleTest(): void {
       expect((await withMap((ffi: MapHandle) => ffi.getStyleImage('dot')))?.pixelRatio).assertEqual(2);
       expect(await mapStyle().removeImage('dot')).assertTrue();
       expect(await withMap((ffi: MapHandle) => ffi.getStyleImage('dot'))).assertUndefined();
-      expect(await rejection(mapStyle().removeImage('dot'))).assertContain('dot');
+      expect(await mapStyle().removeImage('dot')).assertFalse();
       const other = pixel();
       expectThrow('0', () => mapStyle().setImage({ id: 'dot', image: other, pixelRatio: 0 }));
       other.release();

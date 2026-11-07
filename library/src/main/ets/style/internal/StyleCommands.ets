@@ -1,7 +1,7 @@
 // The commands that the style API and its handles send, and the IDs that the
 // library reserves.
 
-import { CommandCompletion } from '@maplibre/native-ffi';
+import { CommandCompletion, MaplibreError, Status } from '@maplibre/native-ffi';
 
 // The library's IDs start with this, and its global state names with it and a
 // colon.
@@ -38,10 +38,16 @@ function failed(what: string, error: Error): Error {
   return new Error(`Style: ${what} failed: ${error.message}`);
 }
 
+// Whether the map failed a command with `status`.
+export function failedWith(error: Error, status: Status): boolean {
+  return error instanceof MaplibreError && (error as MaplibreError).status === status;
+}
+
 // Sends a write, which resolves true once the map applies it. A write that
-// fails once `holds` no longer does resolves false; another failure rejects
-// with what failed.
-export function write(holds: () => boolean, what: string, send: () => Promise<CommandCompletion>): Promise<boolean> {
+// fails once `holds` no longer does, or with a failure that `declined` takes,
+// resolves false; another failure rejects with what failed.
+export function write(holds: () => boolean, what: string, send: () => Promise<CommandCompletion>,
+  declined: (error: Error) => boolean = (): boolean => false): Promise<boolean> {
   let sent: Promise<CommandCompletion>;
   try {
     sent = send();
@@ -49,7 +55,7 @@ export function write(holds: () => boolean, what: string, send: () => Promise<Co
     return Promise.reject(failed(what, error as Error));
   }
   return sent.then((): boolean => true, (error: Error): boolean => {
-    if (!holds()) {
+    if (!holds() || declined(error)) {
       return false;
     }
     throw failed(what, error);

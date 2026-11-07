@@ -1,8 +1,10 @@
-// The style API that a MapController gives: MapStyle and its handles, which
-// act on the style that the map showing the controller has loaded.
+// The style API that a MapController gives, which acts on the style that the
+// map showing the controller has loaded, and makes the handles of its layers
+// and sources.
 
 import {
   CommandCompletion,
+  Status,
   StyleLayerInfo,
   StyleSourceInfo,
   StyleSourceType,
@@ -17,7 +19,7 @@ import { MapStyle, StyleTransitionOptions } from '../MapStyle';
 import { GeoJsonSourceHandle, ImageSourceHandle, SourceHandle } from '../SourceHandle';
 import { LayerKey, SourceKey } from './HandleKeys';
 import { LoadedStyle } from './LoadedStyle';
-import { checkId, checkOwned, propertyValue, read, RESERVED, reservedId, reservedName, write } from './StyleCommands';
+import { checkId, checkOwned, failedWith, propertyValue, read, RESERVED, reservedId, reservedName, write } from './StyleCommands';
 
 // MapLibre Native's transition when the style sets none.
 const DEFAULT_TRANSITION_MS = 300;
@@ -129,7 +131,10 @@ export class StyleApi implements MapStyle {
       return Promise.resolve(false);
     }
     checkOwned(style.reconciler.ownsImage(id), 'image', id);
-    return write(() => this.current() === style, `removing image ${id}`, () => style.map.removeStyleImage(id));
+    // The app can't know which images the sprite has, so one that the style
+    // doesn't have is an answer, not a failure.
+    return write(() => this.current() === style, `removing image ${id}`, () => style.map.removeStyleImage(id),
+      (error: Error): boolean => failedWith(error, Status.notFound));
   }
 
   getGlobalStateProperty(name: string): Promise<Object | undefined> {

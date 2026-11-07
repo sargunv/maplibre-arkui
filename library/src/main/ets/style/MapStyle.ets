@@ -95,8 +95,9 @@ export interface MapStyle {
   setImage(image: StyleImage): Promise<boolean>;
 
   /**
-   * Removes the style's image with `id`. It throws an `Error` for an ID of the
-   * content or the library. It rejects when the style has no image with `id`.
+   * Removes the style's image with `id`, such as one from the sprite, and
+   * resolves `false` when the style has no image with `id`. It throws an
+   * `Error` for an ID of the content or the library.
    */
   removeImage(id: string): Promise<boolean>;
 
