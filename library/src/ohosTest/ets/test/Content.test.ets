@@ -10,7 +10,7 @@ import {
   LayerSummary,
   MapContent,
   MapError,
-  snapshot,
+  renderSnapshot,
   StyleLayer,
 } from '@maplibre/arkui';
 import { ContentReconciler } from '@maplibre/arkui/src/main/ets/Content';
@@ -19,7 +19,7 @@ import application from '@ohos.app.ability.application';
 import fs from '@ohos.file.fs';
 import image from '@ohos.multimedia.image';
 
-import { backgroundStyleJson, STYLE, styleDocument, testMap } from '../testability/TestMaps';
+import { backgroundStyle, STYLE, styleDocument, testMap } from '../testability/TestMaps';
 import { eventually, expectNear, frames, pixelAt, readPixels, setStyle, until, withMap } from './helpers';
 
 // A base style with a layer to place content under, as an app places it under
@@ -428,10 +428,10 @@ export default function contentTest(): void {
         layers: [{ id: 'west', type: 'fill', source: 'west',
           paint: { 'fill-color': '#ff0000', 'fill-antialias': false } }],
       };
-      const pixelMap = await snapshot({
-        style: backgroundStyleJson('#0000ff'), content: west, width: 64, height: 32, scaleFactor: 2,
+      const pixelMap = (await renderSnapshot({
+        style: backgroundStyle('#0000ff'), content: west, width: 64, height: 32, pixelRatio: 2,
         camera: { zoom: 0 },
-      });
+      })).image;
       const pixels = await readPixels(pixelMap);
       // The PixelMap's channels are in RGBA order.
       expect(pixelAt(pixels, 128, 32, 32).join()).assertEqual('255,0,0,255');
@@ -446,10 +446,10 @@ export default function contentTest(): void {
       };
       // 12 vp from the dot's center: outside it at 8 vp, inside at 16.
       const edge = async (fontScale?: number): Promise<string> => {
-        const pixelMap = await snapshot({
-          style: backgroundStyleJson('#0000ff'), content: dot, width: 64, height: 32, scaleFactor: 2,
+        const pixelMap = (await renderSnapshot({
+          style: backgroundStyle('#0000ff'), content: dot, width: 64, height: 32, pixelRatio: 2,
           camera: { center: { latitude: 0, longitude: 0 }, zoom: 0 }, fontScale: fontScale,
-        });
+        })).image;
         const pixels = await readPixels(pixelMap);
         await pixelMap.release();
         return pixelAt(pixels, 128, 2 * (32 + 12), 32).join();
@@ -708,10 +708,10 @@ export default function contentTest(): void {
           { id: 'west', type: 'fill', source: 'west', paint: { 'fill-color': '#ff0000', 'fill-antialias': false } },
         ],
       };
-      const pixelMap = await snapshot({
-        style: backgroundStyleJson('#0000ff'), content: west, width: 64, height: 32, scaleFactor: 2,
+      const pixelMap = (await renderSnapshot({
+        style: backgroundStyle('#0000ff'), content: west, width: 64, height: 32, pixelRatio: 2,
         camera: { zoom: 0 },
-      });
+      })).image;
       const pixels = await readPixels(pixelMap);
       expect(pixelAt(pixels, 128, 32, 32).join()).assertEqual('255,0,0,255');
       expect(pixelAt(pixels, 128, 96, 32).join()).assertEqual('0,0,255,255');

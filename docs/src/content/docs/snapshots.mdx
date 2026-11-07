@@ -9,16 +9,29 @@ import { region } from "../../snippets";
 
 import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
 
-<Api of="snapshot" display="snapshot()" /> renders a still image of a map that
-isn't on screen, as a `PixelMap` for an `Image`:
+<Api of="renderSnapshot" display="renderSnapshot()" /> renders a still image of
+a map that isn't on screen. It resolves a <Api of="MapSnapshot" />: the image,
+as a `PixelMap` for an `Image`, and the attribution of the style's sources,
+which the sources' terms usually require you to show with it, such as with
+<Api of="AttributionText" />. The app owns the image, so release it once nothing
+shows it:
 
 <Code code={region(examples, "snapshot")} lang="ts" />
 
-For an image of a `MaplibreMap`, pass its style, its content, and where its
+Pass `uiContext` so the image is as sharp, and its text as large, as a map in
+that UI.
+
+## An image of a map on screen
+
+ArkUI's `componentSnapshot.createFromBuilder()` can't capture a `MaplibreMap`.
+Render a snapshot instead, with the map's style, its content, and where its
 controller's camera is now:
 
 <Code code={region(examples, "snapshot-of")} lang="ts" />
 
-Without `camera`, the image uses the style's default camera; with it, the fields
-it leaves out take MapLibre's defaults, not the style's. The image holds only
-the map, so show the style's attribution with it.
+The snapshot holds the style and the content only: it has no user location
+indicator and none of the map's ArkUI controls or markers. The example leaves
+out the camera's padding, which keeps the center clear of the map's own UI.
+
+Snapshots that the app starts together render at the same time, each with a GPU
+session of its own, so render many one after another.

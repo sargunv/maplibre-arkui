@@ -27,7 +27,7 @@ export function styleDocument(json: string): Record<string, Object> {
 }
 
 // A style without network requests, a background of `color`, as JSON text,
-// which a snapshot takes.
+// which a resource provider serves.
 export function backgroundStyleJson(color: string): string {
   return '{"version":8,"sources":{},"layers":[{"id":"background","type":"background",' +
     `"paint":{"background-color":"${color}"}}]}`;
@@ -79,6 +79,8 @@ export class TestMap {
   @Trace alwaysShownCompass: boolean = false;
   @Trace zoomButtons: boolean = false;
   @Trace attribution: boolean = false;
+  // The attributions of an AttributionText in the overlay, if any.
+  @Trace attributionText: string[] | undefined = undefined;
   @Trace viewportInsets: Padding | LocalizedPadding = NO_INSETS;
   @Trace interactions: InteractionOptions = {};
   // A box placed at this coordinate, by this alignment when a case sets it.
@@ -173,6 +175,7 @@ export class TestMap {
     this.alwaysShownCompass = false;
     this.zoomButtons = false;
     this.attribution = false;
+    this.attributionText = undefined;
     this.viewportInsets = NO_INSETS;
     this.interactions = {};
     this.placedAt = undefined;

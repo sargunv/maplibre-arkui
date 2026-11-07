@@ -159,6 +159,14 @@ export default function overlayTest(): void {
       await untilFound('the compass shows', find(ON.type('Polygon')));
     });
 
+    it('clears AttributionText when its attributions become empty', 0, async () => {
+      await showOverlay('none');
+      testMap.attributionText = [ATTRIBUTION];
+      await untilFound('the attribution shows', find(ATTRIBUTION_TEXT));
+      testMap.attributionText = [];
+      await untilGone('the attribution clears', find(ATTRIBUTION_TEXT));
+    });
+
     it('draws a preset that the app includes in its block, beside its own content', 0, async () => {
       testMap.placedAt = { latitude: 0, longitude: 0 };
       await showOverlay('default');

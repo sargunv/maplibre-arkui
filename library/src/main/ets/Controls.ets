@@ -515,10 +515,88 @@ export struct DisappearingScaleBar {
 }
 
 /**
+ * Attribution HTML as text: 12 vp, in the theme's secondary font color, with
+ * underlined links that open in the browser. It shows the attributions that
+ * `MapController.attributions` and `MapSnapshot.attributions` give, which the
+ * sources' terms usually require. It needs no map, so it works anywhere.
+ *
+ * ```ets
+ * AttributionText({ attributions: this.controller.attributions })
+ * ```
+ */
+@ComponentV2
+export struct AttributionText {
+  /**
+   * The attributions, each an HTML fragment. Empty by default, which shows no
+   * text. A list with the same strings as the last changes nothing.
+   */
+  @Param attributions: string[] = [];
+  private text: TextController = new TextController();
+  // Whether the text has appeared, so the controller reaches it.
+  private appeared: boolean = false;
+  // The HTML that the text shows, or is converting to show.
+  private html: string | undefined = undefined;
+
+  @Monitor('attributions')
+  attributionsChanged(): void {
+    this.showText();
+  }
+
+  build() {
+    Text(undefined, { controller: this.text })
+      .onAppear(() => {
+        this.appeared = true;
+        this.showText();
+      })
+  }
+
+  // StyledString converts the HTML with its links, which open in the browser.
+  private showText(): void {
+    const html = this.attributions.join('  ');
+    if (!this.appeared || html === this.html) {
+      return;
+    }
+    this.html = html;
+    // fromHtml() rejects empty HTML, so clear the text directly.
+    if (html === '') {
+      this.text.setStyledString(new StyledString(''));
+      return;
+    }
+    StyledString.fromHtml(html).then((converted: StyledString) => {
+      if (html !== this.html) {
+        return;
+      }
+      const text = new MutableStyledString('');
+      text.appendStyledString(converted);
+      if (text.length === 0) {
+        this.text.setStyledString(text);
+        return;
+      }
+      text.setStyle({
+        start: 0,
+        length: text.length,
+        styledKey: StyledStringKey.FONT,
+        styledValue: new TextStyle({ fontSize: LengthMetrics.vp(12), fontColor: $r('sys.color.font_secondary') }),
+      });
+      for (const link of text.getStyles(0, text.length, StyledStringKey.URL)) {
+        text.setStyle({
+          start: link.start,
+          length: link.length,
+          styledKey: StyledStringKey.DECORATION,
+          styledValue: new DecorationStyle({ type: TextDecorationType.Underline }),
+        });
+      }
+      this.text.setStyledString(text);
+    }).catch((error: Error) => logError(error.message));
+  }
+}
+
+/**
  * The attribution of the map's sources, which the sources' terms usually
  * require, behind a button. It starts expanded; a tap on the button folds or
- * unfolds it, and it folds as the user starts a gesture. Its links open in
- * the browser. It draws nothing while the style has no attribution.
+ * unfolds it, and it folds as the user starts a gesture. It shows the
+ * attribution as `AttributionText` does. It draws nothing while the style has
+ * no attribution.
  *
  * Place it in a `MaplibreMap`'s overlay. Anywhere else, it logs an error and
  * draws nothing.
@@ -528,18 +606,12 @@ export struct AttributionButton {
   @Local scope: MapScope | undefined = undefined;
   private readonly nodeId: string = controlKey();
   @Local expanded: boolean = true;
-  private text: TextController = new TextController();
 
-  // ets-loader's webpack build warns that these watch no state variable. Its
+  // ets-loader's webpack build warns that this watches no state variable. Its
   // checker types every member as `any` there, so it can't follow a path
-  // through the scope, but the monitors run as the values change.
-  @Monitor('scope.controller.attributions')
-  attributionsChanged(): void {
-    this.showText();
-  }
-
-  // It folds as a gesture starts, not as one goes on, so a tap that unfolds
-  // it during a gesture keeps it open.
+  // through the scope, but the monitor runs as the value changes. It folds as
+  // a gesture starts, not as one goes on, so a tap that unfolds it during a
+  // gesture keeps it open.
   @Monitor('scope.gesturing')
   gesturingChanged(): void {
     if (this.scope?.gesturing === true) {
@@ -557,10 +629,9 @@ export struct AttributionButton {
       if (this.attributions.length > 0) {
         Flex({ alignItems: ItemAlign.Center }) {
           if (this.expanded) {
-            Text(undefined, { controller: this.text })
+            AttributionText({ attributions: this.attributions })
               .flexShrink(1)
               .padding({ left: 12, top: 6, bottom: 6 })
-              .onAppear(() => this.showText())
           }
           Button({ type: ButtonType.Circle }) {
             Text('i')
@@ -593,36 +664,6 @@ export struct AttributionButton {
     .onAttach(() => {
       this.scope = findScope(this.getUIContext(), this.nodeId, 'AttributionButton');
     })
-  }
-
-  // The attributions are HTML, which StyledString converts with their links.
-  private showText(): void {
-    const attributions = this.attributions;
-    if (attributions.length === 0) {
-      return;
-    }
-    StyledString.fromHtml(attributions.join('  ')).then((html: StyledString) => {
-      if (attributions !== this.attributions) {
-        return;
-      }
-      const text = new MutableStyledString('');
-      text.appendStyledString(html);
-      text.setStyle({
-        start: 0,
-        length: text.length,
-        styledKey: StyledStringKey.FONT,
-        styledValue: new TextStyle({ fontSize: LengthMetrics.vp(12), fontColor: $r('sys.color.font_secondary') }),
-      });
-      for (const link of text.getStyles(0, text.length, StyledStringKey.URL)) {
-        text.setStyle({
-          start: link.start,
-          length: link.length,
-          styledKey: StyledStringKey.DECORATION,
-          styledValue: new DecorationStyle({ type: TextDecorationType.Underline }),
-        });
-      }
-      this.text.setStyledString(text);
-    }).catch((error: Error) => logError(error.message));
   }
 }
 

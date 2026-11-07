@@ -37,9 +37,9 @@ const listeners: Map<bigint, Registration[]> = new Map();
 const liveMaps: Map<bigint, LiveMap[]> = new Map();
 
 /**
- * The runtime that every `MaplibreMap` and `snapshot()` uses unless the app
- * passes its own. The library creates it on first use and keeps it for the
- * app's life.
+ * The runtime that every `MaplibreMap` and `renderSnapshot()` uses unless
+ * the app passes its own. The library creates it on first use and keeps it
+ * for the app's life.
  *
  * Its cache database, which holds the ambient cache and offline regions, is
  * `maplibre-cache.db` in the app's files directory, so offline regions last
@@ -87,7 +87,7 @@ async function createDefaultRuntime(): Promise<RuntimeHandle> {
  * don't call `MapHandle.setEventMask()`. The listener gets only the map events
  * it asks for, and every event that comes from the runtime itself, which no
  * mask selects. Without `mapEvents`, it gets no map events. Maps that
- * `snapshot()` renders report none.
+ * `renderSnapshot()` renders report none.
  *
  * A runtime has one FFI event handler, which the library sets once a map or a
  * listener uses the runtime, so listen here instead of calling

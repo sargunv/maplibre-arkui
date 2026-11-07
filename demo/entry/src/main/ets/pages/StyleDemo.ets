@@ -4,6 +4,7 @@ import image from '@ohos.multimedia.image';
 
 import {
   all,
+  AttributionText,
   cases,
   eq,
   FeatureClickEvent,
@@ -20,8 +21,9 @@ import {
   MapController,
   MapError,
   MaplibreMap,
+  MapSnapshot,
   match,
-  snapshot,
+  renderSnapshot,
   StyleLayer,
   toBoolean,
 } from '@maplibre/arkui';
@@ -157,7 +159,7 @@ export struct StyleDemo {
   @Local placesShown: boolean = true;
   @Local parkColor: number = 0;
   @Local added: GeoJsonFeature[] = [];
-  @Local preview: image.PixelMap | undefined = undefined;
+  @Local preview: MapSnapshot | undefined = undefined;
   @Local message: string = 'Tap a place, the walk, or the park; long press to add a point';
   private controller: MapController = new MapController({
     camera: { center: { latitude: 48.8570, longitude: 2.2965 }, zoom: 13.6 },
@@ -165,6 +167,7 @@ export struct StyleDemo {
   // Kept while the content has it, and released as the page goes.
   private pin: image.PixelMap = loadPin(this.getUIContext());
   private selected: FeatureStateSelector | undefined = undefined;
+  private gone: boolean = false;
   // The layers are on top of each other, so the topmost feature under a click
   // takes it, and the layers under it don't get it.
   private onFeatureClick = (layer: string): FeatureClickHandler => (event: FeatureClickEvent): boolean => {
@@ -191,7 +194,8 @@ export struct StyleDemo {
   }
 
   aboutToDisappear(): void {
-    this.preview?.release();
+    this.gone = true;
+    this.preview?.image.release();
     this.pin.release();
   }
 
@@ -215,17 +219,22 @@ export struct StyleDemo {
           },
         })
         if (this.preview !== undefined) {
-          Image(this.preview)
-            .width(160)
-            .height(120)
-            .borderRadius(8)
-            .borderWidth(2)
-            .borderColor('#ffffff')
-            .position({ top: 12, right: 12 })
-            .onClick(() => {
-              this.preview?.release();
-              this.preview = undefined;
-            })
+          Column() {
+            Image(this.preview.image)
+              .width(160)
+              .height(120)
+              .borderRadius(8)
+              .borderWidth(2)
+              .borderColor('#ffffff')
+            AttributionText({ attributions: this.preview.attributions })
+              .width(160)
+              .backgroundColor('#ccffffff')
+          }
+          .position({ top: 12, right: 12 })
+          .onClick(() => {
+            this.preview?.image.release();
+            this.preview = undefined;
+          })
         }
         Column({ space: 8 }) {
           Text(this.message)
@@ -257,17 +266,24 @@ export struct StyleDemo {
     .title('Style')
   }
 
-  // A still image of the same style, content, and camera.
+  // A still image of the same style, content, and camera, without the camera
+  // padding.
   private async takeSnapshot(): Promise<void> {
     try {
-      const preview = await snapshot({
+      const camera = this.controller.camera;
+      const preview = await renderSnapshot({
         style: this.style,
         content: this.content,
-        camera: this.controller.camera,
+        camera: { center: camera.center, zoom: camera.zoom, bearing: camera.bearing, pitch: camera.pitch },
         width: 160,
         height: 120,
+        uiContext: this.getUIContext(),
       });
-      this.preview?.release();
+      if (this.gone) {
+        preview.image.release();
+        return;
+      }
+      this.preview?.image.release();
       this.preview = preview;
     } catch (error) {
       this.message = (error as Error).message;
