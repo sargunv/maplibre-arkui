@@ -37,7 +37,7 @@ export type {
   GeoJsonPosition,
 } from './src/main/ets/GeoJson';
 export { WheelAction } from './src/main/ets/gestures';
-export type { MapInteractionOptions, MovementOptions, RotationOptions } from './src/main/ets/gestures';
+export type { InteractionOptions, MovementOptions, RotationOptions } from './src/main/ets/gestures';
 export { FollowBearing } from './src/main/ets/location';
 export type { FollowUserLocationOptions, UserLocationIndicatorOptions } from './src/main/ets/location';
 export { addRuntimeEventListener, getDefaultRuntime, removeRuntimeEventListener } from './src/main/ets/runtime';

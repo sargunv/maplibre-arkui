@@ -132,12 +132,16 @@ export default function gestureInputTest(): void {
 
       await start();
       testMap.compass = true;
+      const ends: number[] = [];
+      testMap.onGestureEnd = () => {
+        ends.push(camera().bearing);
+      };
       await gesture(async () => {
         await driver.injectMultiPointerAction(twist(c, 100, 10, 10, STILL_TWIST_HOLD), speed(200));
       });
-      // The snap starts after the gesture ends, once the map reports the
-      // bearing.
-      await until('the bearing snaps to north', () => Math.abs(wrap(camera().bearing)) < 0.001);
+      // The snap is the gesture's last step, so the gesture ends at north.
+      expect(ends.length).assertEqual(1);
+      expectNear(wrap(ends[0]), 0, 0.001);
     });
 
     it('snaps to the bearings that the options give, or not at all', 0, async () => {
@@ -195,7 +199,6 @@ export default function gestureInputTest(): void {
       await gesture(async () => {
         await driver.injectMultiPointerAction(twist(c, 100, 10, 10, STILL_TWIST_HOLD), speed(200));
       });
-      // A snap would start once the map reports the bearing; give it time.
       await frames(30);
       expectNear(wrap(camera().bearing), 5, 0.001);
     });
@@ -243,7 +246,7 @@ export default function gestureInputTest(): void {
     });
 
     it('pans with the mouse wheel in pan mode, and zooms with Ctrl', 0, async () => {
-      testMap.interactions = { wheel: WheelAction.pan };
+      testMap.interactions = { wheel: WheelAction.PAN };
       const c = await mapCenter();
       // Scrolling down shows what's below, as a page does.
       await gesture(() => driver.mouseScroll(c, true, 3));

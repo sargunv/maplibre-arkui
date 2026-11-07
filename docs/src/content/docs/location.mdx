@@ -25,10 +25,10 @@ an app stops as the user starts to pan, in the `onStart` of
 
 While the camera follows, the user can zoom and rotate: both keep the location
 at the center, and two fingers zoom and rotate without panning. The camera
-waits for the user's input to end, then catches up with the location. A pan
-that doesn't stop following eases back, and so does a rotation while the camera
-turns with the course or heading, unless the app follows without the bearing
-from the rotation's `onStart`.
+waits for the user's input to end, then catches up with the location, after
+`onGestureEnd`. A pan that doesn't stop following eases back, and so does a
+rotation while the camera turns with the course or heading, unless the app
+follows without the bearing from the rotation's `onStart`.
 
 The library declares no permission and starts no location request, so apps that
 don't show a location don't ask for one. An app that does declares

@@ -9,7 +9,7 @@ import {
   MapContent,
   MapController,
   MapError,
-  MapInteractionOptions,
+  InteractionOptions,
   RuntimeHandle,
   UserLocationIndicatorOptions,
   ScaleBarUnits,
@@ -80,7 +80,7 @@ export class TestMap {
   @Trace zoomButtons: boolean = false;
   @Trace attribution: boolean = false;
   @Trace viewportInsets: Padding | LocalizedPadding = NO_INSETS;
-  @Trace interactions: MapInteractionOptions = {};
+  @Trace interactions: InteractionOptions = {};
   // A box placed at this coordinate, by this alignment when a case sets it.
   @Trace placedAt: LatLng | undefined = undefined;
   @Trace placedAtAlignment: Alignment | undefined = undefined;

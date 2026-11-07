@@ -19,8 +19,9 @@ JSON changes, so the map doesn't load it again on each build.
 ## Events
 
 Its events tell the app when the style has loaded (`onStyleLoaded`), the camera
-has come to rest (`onCameraIdle`), the user starts and stops moving the map
-(`onGestureStart`, `onGestureEnd`), the user clicks it (see
+has come to rest (`onCameraIdle`), the user starts and ends a gesture, which
+ends after its momentum and its snap (`onGestureStart`, `onGestureEnd`; see
+[Gestures](/maplibre-arkui/gestures/)), the user clicks it (see
 [Clicks](/maplibre-arkui/gestures/#clicks)), and something failed (`onError`;
 see [Errors](/maplibre-arkui/errors/)).
 

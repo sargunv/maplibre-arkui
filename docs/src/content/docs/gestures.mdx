@@ -30,31 +30,33 @@ stays north-up and flat, and tells the app while the user moves it:
 
 <Code code={region(examples, "gestures")} lang="ts" />
 
-`onGestureStart` and `onGestureEnd` bracket any input that moves the camera,
-with its momentum. To react to one movement, give it an `onStart`, which runs
-once in each gesture, as the gesture first moves the camera that way. An app
-that moves the camera itself, such as to follow a vehicle, stops as the user
-starts to pan. The same example changes what the wheel and rotation do too:
+`onGestureStart` and `onGestureEnd` bracket each gesture: any input that moves
+the camera, with its momentum and a rotation's snap. To react to one movement,
+give it an `onStart`, which runs each time a gesture starts to move the camera
+that way. An app that moves the camera itself, such as to follow a vehicle,
+stops as the user starts to pan. The same example changes what the wheel and
+rotation do too:
 
 <Code code={region(examples, "interactions")} lang="ts" />
 
-See <Api of="MapInteractionOptions" /> for every option.
+See <Api of="InteractionOptions" /> for every option.
 
 ## Scroll the wheel and the touchpad
 
 The wheel zooms at the pointer, and pans with Ctrl held. With `wheel` set to
-`WheelAction.pan`, it pans, and zooms with Ctrl. A two-finger swipe on a
+`WheelAction.PAN`, it pans, and zooms with Ctrl. A two-finger swipe on a
 touchpad pans either way, and zooms with Ctrl.
 
 A map in a `Scroll` or `List` can leave the page's gestures to it: with
 `cooperative`, one-finger drags, the wheel, and touchpad swipes scroll the page.
-The map moves with two fingers, or with Ctrl held, when the wheel and the
-touchpad do what they would otherwise.
+The map moves with two fingers. With Ctrl held, the wheel does what `wheel`
+says, and a touchpad swipe pans.
 
 ## Snap and tick rotation
 
-A rotation that ends within 7° of north eases to it. `snapBearings` chooses the
-bearings to snap to, and `[]` turns snapping off.
+A rotation that ends within 7° of north eases to it, and its gesture ends, with
+`onGestureEnd`, once the camera gets there. `snapBearings` chooses the bearings
+to snap to, and `[]` turns snapping off.
 
 As a twist or a right-button drag turns the map across north, the device plays
 a soft tick. `hapticBearings` chooses where it ticks, and `[]` turns the ticks
