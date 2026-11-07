@@ -2,7 +2,6 @@
 // renders them: a static map, an offscreen session, and a still image request.
 
 import {
-  CameraOptions,
   CameraUpdateMode,
   MapMode,
   RenderDriverKind,
@@ -13,8 +12,11 @@ import {
 import display from '@ohos.display';
 import image from '@ohos.multimedia.image';
 
+import { CameraUpdate } from './CameraPosition';
 import { followConnectivity } from './connectivity';
 import { ContentReconciler, loadStyle, MapContent } from './Content';
+import { checkCamera, toFfiCamera } from './FfiValues';
+import { paddingInVp } from './Insets';
 import { logError } from './log';
 import { getDefaultRuntime } from './runtime';
 
@@ -34,9 +36,11 @@ export interface SnapshotOptions {
   /**
    * Where the camera looks. Without one, the image uses the style's default
    * camera. With one, the fields it leaves out take MapLibre's defaults, not
-   * the style's.
+   * the style's. Its padding's lengths in px are pixels of the image, and in
+   * fp scale by `fontScale`; one in lpx or in percent rejects, as does a
+   * camera that `MapController.updateCamera()` would throw for.
    */
-  camera?: CameraOptions;
+  camera?: CameraUpdate;
   /**
    * The image's pixels in each vp. Defaults to the default display's density,
    * so the image is as sharp as a map of the same size on screen.
@@ -69,13 +73,19 @@ export interface SnapshotOptions {
  * It resolves once every resource the image needs has loaded, and rejects when
  * the style or one of those resources fails to load. To capture what a
  * `MapLibreMap` shows, pass its style, its content, and its controller's
- * camera, through `cameraToOptions()`, when `getCamera()` returns one. The
- * image holds only the map: show the style's attribution with it.
+ * `getCamera()`. The image holds only the map: show the style's attribution
+ * with it.
  */
 export async function snapshot(options: SnapshotOptions): Promise<image.PixelMap> {
   followConnectivity();
+  const camera = options.camera === undefined ? undefined : checkCamera(options.camera);
   const runtime = options.runtime ?? await getDefaultRuntime();
   const scaleFactor = options.scaleFactor ?? display.getDefaultDisplaySync().densityPixels;
+  const fontScale = options.fontScale ?? 1;
+  const padding = camera?.padding === undefined ? undefined : paddingInVp(camera.padding, {
+    px: (px: number) => px / scaleFactor,
+    fp: (fp: number) => fp * fontScale,
+  });
   const map = runtime.createMap({
     initialExtent: { width: options.width, height: options.height, scaleFactor: scaleFactor },
     mapMode: MapMode.static,
@@ -91,10 +101,10 @@ export async function snapshot(options: SnapshotOptions): Promise<image.PixelMap
       const reconciler = new ContentReconciler(map,
         (error: Error) => logError(`a snapshot left out content: ${error.message}`));
       reconciler.setContent(options.content);
-      reconciler.setFontScale(options.fontScale ?? 1);
+      reconciler.setFontScale(fontScale);
       await reconciler.styleLoaded();
-      if (options.camera !== undefined) {
-        map.discarding.updateCamera({ mode: CameraUpdateMode.jump, camera: options.camera });
+      if (camera !== undefined) {
+        map.discarding.updateCamera({ mode: CameraUpdateMode.jump, camera: toFfiCamera(camera, padding) });
       }
       await map.requestStillImage();
       return await toPixelMap(await session.readTexture());

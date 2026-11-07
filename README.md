@@ -34,7 +34,7 @@ source]). [Getting started] has the details.
 ## Quick start
 
 ```ets
-import { CameraUpdateMode, MapController, MapLibreMap } from '@maplibre/arkui';
+import { CameraTransitionMode, MapController, MapLibreMap } from '@maplibre/arkui';
 
 @Entry
 @ComponentV2
@@ -53,11 +53,10 @@ struct MapPage {
       Button('Fly to New York')
         .margin(64)
         .onClick(() => {
-          this.controller.updateCamera({
-            mode: CameraUpdateMode.fly,
-            camera: { center: { latitude: 40.7128, longitude: -74.006 }, zoom: 12 },
-            animation: { durationMs: 3000 },
-          }).catch((error: Error) => console.error(error.message));
+          this.controller.updateCamera(
+            { center: { latitude: 40.7128, longitude: -74.006 }, zoom: 12 },
+            { mode: CameraTransitionMode.FLY, durationMs: 3000 },
+          ).catch((error: Error) => console.error(error.message));
         })
     }
     .width('100%')

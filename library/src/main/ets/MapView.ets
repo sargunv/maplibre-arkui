@@ -5,19 +5,17 @@
 // disappears. From FFI's examples/arkui map/MapController.ets.
 
 import {
+  AnimationOptions,
   BoundOptions,
-  Camera as CameraPosition,
+  Camera as FfiCamera,
   CameraDelta,
   CameraFitOptions,
   CameraOptions,
   CameraQueryResult,
   CameraTransitionOutcome,
-  CameraUpdate,
   CameraUpdateMode,
-  cameraToOptions,
   CommandCompletion,
-  EdgeInsets,
-  LatLng,
+  LatLng as FfiLatLng,
   LogicalSize,
   MapHandle,
   MapMode,
@@ -32,7 +30,7 @@ import {
   RuntimeEventFlag,
   RuntimeEventType,
   RuntimeHandle,
-  ScreenPoint,
+  ScreenPoint as FfiScreenPoint,
   StyleSourceInfo,
 } from '@maplibre/native-ffi';
 import { Configuration } from '@ohos.app.ability.Configuration';
@@ -40,14 +38,24 @@ import EnvironmentCallback from '@ohos.app.ability.EnvironmentCallback';
 import observer from '@ohos.arkui.observer';
 import geoLocationManager from '@ohos.geoLocationManager';
 
+import { CameraPosition } from './CameraPosition';
 import { ContentReconciler, loadStyle, MapClickEvent, MapContent, MapLayer } from './Content';
+import {
+  checkCamera,
+  CheckedCamera,
+  CheckedFit,
+  CheckedTransition,
+  toCameraPosition,
+  toFfiCamera,
+  toLatLng,
+} from './FfiValues';
 import { fontScaleOf } from './fontScale';
 import { GESTURE_ANIMATION_MS, GestureTarget, MapGestures, snapBearing } from './gestures';
 import { playTick } from './haptics';
 import { FOLLOW_MS, UserLocationIndicatorOptions, UserLocationLayer } from './location';
 import { logError } from './log';
-import { FitCameraOptions, MapController } from './MapController';
-import { addInsets, NO_INSETS, sameInsets, withAppPadding, withPadding } from './padding';
+import { addInsets, contextScales, Insets, NO_INSETS, paddingInVp, paddingInVpOrZero, sameInsets } from './Insets';
+import { MapController } from './MapController';
 import {
   addRuntimeEventListener,
   addRuntimeMap,
@@ -73,6 +81,8 @@ export interface MapViewEvents {
   onStyleLoaded: () => void;
   onCameraIdle: (camera: CameraPosition) => void;
   onMapError: (error: Error) => void;
+  // The viewport insets in vp changed, as the view resolved them.
+  onViewportInsets: (insets: Insets) => void;
   onGestureStart: () => void;
   onGestureEnd: () => void;
   onMapClick: (event: MapClickEvent) => boolean;
@@ -107,6 +117,8 @@ export class MapView extends XComponentController implements GestureTarget {
   private readonly environmentCallback: EnvironmentCallback = {
     onConfigurationUpdated: (config: Configuration): void => {
       this.reconciler?.setFontScale(fontScaleOf(this.context));
+      // fp insets follow the font scale.
+      this.applyViewportInsets((error: Error) => this.fail(error));
     },
     onMemoryLevel: (): void => {
     },
@@ -133,13 +145,17 @@ export class MapView extends XComponentController implements GestureTarget {
   private indicatorOptions: UserLocationIndicatorOptions = {};
   // The location indicator, drawn at the map's scale factor.
   private locationLayer: UserLocationLayer;
-  // The component's viewportInsets, which the map's camera padding includes on
-  // top of the app's.
-  private insets: EdgeInsets = NO_INSETS;
-  // The app's camera padding, which only the app's camera changes set: the
-  // map's padding is the insets around it, and the camera the app reads has
-  // it.
-  private padding: EdgeInsets = NO_INSETS;
+  // The component's viewportInsets as it gives them, and as JSON, which the
+  // view resolves again at each new density.
+  private viewportInsets: Padding | LocalizedPadding = {};
+  private viewportInsetsJson: string = '{}';
+  // The viewport insets in vp, which the map's camera padding includes on top
+  // of the app's.
+  private insets: Insets = NO_INSETS;
+  // The app's camera padding in vp, which only the app's camera changes set:
+  // the map's padding is the insets around it, and the camera the app reads
+  // has it.
+  private padding: Insets = NO_INSETS;
 
   // The component's latest size in px, its latest surface, and the surface
   // that the session renders to. A surface ID is the one the component
@@ -229,13 +245,29 @@ export class MapView extends XComponentController implements GestureTarget {
     this.applyBounds();
   }
 
-  // The map keeps the app's camera padding inside the new insets, and its
-  // center, which moves to the middle of what they leave.
-  setViewportInsets(insets: EdgeInsets): void {
+  // Options that an app writes in `build()` are a new value each time, so
+  // only a change of their JSON resolves the insets again.
+  setViewportInsets(insets: Padding | LocalizedPadding): void {
+    const json = JSON.stringify(insets);
+    if (json === this.viewportInsetsJson) {
+      return;
+    }
+    this.viewportInsets = insets;
+    this.viewportInsetsJson = json;
+    this.applyViewportInsets((error: Error) => this.fail(error));
+  }
+
+  // Resolves the viewport insets at the current density, with an invalid side
+  // reported to `report` and taken as 0. The map keeps the app's camera padding
+  // inside the new insets, and its center, which moves to the middle of what
+  // they leave.
+  private applyViewportInsets(report: (error: Error) => void): void {
+    const insets = paddingInVpOrZero(this.viewportInsets, 'viewportInsets', contextScales(this.context), report);
     if (sameInsets(this.insets, insets)) {
       return;
     }
     this.insets = insets;
+    this.events.onViewportInsets(insets);
     this.map?.discarding.updateCamera({
       mode: CameraUpdateMode.jump,
       camera: { padding: addInsets(insets, this.padding) },
@@ -243,55 +275,54 @@ export class MapView extends XComponentController implements GestureTarget {
   }
 
   // The map's camera as the app sees it, with the app's padding.
-  appCamera(camera: CameraPosition): CameraPosition {
-    return withAppPadding(camera, this.padding);
+  appCamera(camera: FfiCamera): CameraPosition {
+    return toCameraPosition(camera, this.padding);
+  }
+
+  // `camera` as FFI takes it, with its padding, if any, in vp.
+  resolveCamera(camera: CheckedCamera): CameraOptions {
+    const padding = camera.padding;
+    return toFfiCamera(camera, padding === undefined ? undefined : paddingInVp(padding, contextScales(this.context)));
   }
 
   // Sends the app's camera change, with the insets around its padding. FFI
   // checks the change as it takes it and throws if it rejects it, so the
-  // padding becomes the app's only once the map has taken it. FFI checks the
-  // padding with the insets added, which can cover a negative one, so the
-  // view checks the app's own first.
-  updateCamera(map: MapHandle, update: CameraUpdate): void {
-    const camera = update.camera;
-    const padding = camera?.padding;
-    if (camera === undefined || padding === undefined) {
-      map.discarding.updateCamera(update);
-      return;
-    }
-    const sides = [padding.top, padding.left, padding.bottom, padding.right];
-    if (!sides.every((side: number) => Number.isFinite(side) && side >= 0)) {
-      throw new Error(`Camera padding must be finite and at least 0: ${JSON.stringify(padding)}`);
-    }
+  // padding becomes the app's only once the map has taken it.
+  moveCamera(map: MapHandle, camera: CameraOptions, transition: CheckedTransition, animation: AnimationOptions): void {
+    const padding = camera.padding;
     map.discarding.updateCamera({
-      mode: update.mode,
-      camera: withPadding(camera, addInsets(this.insets, padding)),
-      gesturePhase: update.gesturePhase,
-      animation: update.animation,
+      mode: transition.mode,
+      camera: padding === undefined ? camera : withPadding(camera, addInsets(this.insets, padding)),
+      animation: animation,
     });
-    // A copy, since the app can change its object later.
-    this.padding = addInsets(NO_INSETS, padding);
+    if (padding !== undefined) {
+      // A copy, since FFI's camera can change later.
+      this.padding = addInsets(NO_INSETS, padding);
+    }
   }
 
-  // The camera that fits what `query` finds, for `updateCamera()`. FFI's fit
+  // The camera that fits what `query` finds, for `moveCamera()`. FFI's fit
   // keeps its padding as the camera's, so the query fits inside the margin too,
   // and the camera then centers the same view inside the insets and the camera
   // padding alone. Undefined when the map leaves first.
-  async fitCamera(options: FitCameraOptions,
+  async fitCamera(options: CheckedFit,
     query: (map: MapHandle, fit: CameraFitOptions) => Promise<CameraOptions>): Promise<CameraOptions | undefined> {
     const map = this.map;
     if (map === undefined) {
       return undefined;
     }
-    const cameraPadding = options.cameraPadding ?? this.padding;
+    const scales = contextScales(this.context);
+    const cameraPadding = options.cameraPadding === undefined ? this.padding :
+      paddingInVp(options.cameraPadding, scales);
+    const margin = options.fitPadding === undefined ? NO_INSETS : paddingInVp(options.fitPadding, scales);
     // A layout change during the query leaves a different part of the map to
     // fit in, so the fit asks again.
-    let insets: EdgeInsets;
-    let fitPadding: EdgeInsets;
+    let insets: Insets;
+    let fitPadding: Insets;
     let fitted: CameraOptions;
     do {
       insets = this.insets;
-      fitPadding = addInsets(addInsets(insets, cameraPadding), options.fitPadding ?? NO_INSETS);
+      fitPadding = addInsets(addInsets(insets, cameraPadding), margin);
       fitted = await query(map, { padding: fitPadding, bearing: options.bearing, pitch: options.pitch });
       if (this.map !== map) {
         return undefined;
@@ -300,7 +331,7 @@ export class MapView extends XComponentController implements GestureTarget {
     const padding = addInsets(insets, cameraPadding);
     const view = map.getSnapshot().view;
     const projection = MapProjectionHandle.create(view);
-    let center: LatLng;
+    let center: FfiLatLng;
     try {
       projection.setCamera(withPadding(fitted, fitPadding));
       center = projection.latLngForPixel({
@@ -458,7 +489,7 @@ export class MapView extends XComponentController implements GestureTarget {
 
   // The coordinate is the one under the click as it happens, before the
   // queries that the layers need.
-  clicked(point: ScreenPoint, long: boolean): void {
+  clicked(point: FfiScreenPoint, long: boolean): void {
     const map = this.map;
     if (map === undefined || this.disposed) {
       return;
@@ -466,7 +497,7 @@ export class MapView extends XComponentController implements GestureTarget {
     const projection = MapProjectionHandle.create(map.getSnapshot().view);
     let event: MapClickEvent;
     try {
-      event = { x: point.x, y: point.y, coordinate: projection.latLngForPixel(point) };
+      event = { x: point.x, y: point.y, coordinate: toLatLng(projection.latLngForPixel(point)) };
     } finally {
       projection.release();
     }
@@ -626,6 +657,10 @@ export class MapView extends XComponentController implements GestureTarget {
     });
     this.created = map;
     this.scaleFactor = scaleFactor;
+    // Insets in px, fp, or lpx change with the density. An invalid side was
+    // reported as the component set it.
+    this.applyViewportInsets(() => {
+    });
     this.locationLayer = this.newLocationLayer(scaleFactor);
     await map.ready;
     if (this.disposed || this.created !== map) {
@@ -641,7 +676,7 @@ export class MapView extends XComponentController implements GestureTarget {
     // The insets go around the start camera's padding, or the map's, which is
     // none.
     const attached = attach ? controller.attach(this) : undefined;
-    const startCamera: CameraOptions = (camera !== undefined ? cameraToOptions(camera) : attached) ?? {};
+    const startCamera = this.resolveCamera((camera !== undefined ? checkCamera(camera) : attached) ?? {});
     this.padding = addInsets(NO_INSETS, startCamera.padding ?? NO_INSETS);
     map.discarding.updateCamera({
       mode: CameraUpdateMode.jump,
@@ -695,7 +730,7 @@ export class MapView extends XComponentController implements GestureTarget {
     }).catch((error: Error) => this.fail(error));
   }
 
-  private cameraIdle(mapCamera: CameraPosition): void {
+  private cameraIdle(mapCamera: FfiCamera): void {
     const camera = this.appCamera(mapCamera);
     const controller = this.controller;
     if (controller !== undefined && controller.map === this.map) {
@@ -861,3 +896,17 @@ export class MapView extends XComponentController implements GestureTarget {
   }
 }
 
+// `camera` with `padding`, and with `center` when it's given.
+function withPadding(camera: CameraOptions, padding: Insets | undefined, center?: FfiLatLng): CameraOptions {
+  return {
+    center: center ?? camera.center,
+    centerAltitude: camera.centerAltitude,
+    padding: padding,
+    anchor: camera.anchor,
+    zoom: camera.zoom,
+    bearing: camera.bearing,
+    pitch: camera.pitch,
+    roll: camera.roll,
+    fieldOfView: camera.fieldOfView,
+  };
+}

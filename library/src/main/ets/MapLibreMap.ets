@@ -1,13 +1,14 @@
-import { BoundOptions, Camera as CameraPosition, EdgeInsets, RuntimeHandle } from '@maplibre/native-ffi';
+import { BoundOptions, RuntimeHandle } from '@maplibre/native-ffi';
 import geoLocationManager from '@ohos.geoLocationManager';
 
+import { CameraPosition } from './CameraPosition';
 import { MapInteractionOptions, TAP_SLOP } from './gestures';
 import { MapClickEvent, MapContent } from './Content';
 import { MapController } from './MapController';
 import { UserLocationIndicatorOptions } from './location';
 import { MapView } from './MapView';
 import { defaultOverlay } from './Overlay';
-import { NO_INSETS } from './padding';
+import { Insets } from './Insets';
 import { closeScope, MapScope, openScope } from './scope';
 
 /**
@@ -80,22 +81,27 @@ export struct MapLibreMap {
    */
   @Param interactions: MapInteractionOptions = {};
   /**
-   * The edges of the map, in vp, that the app's own UI covers, such as a
-   * bottom sheet. The overlay presets keep their controls clear of them, and
-   * they add to the camera's padding, so a camera move centers its target in
-   * the part of the map that the user sees. They never show in the camera
-   * that `controller` reports. When they change, the camera's center moves to
-   * the middle of what they leave.
+   * The edges of the map that the app's own UI covers, such as a bottom
+   * sheet. The overlay presets keep their controls clear of them, and they add
+   * to the camera's padding, so a camera move centers its target in the part
+   * of the map that the user sees. They never show in the camera that
+   * `controller` reports. When they change, the camera's center moves to the
+   * middle of what they leave. None by default.
+   *
+   * Each side is a length of at least 0, not a percentage; a side left out is
+   * 0. An invalid side is reported to `onMapError` and taken as 0. A
+   * `LocalizedPadding`'s `start` and `end` follow the app's language, not an
+   * ancestor's `.direction()`.
    *
    * ```ets
    * MapLibreMap({
    *   controller: this.map,
    *   style: STYLE,
-   *   viewportInsets: { top: 0, left: 0, bottom: this.sheetHeight, right: 0 },
+   *   viewportInsets: { bottom: this.sheetHeight },
    * })
    * ```
    */
-  @Param viewportInsets: EdgeInsets = NO_INSETS;
+  @Param viewportInsets: Padding | LocalizedPadding = {};
   /**
    * ArkUI content over the map, in a `Stack` of its size, from the trailing
    * closure: by default, `MapDefaultOverlay`. `content` is what the map draws
@@ -134,7 +140,10 @@ export struct MapLibreMap {
   /** The camera has come to rest, after a jump or once an animation ends. */
   @Event onCameraIdle: (camera: CameraPosition) => void = (camera: CameraPosition) => {
   };
-  /** The style failed to load, the map failed to render, or it rejected part of `content`. */
+  /**
+   * The style failed to load, the map failed to render, it rejected part of
+   * `content`, or a side of `viewportInsets` is invalid.
+   */
   @Event onMapError: (error: Error) => void = (error: Error) => {
   };
   /**
@@ -173,6 +182,9 @@ export struct MapLibreMap {
     onStyleLoaded: () => this.onStyleLoaded(),
     onCameraIdle: (camera: CameraPosition) => this.onCameraIdle(camera),
     onMapError: (error: Error) => this.onMapError(error),
+    onViewportInsets: (insets: Insets) => {
+      this.scope.insets = insets;
+    },
     onGestureStart: () => {
       this.scope.gesturing = true;
       this.onGestureStart();
@@ -188,7 +200,6 @@ export struct MapLibreMap {
 
   aboutToAppear(): void {
     this.scope.controller = this.controller;
-    this.scope.insets = this.viewportInsets;
     this.view.gestures.options = this.interactions;
     this.view.setUserLocationIndicator(this.userLocationIndicator);
     this.view.setUserLocation(this.userLocation);
@@ -224,7 +235,6 @@ export struct MapLibreMap {
 
   @Monitor('viewportInsets')
   viewportInsetsChanged(): void {
-    this.scope.insets = this.viewportInsets;
     this.view.setViewportInsets(this.viewportInsets);
   }
 

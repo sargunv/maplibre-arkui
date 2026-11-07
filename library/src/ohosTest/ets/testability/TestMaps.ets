@@ -4,8 +4,6 @@
 import {
   BoundOptions,
   CameraPosition,
-  CameraUpdateMode,
-  EdgeInsets,
   LatLng,
   MapClickEvent,
   MapContent,
@@ -30,7 +28,7 @@ export function backgroundStyle(color: string): string {
 
 export const STYLE = backgroundStyle('#4a90d9');
 
-export const NO_INSETS: EdgeInsets = { top: 0, left: 0, bottom: 0, right: 0 };
+export const NO_INSETS: Padding = { top: 0, left: 0, bottom: 0, right: 0 };
 
 function noop(): void {
 }
@@ -63,7 +61,7 @@ export class TestMap {
   @Trace alwaysShownCompass: boolean = false;
   @Trace zoomButtons: boolean = false;
   @Trace attribution: boolean = false;
-  @Trace viewportInsets: EdgeInsets = NO_INSETS;
+  @Trace viewportInsets: Padding | LocalizedPadding = NO_INSETS;
   @Trace interactions: MapInteractionOptions = {};
   // A box placed at this coordinate, by this alignment when a case sets it.
   @Trace placedAt: LatLng | undefined = undefined;
@@ -174,14 +172,11 @@ export class TestMap {
     this.clickEvents = [];
     this.scroller.scrollTo({ xOffset: 0, yOffset: 0 });
     await controller.updateCamera({
-      mode: CameraUpdateMode.jump,
-      camera: {
-        center: { latitude: 0, longitude: 0 },
-        zoom: 1,
-        bearing: 0,
-        pitch: 0,
-        padding: { top: 0, left: 0, bottom: 0, right: 0 },
-      },
+      center: { latitude: 0, longitude: 0 },
+      zoom: 1,
+      bearing: 0,
+      pitch: 0,
+      padding: { top: 0, left: 0, bottom: 0, right: 0 },
     });
   }
 

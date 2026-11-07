@@ -5,10 +5,12 @@ description: How the camera methods, the map, and snapshots report failures.
 
 import Api from "../../components/Api.astro";
 
-- Camera methods return promises that resolve with how the move ended
-  (<Api of="CameraTransitionOutcome" />), and reject when no map is on screen or
-  the map rejects the change. FFI's style and query methods reject with a
+- Camera methods throw an `Error` for an invalid argument, such as a zoom that
+  isn't finite. Otherwise they return promises that resolve with whether the
+  camera got there, and reject when no map is on screen or the map rejects the
+  change. FFI's style and query methods reject with a
   <Api of="MaplibreError" />.
-- What goes wrong while the map runs, such as a style that fails to load or
-  content the map rejects, goes to `onMapError`.
+- What goes wrong while the map runs, such as a style that fails to load,
+  content the map rejects, or an invalid `viewportInsets`, goes to
+  `onMapError`.
 - `snapshot()` rejects when the style or a resource it needs fails to load.

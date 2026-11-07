@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
 import {
-  CameraUpdateMode,
   eq,
   fp,
   GeoJsonFeatureCollection,
@@ -250,7 +249,7 @@ export default function contentTest(): void {
     });
 
     it('replaces GeoJSON data in place', 0, async () => {
-      await testMap.controller.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 0 } });
+      await testMap.controller.updateCamera({ zoom: 0 });
       testMap.content = content(TWO, [circles('dots', '#ff0000')]);
       await untilLayers('background,labels,dots');
       const map = requireMap();
@@ -480,7 +479,7 @@ export default function contentTest(): void {
     });
 
     it('replaces the data of a source with options in place', 0, async () => {
-      await testMap.controller.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 0 } });
+      await testMap.controller.updateCamera({ zoom: 0 });
       // The options differ from their defaults, a zoom that the map takes as
       // an integer among them, and too few points cluster to change the count.
       const clustered = (data: GeoJsonFeatureCollection): MapContent => ({
@@ -506,7 +505,7 @@ export default function contentTest(): void {
       fs.writeSync(file.fd, JSON.stringify(THREE));
       fs.closeSync(file);
       try {
-        await testMap.controller.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 0 } });
+        await testMap.controller.updateCamera({ zoom: 0 });
         testMap.content = content(TWO, [circles('dots', '#ff0000')]);
         await untilFeatures(2);
         await markLayer('dots');
@@ -523,7 +522,7 @@ export default function contentTest(): void {
     });
 
     it('takes the same data object, or an equal copy, as unchanged', 0, async () => {
-      await testMap.controller.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 0 } });
+      await testMap.controller.updateCamera({ zoom: 0 });
       testMap.content = content(TWO, [circles('dots', '#ff0000')]);
       await untilFeatures(2);
       // The app replaces the data behind the content's back, which the map

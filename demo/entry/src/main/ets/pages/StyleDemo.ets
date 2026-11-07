@@ -3,7 +3,6 @@ import image from '@ohos.multimedia.image';
 
 import {
   all,
-  cameraToOptions,
   cases,
   CommandCompletion,
   eq,
@@ -265,12 +264,11 @@ export struct StyleDemo {
 
   // A still image of the same style, content, and camera.
   private async takeSnapshot(): Promise<void> {
-    const camera = this.controller.getCamera();
     try {
       const preview = await snapshot({
         style: this.style,
         content: this.content,
-        camera: camera === undefined ? undefined : cameraToOptions(camera),
+        camera: this.controller.getCamera(),
         width: 160,
         height: 120,
       });

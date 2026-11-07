@@ -17,9 +17,7 @@ import util from '@ohos.util';
 import {
   addRuntimeEventListener,
   CameraPosition,
-  cameraToOptions,
-  CameraTransitionOutcome,
-  CameraUpdateMode,
+  CameraTransitionMode,
   ConnectivityMode,
   eq,
   FollowBearing,
@@ -335,7 +333,7 @@ struct PlacedTowardsExample {
         MapPointerPinButton({
           coordinate: PARIS_CENTER,
           onTap: () => {
-            this.controller.updateCamera({ mode: CameraUpdateMode.fly, camera: { center: PARIS_CENTER } })
+            this.controller.updateCamera({ center: PARIS_CENTER }, { mode: CameraTransitionMode.FLY })
               .catch((error: Error) => console.error(error.message));
           },
         }) {
@@ -385,6 +383,7 @@ struct CameraExample {
         // #endregion camera-observable
         Text(this.message)
         Row({ space: 8 }) {
+          Button('Zoom in').onClick(() => this.zoomIn())
           Button('Fit Switzerland').onClick(() => this.fitSwitzerland())
           Button('Look ahead').onClick(() => this.lookAhead())
         }
@@ -393,16 +392,23 @@ struct CameraExample {
     }
   }
 
+  private zoomIn(): void {
+    // #region camera-move
+    this.controller.updateCamera({ zoom: 12 }, { mode: CameraTransitionMode.EASE })
+      .catch((error: Error) => console.error(error.message));
+    // #endregion camera-move
+  }
+
   private fitSwitzerland(): void {
     // #region camera-fit
-    this.controller.fitCameraToLatLngBounds(SWITZERLAND, {
-      mode: CameraUpdateMode.ease,
+    this.controller.fitCameraToBounds(SWITZERLAND, {
+      mode: CameraTransitionMode.EASE,
+      durationMs: 1000,
       // Space around Switzerland for this fit only.
       fitPadding: { top: 24, left: 24, bottom: 24, right: 24 },
-      animation: { durationMs: 1000 },
-    }).then((outcome: CameraTransitionOutcome) => {
+    }).then((completed: boolean) => {
       // A gesture or a later move can stop it first.
-      this.message = outcome === CameraTransitionOutcome.completed ? 'Fitted' : 'Stopped';
+      this.message = completed ? 'Fitted' : 'Stopped';
     }).catch((error: Error) => {
       // No map is on screen, or the map rejected the move.
       this.message = error.message;
@@ -414,13 +420,10 @@ struct CameraExample {
     // #region camera-padding
     // The camera centers in the map below its top 200 vp, which shows more of
     // what lies ahead. The padding stays until a move or a fit changes it.
-    this.controller.updateCamera({
-      mode: CameraUpdateMode.ease,
-      camera: { padding: { top: 200, left: 0, bottom: 0, right: 0 } },
-      animation: { durationMs: 500 },
-    }).catch((error: Error) => {
-      this.message = error.message;
-    });
+    this.controller.updateCamera({ padding: { top: 200 } }, { mode: CameraTransitionMode.EASE, durationMs: 500 })
+      .catch((error: Error) => {
+        this.message = error.message;
+      });
     // #endregion camera-padding
   }
 }
@@ -439,7 +442,7 @@ struct InsetsExample {
       MapLibreMap({
         controller: this.controller,
         style: STYLE,
-        viewportInsets: { top: 0, left: 0, bottom: this.panelHeight, right: 0 },
+        viewportInsets: { bottom: this.panelHeight },
       }) {
         MapFullOverlay()
       }
@@ -470,7 +473,7 @@ export class CameraSavingAbility extends UIAbility {
     const saved = want.parameters?.[SAVED_CAMERA];
     if (typeof saved === 'string') {
       const camera = JSON.parse(saved) as CameraPosition;
-      AppStorageV2.connect(MapController, () => new MapController({ camera: cameraToOptions(camera) }));
+      AppStorageV2.connect(MapController, () => new MapController({ camera: camera }));
     }
   }
 
@@ -711,13 +714,12 @@ struct SnapshotExample {
 // An image of what a MapLibreMap shows: its style, its content, and its camera.
 // #region snapshot-of
 function snapshotOf(controller: MapController, content: MapContent): Promise<image.PixelMap> {
-  const camera = controller.getCamera();
   return snapshot({
     style: STYLE,
     content: content,
     width: 320,
     height: 200,
-    camera: camera === undefined ? undefined : cameraToOptions(camera),
+    camera: controller.getCamera(),
   });
 }
 // #endregion snapshot-of

@@ -1,6 +1,5 @@
 import {
-  CameraTransitionOutcome,
-  CameraUpdateMode,
+  CameraTransitionMode,
   LatLng,
   LatLngBounds,
   MapController,
@@ -59,7 +58,7 @@ struct Index {
           MapLibreMap({
             controller: this.map,
             style: LIBERTY,
-            viewportInsets: { top: 0, left: 0, bottom: this.panelHeight, right: 0 },
+            viewportInsets: { bottom: this.panelHeight },
             onMapError: (error: Error) => {
               this.message = error.message;
             },
@@ -208,80 +207,60 @@ struct Index {
   }
 
   private goHome(): void {
-    this.report(this.map.updateCamera({
-      mode: CameraUpdateMode.fly,
-      camera: { center: EIFFEL_TOWER, zoom: 14 },
-    }));
+    this.report(this.map.updateCamera({ center: EIFFEL_TOWER, zoom: 14 }, { mode: CameraTransitionMode.FLY }));
   }
 
   private jump(): void {
     this.report(this.map.updateCamera({
-      mode: CameraUpdateMode.jump,
-      camera: { center: { latitude: 35.6764, longitude: 139.65 }, zoom: 12, bearing: 0, pitch: 0 },
+      center: { latitude: 35.6764, longitude: 139.65 },
+      zoom: 12,
+      bearing: 0,
+      pitch: 0,
     }));
   }
 
   private fly(): void {
     this.report(this.map.updateCamera({
-      mode: CameraUpdateMode.fly,
-      camera: { center: { latitude: 40.7128, longitude: -74.006 }, zoom: 13, bearing: 30, pitch: 45 },
-      animation: { durationMs: 4000 },
-    }));
+      center: { latitude: 40.7128, longitude: -74.006 },
+      zoom: 13,
+      bearing: 30,
+      pitch: 45,
+    }, { mode: CameraTransitionMode.FLY, durationMs: 4000 }));
   }
 
   private fit(): void {
-    this.report(this.map.fitCameraToLatLngBounds(SWITZERLAND, {
-      mode: CameraUpdateMode.ease,
+    this.report(this.map.fitCameraToBounds(SWITZERLAND, {
+      mode: CameraTransitionMode.EASE,
+      durationMs: 1500,
       fitPadding: { top: 24, left: 24, bottom: 24, right: 24 },
       bearing: 0,
       pitch: 0,
-      animation: { durationMs: 1500 },
     }));
   }
 
   // Flies out from Paris until London shows too, with both pinned.
   private flyOverEurope(): void {
     this.report(this.map.updateCamera({
-      mode: CameraUpdateMode.fly,
-      camera: {
-        center: { latitude: 50.2, longitude: 1.2 },
-        zoom: 5,
-        bearing: 0,
-        pitch: 0,
-      },
-      animation: { durationMs: 5000 },
-    }));
+      center: { latitude: 50.2, longitude: 1.2 },
+      zoom: 5,
+      bearing: 0,
+      pitch: 0,
+    }, { mode: CameraTransitionMode.FLY, durationMs: 5000 }));
   }
 
   // Turns the map, which shows the compass. Tapping it turns the map north.
   private turn(): void {
     const camera = this.map.getCamera();
-    this.report(this.map.updateCamera({
-      mode: CameraUpdateMode.ease,
-      camera: { bearing: (camera?.bearing ?? 0) + 45 },
-      animation: { durationMs: 1000 },
-    }));
+    this.report(this.map.updateCamera({ bearing: (camera?.bearing ?? 0) + 45 },
+      { mode: CameraTransitionMode.EASE, durationMs: 1000 }));
   }
 
-  private report(transition: Promise<CameraTransitionOutcome>): void {
+  private report(transition: Promise<boolean>): void {
     this.message = 'Moving…';
-    transition.then((outcome: CameraTransitionOutcome) => {
-      this.message = `The camera move ${outcomeName(outcome)}`;
+    transition.then((completed: boolean) => {
+      this.message = completed ? 'The camera move completed' : 'The camera move was stopped';
     }).catch((error: Error) => {
       this.message = error.message;
     });
-  }
-}
-
-function outcomeName(outcome: CameraTransitionOutcome): string {
-  switch (outcome) {
-    case CameraTransitionOutcome.completed:
-      return 'completed';
-    case CameraTransitionOutcome.cancelled:
-      return 'was cancelled';
-    case CameraTransitionOutcome.replaced:
-      return 'was replaced';
-    default:
-      return 'ended as the map closed';
   }
 }

@@ -4,7 +4,7 @@
 // no fixes, and it has no compass.
 
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
-import { CameraUpdateMode, FollowBearing, LatLng, MapHandle, StyleLayerInfo } from '@maplibre/arkui';
+import { FollowBearing, LatLng, MapHandle, StyleLayerInfo } from '@maplibre/arkui';
 import {
   BORDER_RADIUS,
   DOT_COLOR,
@@ -135,7 +135,7 @@ export default function locationTest(): void {
     // The map's center is at the camera's.
     beforeEach(async () => {
       await testMap.reset();
-      await testMap.controller.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 10 } });
+      await testMap.controller.updateCamera({ zoom: 10 });
     });
 
     it('draws the indicator at the location, and removes it', 0, async () => {
@@ -188,7 +188,7 @@ export default function locationTest(): void {
       testMap.userLocation = fix(5.5, 6.5);
       await until('the camera reaches the next location', () => restsAt(5.5, 6.5));
       // The zoom applied only as the camera started to follow.
-      await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 9 } });
+      await map.updateCamera({ zoom: 9 });
       testMap.userLocation = fix(5.6, 6.6);
       await until('the camera reaches a third location', () => restsAt(5.6, 6.6));
       expectNear(camera().zoom, 9, 0.001);
@@ -257,7 +257,7 @@ export default function locationTest(): void {
       // change that the app makes.
       map.followUserLocation({ bearing: FollowBearing.course });
       await until('the camera turns to the course', () => restsAt(5.1, 6.1) && near(camera().bearing, 90, 0.001));
-      await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { center: { latitude: 5.2, longitude: 6.2 } } });
+      await map.updateCamera({ center: { latitude: 5.2, longitude: 6.2 } });
       testMap.userHeading = 120;
       await eventually('the arrow turns to the heading', async () =>
         await arrowBearing() === 120 ? true : undefined);
