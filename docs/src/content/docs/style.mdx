@@ -120,17 +120,17 @@ reads: reads leave them out, and writes throw.
 ## What the next style keeps
 
 A new style starts from its own document. It doesn't keep what the app changed
-through the style API or the FFI map, such as a source it added or a property it
-set, and the handles of the last style expire. A new `style` value, a map that
-appears again, and a map that starts again at a new display density each load a
-new style. Make the changes again in `onStyleLoaded`, or declare them as
-content.
+through the style API or the FFI map, such as a source it added, a property it
+set, or feature state, and the handles of the last style expire. A new `style`
+value, a map that appears again, and a map that starts again at a new display
+density each load a new style. Make the changes again in `onStyleLoaded`, or
+declare them as content.
 
-Feature state is the map's, not the style's: a source of the next style with
-the same ID shows the state that the app set, until the app removes it, such
-as with <Api of="GeoJsonSourceHandle.resetFeatureStates" display="resetFeatureStates()" />.
-A map that appears again, or starts again at a new display density, starts
-without it.
+Until MapLibre Native FFI fixes [maplibre-native-ffi#1746], feature state can
+carry over to a source of the next style with the same ID. An app that needs the
+next style's source to start without it calls
+<Api of="GeoJsonSourceHandle.resetFeatureStates" display="resetFeatureStates()" /> in
+`onStyleLoaded`.
 
 ## Query features
 
@@ -165,3 +165,5 @@ content's sources, layers, and images, the camera padding, the camera bounds,
 the runtime's event handler, and the map's event mask.
 
 [TypeScript reference]: https://maplibre.org/maplibre-native-ffi/reference/typescript/
+
+[maplibre-native-ffi#1746]: https://github.com/maplibre/maplibre-native-ffi/issues/1746

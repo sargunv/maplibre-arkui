@@ -213,8 +213,8 @@ export struct StyleDemo {
           onError: (error: MapError) => {
             this.message = error.message;
           },
-          // Each style starts with its buildings as its document has them.
-          // The map keeps the selection's feature state.
+          // Each style starts with its buildings as its document has them,
+          // and the page selects the feature again in it.
           onStyleLoaded: () => {
             this.showBuildings();
             this.findPlaces();
@@ -293,10 +293,15 @@ export struct StyleDemo {
     }
   }
 
+  // Takes the new style's source, and selects the feature again in it.
   private async findPlaces(): Promise<void> {
     this.places = undefined;
     try {
-      this.places = await this.controller.style.getGeoJsonSource('paris');
+      const places = await this.controller.style.getGeoJsonSource('paris');
+      this.places = places;
+      if (places !== undefined && this.selected !== undefined) {
+        await places.setFeatureState(this.selected, SELECTED_STATE);
+      }
     } catch (error) {
       this.message = (error as Error).message;
     }

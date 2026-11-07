@@ -127,13 +127,18 @@ function geoJsonNamed(id: string): Promise<GeoJsonSourceHandle> {
   return eventually(`the style has source ${id}`, () => mapStyle().getGeoJsonSource(id));
 }
 
-// The places as content, in circles that are red while their feature state
-// is selected, and white otherwise.
-function selectableDots(): MapContent {
+// Shows the places as content, in circles that are red while their feature
+// state is selected, and white otherwise, and returns the source's handle.
+// Until maplibre-native-ffi#1746 is fixed, an earlier case's feature state can
+// carry over to the source, so it starts without any.
+async function selectableDots(): Promise<GeoJsonSourceHandle> {
   const color = cases([[toBoolean(featureState('selected')), '#ff0000']], '#ffffff');
   const layer: StyleLayer = { id: 'dots', type: 'circle', source: 'places',
     paint: { 'circle-radius': 12, 'circle-color': color } };
-  return { sources: [{ id: 'places', json: geoJson(PLACES) }], layers: [layer] };
+  testMap.content = { sources: [{ id: 'places', json: geoJson(PLACES) }], layers: [layer] };
+  const source = await geoJsonNamed('places');
+  await source.resetFeatureStates();
+  return source;
 }
 
 // Waits until the screen shows red at `coordinate` of the map, or doesn't.
@@ -551,8 +556,7 @@ export default function styleTest(): void {
     });
 
     it('sets, reads, removes, and resets the feature state of a content source', 0, async () => {
-      testMap.content = selectableDots();
-      const source = await geoJsonNamed('places');
+      const source = await selectableDots();
       const one: Record<string, Object> = { 'selected': true, 'size': 2 };
       expect(await source.setFeatureState(1, one)).assertTrue();
       expect(state(await source.getFeatureState(1))).assertEqual('{"selected":true,"size":2}');
@@ -585,8 +589,7 @@ export default function styleTest(): void {
     });
 
     it('draws a feature state change on an idle map', 0, async () => {
-      testMap.content = selectableDots();
-      const source = await geoJsonNamed('places');
+      const source = await selectableDots();
       const one: LatLng = { latitude: 10, longitude: 20 };
       const two: LatLng = { latitude: -20, longitude: -40 };
       await untilRed(two, false);
@@ -600,9 +603,8 @@ export default function styleTest(): void {
       await untilRed(one, false);
     });
 
-    it('keeps feature state by source ID in a new style, and expires the old handles', 0, async () => {
-      testMap.content = selectableDots();
-      const source = await geoJsonNamed('places');
+    it('expires a source\'s handle with its style, and resets a new style\'s feature state', 0, async () => {
+      const source = await selectableDots();
       const selected: Record<string, Object> = { 'selected': true };
       expect(await source.setFeatureState(1, selected)).assertTrue();
 
@@ -612,7 +614,6 @@ export default function styleTest(): void {
       expect(await source.resetFeatureStates()).assertFalse();
       expect(await source.getFeatureState(1)).assertUndefined();
       const again = await geoJsonNamed('places');
-      expect(state(await again.getFeatureState(1))).assertEqual('{"selected":true}');
       expect(await again.resetFeatureStates()).assertTrue();
       expect(state(await again.getFeatureState(1))).assertEqual('{}');
     });

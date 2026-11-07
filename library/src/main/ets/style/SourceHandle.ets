@@ -29,10 +29,13 @@ import { replaced } from './internal/StyleCommands';
  * Feature state is a set of values by name for each feature of a source,
  * which the `featureState()` expressions of paint properties read, such as to
  * highlight a selected feature. It works on every source, those of the base
- * style and the content too. The map keeps it by the source's ID, and the
- * source layer's name, until the app removes it: a source that replaces this
- * one, or a source of a later style, with the same ID shows it. A change draws
- * on the next frame, even on a map that's idle. A feature state method takes
+ * style and the content too, and lasts until the app removes it or the
+ * source leaves the style. Until MapLibre Native FFI fixes
+ * [maplibre-native-ffi#1746](https://github.com/maplibre/maplibre-native-ffi/issues/1746),
+ * it can carry over to a later source with the same ID, in this style or a
+ * later one; an app that needs a source to start without feature state calls
+ * `resetFeatureStates()` on it, such as in `onStyleLoaded`. A change draws on
+ * the next frame, even on a map that's idle. A feature state method takes
  * the feature's `id`, a number or a string. The map compares IDs as text, so 7
  * and '7' name one feature. It throws an `Error` for a state that
  * `JSON.stringify()` can't write.
