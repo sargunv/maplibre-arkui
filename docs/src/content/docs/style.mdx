@@ -55,16 +55,11 @@ content layer that draws it fails with a `ContentError`.
 Feature state gives a feature of a source values by name, which paint
 properties read with <Api of="featureState" display="featureState()" />, such
 as to highlight the feature that a click selects. It works on every source,
-the base style's and the content's too. A
-<Api of="GeoJsonSourceHandle" />'s
-
-<Api of="GeoJsonSourceHandle.setFeatureState" display="setFeatureState()" />
-
-merges values into a feature's state, and
-
-<Api of="GeoJsonSourceHandle.removeFeatureState" display="removeFeatureState()" />
-
-removes them; a <Api of="VectorSourceHandle" />, from
+the base style's and the content's too. A <Api of="GeoJsonSourceHandle" />'s
+<Api of="GeoJsonSourceHandle.setFeatureState" display="setFeatureState()" /> merges
+values into a feature's state, and its
+<Api of="GeoJsonSourceHandle.removeFeatureState" display="removeFeatureState()" /> removes
+them; a <Api of="VectorSourceHandle" />, from
 <Api of="MapStyle.getVectorSource" display="getVectorSource()" />, does the same
 in one of its source layers. A feature state method takes the feature's ID as
 text, and the change draws on the next frame:
@@ -153,11 +148,9 @@ finds the features of a source in the tiles that it has loaded. Both resolve
 
 ## The FFI map
 
-For what the library doesn't cover yet, such as debug overlays,
-
-<Api of="MapController.withFfiMap" display="withFfiMap()" />
-
-lends a callback the FFI map, a `MapHandle`, and its render session, a
+For what the library doesn't cover yet, such as debug overlays, the
+controller's <Api of="MapController.withFfiMap" display="withFfiMap()" /> lends
+a callback the FFI map, a `MapHandle`, and its render session, a
 `RenderSessionHandle`. Their API is MapLibre Native FFI's: see its [TypeScript
 reference]. Import their types from `@maplibre/native-ffi`, at the version that
 the library depends on. The callback runs at once, so send the map's commands
