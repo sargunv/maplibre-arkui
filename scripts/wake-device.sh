@@ -13,6 +13,20 @@ set -euo pipefail
 device=${1:?usage: wake-device.sh <hdc connect key>}
 hdc=(hdc -t "$device")
 
+# A running lock survives the lock screen resetting the timeout. A reboot
+# releases it. The shell is available before the power service has created
+# this lock, and the command returns success even when it acquired nothing.
+for ((attempt = 0; attempt < 30; attempt++)); do
+  "${hdc[@]}" shell power-shell dump -t >/dev/null
+  if "${hdc[@]}" shell power-shell dump -r | grep -q 'name=PowerMgrKeepOnLock.*state=1'; then
+    break
+  fi
+  if ((attempt == 29)); then
+    echo "error: the emulator didn't acquire its screen running lock" >&2
+    exit 1
+  fi
+  sleep 1
+done
 "${hdc[@]}" shell power-shell wakeup >/dev/null
 layout=/data/local/tmp/wake-device-layout.json
 if "${hdc[@]}" shell "uitest dumpLayout -p $layout >/dev/null && grep -qi screenlock $layout && echo locked" |
@@ -24,6 +38,3 @@ if "${hdc[@]}" shell "uitest dumpLayout -p $layout >/dev/null && grep -qi screen
   height=${size#*x}
   "${hdc[@]}" shell uitest uiInput swipe $((width / 2)) $((height * 5 / 6)) $((width / 2)) $((height / 6)) 800 >/dev/null
 fi
-# Unlocking restores the screen timeout, so override it afterwards. A day
-# keeps a long run awake; a reboot restores the default.
-"${hdc[@]}" shell power-shell timeout -o 86400000 >/dev/null

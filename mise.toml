@@ -158,6 +158,11 @@ run = '''
 device=${usage_device:-$(scripts/ohos-key.sh)}
 abi=$(scripts/device-abi.sh "$device")
 mise run test:build --abi "$abi" --backend "$usage_backend"
+# Recheck the emulator's lock screen after boot services settle during the
+# build; an explicitly named device is left as it is.
+if [[ -z ${usage_device:-} ]]; then
+  scripts/wake-device.sh "$device"
+fi
 scripts/run-tests.sh "$device" "build/test/$abi/entry_test.hap"
 '''
 
