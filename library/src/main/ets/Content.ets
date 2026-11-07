@@ -5,8 +5,6 @@
 
 import {
   CommandCompletion,
-  GeoJsonSourceDataHandle,
-  GeoJsonSourceOptions,
   LatLng,
   MapHandle,
   PremultipliedRgba8Image,
@@ -162,12 +160,11 @@ export interface MapImage {
 }
 
 // A source the reconciler added: its JSON without data, its data, its data as
-// text, and the options that new GeoJSON data takes.
+// text.
 interface AppliedSource {
   shape: string;
   value: Object | undefined;
   data: string;
-  options: GeoJsonSourceOptions;
 }
 
 // A layer the reconciler added: what replaces it when it changes, and the text
@@ -494,7 +491,7 @@ export class ContentReconciler {
         return;
       }
       if (await this.run(generation, `adding source ${source.id}`, map.addStyleSourceJson(source.id, source.json))) {
-        this.sources.set(source.id, { shape: shape, value: value, data: data, options: geoJsonOptions(source.json) });
+        this.sources.set(source.id, { shape: shape, value: value, data: data });
         this.rejectedSources.delete(source.id);
       } else {
         this.rejectedSources.set(source.id, key);
@@ -505,15 +502,14 @@ export class ContentReconciler {
     if (applied.data === data) {
       return;
     }
-    // Only a GeoJSON source's data changed, and its options are those it was
-    // added with.
+    // Only a GeoJSON source's data changed.
     applied.data = data;
     if (typeof value === 'string') {
       await this.run(generation, `setting the URL of source ${source.id}`,
         map.setGeoJsonSourceUrl(source.id, value));
     } else {
       await this.run(generation, `setting the data of source ${source.id}`,
-        setGeoJsonData(map, source.id, value, applied.options));
+        map.setGeoJsonSourceData(source.id, value));
     }
   }
 
@@ -622,41 +618,6 @@ function stackUp(layers: MapLayer[], under: Map<string, MapLayer[]>, stack: MapL
     stackUp(under.get(layer.id) ?? [], under, stack);
     stack.push(layer);
   }
-}
-
-// Replaces a GeoJSON source's data with data prepared with the source's own
-// options, which FFI requires.
-async function setGeoJsonData(map: MapHandle, id: string, data: Object,
-  options: GeoJsonSourceOptions): Promise<CommandCompletion> {
-  const prepared = GeoJsonSourceDataHandle.create(data, options);
-  try {
-    return await map.setGeoJsonSourceData(id, prepared);
-  } finally {
-    prepared.release();
-  }
-}
-
-// The options of a GeoJSON source with this JSON, as MapLibre Native reads
-// them: it truncates the counts and zooms to integers, and the options that
-// the JSON leaves out keep FFI's defaults, which are Native's.
-function geoJsonOptions(json: Record<string, Object>): GeoJsonSourceOptions {
-  const count = (key: string): number | undefined =>
-    typeof json[key] === 'number' ? Math.trunc(json[key] as number) : undefined;
-  const flag = (key: string): boolean | undefined =>
-    typeof json[key] === 'boolean' ? json[key] as boolean : undefined;
-  const minPoints = count('clusterMinPoints');
-  return {
-    minZoom: count('minzoom'),
-    maxZoom: count('maxzoom'),
-    buffer: count('buffer'),
-    tolerance: typeof json['tolerance'] === 'number' ? json['tolerance'] as number : undefined,
-    cluster: flag('cluster'),
-    clusterRadius: count('clusterRadius'),
-    clusterMaxZoom: count('clusterMaxZoom'),
-    clusterMinPoints: minPoints === undefined ? undefined : BigInt(minPoints),
-    clusterProperties: json['clusterProperties'],
-    lineMetrics: flag('lineMetrics'),
-  };
 }
 
 function textOf(value: Object | null | undefined): string {

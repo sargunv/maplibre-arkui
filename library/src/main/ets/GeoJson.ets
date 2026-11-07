@@ -1,7 +1,7 @@
 // GeoJSON types, https://datatracker.ietf.org/doc/html/rfc7946, so ArkTS apps
 // can write GeoJSON as object literals: strict ArkTS accepts an object literal
 // only for a declared type. FFI takes GeoJSON as a plain object, in a source's
-// `data` or in `GeoJsonSourceDataHandle.create()`, and returns it from feature
+// `data` or in `MapHandle.setGeoJsonSourceData()`, and returns it from feature
 // queries. These types only describe it; nothing converts it.
 
 /** A longitude and a latitude, in that order, and an optional altitude. */

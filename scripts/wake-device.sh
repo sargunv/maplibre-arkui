@@ -14,8 +14,6 @@ device=${1:?usage: wake-device.sh <hdc connect key>}
 hdc=(hdc -t "$device")
 
 "${hdc[@]}" shell power-shell wakeup >/dev/null
-# A day, so a long run doesn't sleep. A reboot restores the default.
-"${hdc[@]}" shell power-shell timeout -o 86400000 >/dev/null
 layout=/data/local/tmp/wake-device-layout.json
 if "${hdc[@]}" shell "uitest dumpLayout -p $layout >/dev/null && grep -qi screenlock $layout && echo locked" |
   grep -q locked; then
@@ -26,3 +24,6 @@ if "${hdc[@]}" shell "uitest dumpLayout -p $layout >/dev/null && grep -qi screen
   height=${size#*x}
   "${hdc[@]}" shell uitest uiInput swipe $((width / 2)) $((height * 5 / 6)) $((width / 2)) $((height / 6)) 800 >/dev/null
 fi
+# Unlocking restores the screen timeout, so override it afterwards. A day
+# keeps a long run awake; a reboot restores the default.
+"${hdc[@]}" shell power-shell timeout -o 86400000 >/dev/null

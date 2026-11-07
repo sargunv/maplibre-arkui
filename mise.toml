@@ -19,7 +19,7 @@ auto_install_disable_tools = ["ohos-sdk", "http:oniro-emulator"]
 # FFI isn't on OHPM in the form this library needs, so `ffi:download` fetches
 # the packages that FFI's CI packed at this commit, and `ffi:pack` packs them
 # from a checkout. See AGENTS.md.
-ffi_commit = "5c4c9084ab442ed62e48c6ced764396eae2cdc80"
+ffi_commit = "b813912956cc8b85507cd9aceafcfaa3a46398e4"
 # Oniro publishes its emulator image against the matching OpenHarmony release.
 # Keep the SDK and emulator on the same version.
 ohos_sdk_version = "7.0"

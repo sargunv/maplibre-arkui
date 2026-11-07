@@ -385,7 +385,11 @@ export class MapView extends XComponentController implements GestureTarget {
   applyCameraDelta(delta: CameraDelta): void {
     const map = this.map;
     if (map === undefined) {
-      delta.animation?.endHandler?.callback?.({ outcome: CameraTransitionOutcome.closed, generation: BigInt(0) });
+      delta.animation?.endHandler?.callback?.({
+        outcome: CameraTransitionOutcome.closed,
+        generation: BigInt(0),
+        velocity: { pan: { x: 0, y: 0 }, zoom: 0, bearing: 0, pitch: 0 },
+      });
       return;
     }
     map.discarding.applyCameraDelta(delta);

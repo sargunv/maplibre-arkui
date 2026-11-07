@@ -187,11 +187,14 @@ export default function expressionsTest(): void {
       const gray = round(call('at', 0, call('to-rgba', lab)));
       expect(evaluate(gray, NUMBER, withFeature({ 't': 0.5 }))).assertEqual('119');
       expect(evaluate(rgba(255, 0, 0, 0.5), COLOR)).assertEqual('["rgba",255,0,0,0.5]');
-      // A string is a color in CSS syntax, with alpha last. MapLibre keeps
-      // colors premultiplied, so red comes back as 254.99998….
-      const translucent = evaluate(new Expression('#ff000080'), COLOR);
-      expect(translucent.startsWith('["rgba",254.99')).assertTrue();
-      expect(translucent.endsWith(',0,0,0.5]')).assertTrue();
+      // A string is a color in CSS syntax, with alpha last. Allow for
+      // floating-point roundoff when Native unpremultiplies the channels.
+      const translucent = JSON.parse(evaluate(new Expression('#ff000080'), COLOR)) as Object[];
+      expect(translucent[0]).assertEqual('rgba');
+      expectNear(translucent[1] as number, 255, 0.0001);
+      expect(translucent[2]).assertEqual(0);
+      expect(translucent[3]).assertEqual(0);
+      expectNear(translucent[4] as number, 128 / 255, 0.000001);
       expect(evaluate(toColor(get('c'), '#00f'), COLOR, withFeature({ 'c': 'nope' })))
         .assertEqual('["rgba",0,0,255,1]');
     });
