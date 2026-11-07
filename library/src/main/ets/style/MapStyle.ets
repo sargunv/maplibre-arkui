@@ -101,11 +101,12 @@ export interface MapStyle {
   removeImage(id: string): Promise<boolean>;
 
   /**
-   * The style's global state properties by name, which `globalState()`
-   * expressions read: the defaults of the style's `state`, with the values set
-   * since. It leaves out the library's, and those whose value is null.
+   * The value of the style's global state property `name`, which
+   * `globalState()` expressions read: the default of the style's `state`, or
+   * the value set since. It resolves undefined when the property has none, or
+   * its value is null, and for a name of the library.
    */
-  getGlobalState(): Promise<Record<string, Object> | undefined>;
+  getGlobalStateProperty(name: string): Promise<Object | undefined>;
 
   /**
    * Sets the global state property `name`, which `globalState()` expressions
@@ -135,10 +136,12 @@ export interface MapStyle {
   getLightProperty(name: string): Promise<Object | undefined>;
 
   /**
-   * Replaces the style's light with `light`, as the style spec's `light`
-   * writes it. The properties that it leaves out take their defaults.
+   * Sets the style's light property `name`, as `getLightProperty()` names
+   * them, to `value`, as the style spec writes it. `null` restores the
+   * property's default. It rejects when the map rejects the value, such as one
+   * of the wrong type, or a property that the light doesn't have.
    */
-  setLight(light: Record<string, Object>): Promise<boolean>;
+  setLightProperty(name: string, value: Object | null): Promise<boolean>;
 }
 
 /** How the style's properties change to a new value, for `MapStyle.setTransition()`. */

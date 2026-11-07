@@ -27,6 +27,13 @@ export function checkOwned(owned: boolean, kind: string, id: string): void {
   }
 }
 
+// The value that a write of a property sends: MapLibre Native takes no null
+// for a transition, but an empty one is its default.
+export function propertyValue(name: string, value: Object | null): Object | null {
+  const empty: Record<string, Object> = {};
+  return value === null && name.endsWith('-transition') ? empty : value;
+}
+
 function failed(what: string, error: Error): Error {
   return new Error(`Style: ${what} failed: ${error.message}`);
 }

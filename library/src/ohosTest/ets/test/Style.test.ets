@@ -325,9 +325,7 @@ export default function styleTest(): void {
         () => mapStyle().addSource({ id: 'maplibre-arkui-places', json: geoJson(PLACES) }));
       expectThrow('maplibre-arkui-pin', () => mapStyle().setImage({ id: 'maplibre-arkui-pin', image: pin }));
       expectThrow('maplibre-arkui:font-scale', () => mapStyle().setGlobalStateProperty('maplibre-arkui:font-scale', 2));
-      const state = await mapStyle().getGlobalState();
-      expect(state === undefined || Object.keys(state).some((name: string) => name.startsWith('maplibre-arkui')))
-        .assertFalse();
+      expect(await mapStyle().getGlobalStateProperty('maplibre-arkui:font-scale')).assertUndefined();
       pin.release();
     });
 
@@ -336,7 +334,7 @@ export default function styleTest(): void {
       expect(await unused.getSource('places')).assertUndefined();
       expect(await unused.getSources()).assertUndefined();
       expect(await unused.getLayers()).assertUndefined();
-      expect(await unused.getGlobalState()).assertUndefined();
+      expect(await unused.getGlobalStateProperty('mode')).assertUndefined();
       expect(await unused.getTransition()).assertUndefined();
       expect(await unused.getLightProperty('anchor')).assertUndefined();
       expect(await unused.addSource({ id: 'places', json: geoJson(PLACES) })).assertUndefined();
@@ -346,7 +344,7 @@ export default function styleTest(): void {
       expect(await unused.removeImage('pin')).assertFalse();
       expect(await unused.setGlobalStateProperty('mode', 'night')).assertFalse();
       expect(await unused.setTransition({ durationMs: 0 })).assertFalse();
-      expect(await unused.setLight({ 'intensity': 0.5 })).assertFalse();
+      expect(await unused.setLightProperty('intensity', 0.5)).assertFalse();
 
       // The handles of a map that left.
       const background = await layerNamed('background');
@@ -371,7 +369,7 @@ export default function styleTest(): void {
       expect(await background.getProperty('background-opacity')).assertUndefined();
       expect(await background.setProperty('background-opacity', 0.5)).assertFalse();
       expect(await mapStyle().getSource('extra')).assertUndefined();
-      expect((await mapStyle().getGlobalState())?.['mode']).assertEqual('day');
+      expect(await mapStyle().getGlobalStateProperty('mode')).assertEqual('day');
       expect((await mapStyle().getTransition())?.durationMs).assertEqual(300);
       expect(await (await layerNamed('background')).getProperty('background-opacity')).assertUndefined();
     });
@@ -482,15 +480,15 @@ export default function styleTest(): void {
 
     it('restores a global state property\'s default with null', 0, async () => {
       await testMap.reset(BASE);
-      expect((await mapStyle().getGlobalState())?.['mode']).assertEqual('day');
+      expect(await mapStyle().getGlobalStateProperty('mode')).assertEqual('day');
       expect(await mapStyle().setGlobalStateProperty('mode', 'night')).assertTrue();
-      expect((await mapStyle().getGlobalState())?.['mode']).assertEqual('night');
+      expect(await mapStyle().getGlobalStateProperty('mode')).assertEqual('night');
       expect(await mapStyle().setGlobalStateProperty('mode', null)).assertTrue();
-      expect((await mapStyle().getGlobalState())?.['mode']).assertEqual('day');
+      expect(await mapStyle().getGlobalStateProperty('mode')).assertEqual('day');
       expect(await mapStyle().setGlobalStateProperty('size', 2)).assertTrue();
-      expect((await mapStyle().getGlobalState())?.['size']).assertEqual(2);
+      expect(await mapStyle().getGlobalStateProperty('size')).assertEqual(2);
       expect(await mapStyle().setGlobalStateProperty('size', null)).assertTrue();
-      expect((await mapStyle().getGlobalState())?.['size']).assertUndefined();
+      expect(await mapStyle().getGlobalStateProperty('size')).assertUndefined();
     });
 
     it('reads back the transition and the light that it sets', 0, async () => {
@@ -502,9 +500,17 @@ export default function styleTest(): void {
         .assertEqual('{"durationMs":120,"delayMs":30,"placementTransitions":false}');
       expectThrow('-1', () => mapStyle().setTransition({ durationMs: -1 }));
 
-      expect(await mapStyle().setLight({ 'anchor': 'map', 'intensity': 0.25 })).assertTrue();
+      expect(await mapStyle().setLightProperty('anchor', 'map')).assertTrue();
+      expect(await mapStyle().setLightProperty('intensity', 0.25)).assertTrue();
       expect(await mapStyle().getLightProperty('anchor')).assertEqual('map');
       expect(await mapStyle().getLightProperty('intensity')).assertEqual(0.25);
+      expect(await mapStyle().setLightProperty('intensity', null)).assertTrue();
+      expect(await mapStyle().getLightProperty('intensity')).assertUndefined();
+      expect(await mapStyle().getLightProperty('anchor')).assertEqual('map');
+      const transition: Record<string, Object> = { 'duration': 500, 'delay': 0 };
+      expect(await mapStyle().setLightProperty('intensity-transition', transition)).assertTrue();
+      expect(await mapStyle().setLightProperty('intensity-transition', null)).assertTrue();
+      expect(await rejection(mapStyle().setLightProperty('intensity', 'bright'))).assertContain('intensity');
     });
   });
 }

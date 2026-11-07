@@ -68,8 +68,10 @@ change to a property changes what layers draw without a new content value.
 
 <Api of="MapStyle.setTransition" display="setTransition()" /> sets how long the
 style's properties take to change, and
-<Api of="MapStyle.setLight" display="setLight()" /> replaces the light, as the
-style spec writes it.
+<Api of="MapStyle.setLightProperty" display="setLightProperty()" /> sets a
+property of the light, as the style spec writes it. Like a layer's
+`setProperty()` and `setGlobalStateProperty()`, it takes `null` to restore the
+property's default.
 
 ## Who owns an ID
 

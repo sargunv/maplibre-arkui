@@ -17,7 +17,7 @@ import { MapStyle, StyleTransitionOptions } from '../MapStyle';
 import { GeoJsonSourceHandle, ImageSourceHandle, SourceHandle } from '../SourceHandle';
 import { LayerKey, SourceKey } from './HandleKeys';
 import { LoadedStyle } from './LoadedStyle';
-import { checkId, checkOwned, read, RESERVED, reservedId, reservedName, write } from './StyleCommands';
+import { checkId, checkOwned, propertyValue, read, RESERVED, reservedId, reservedName, write } from './StyleCommands';
 
 // MapLibre Native's transition when the style sets none.
 const DEFAULT_TRANSITION_MS = 300;
@@ -132,23 +132,14 @@ export class StyleApi implements MapStyle {
     return write(() => this.current() === style, `removing image ${id}`, () => style.map.removeStyleImage(id));
   }
 
-  getGlobalState(): Promise<Record<string, Object> | undefined> {
+  getGlobalStateProperty(name: string): Promise<Object | undefined> {
     const style = this.current();
-    if (style === undefined) {
+    if (style === undefined || reservedName(name)) {
       return Promise.resolve(undefined);
     }
-    return read(() => this.current() === style, 'reading the global state', () => style.map.getGlobalState() as Promise<Object>,
-      (value: Object): Record<string, Object> => {
-        const all = value as Record<string, Object | null>;
-        const state: Record<string, Object> = {};
-        for (const name of Object.keys(all)) {
-          const property = all[name];
-          if (!reservedName(name) && property !== null) {
-            state[name] = property;
-          }
-        }
-        return state;
-      });
+    return read(() => this.current() === style, `reading global state ${name}`,
+      () => style.map.getGlobalState() as Promise<Object>,
+      (value: Object): Object | undefined => (value as Record<string, Object | null>)[name] ?? undefined);
   }
 
   setGlobalStateProperty(name: string, value: Object | null): Promise<boolean> {
@@ -201,12 +192,13 @@ export class StyleApi implements MapStyle {
       () => style.map.getStyleLightProperty(name) as Promise<Object | undefined>, (value: Object | undefined): Object | undefined => value);
   }
 
-  setLight(light: Record<string, Object>): Promise<boolean> {
+  setLightProperty(name: string, value: Object | null): Promise<boolean> {
     const style = this.current();
     if (style === undefined) {
       return Promise.resolve(false);
     }
-    return write(() => this.current() === style, 'setting the light', () => style.map.setStyleLightJson(light));
+    return write(() => this.current() === style, `setting ${name} of the light`,
+      () => style.map.setStyleLightProperty(name, propertyValue(name, value)));
   }
 
   private findSource(id: string, style: LoadedStyle | undefined = this.current()): Promise<SourceHandle | undefined> {

@@ -1,6 +1,6 @@
 import { LayerSummary } from '../content/StyleLayer';
 import { LayerKey } from './internal/HandleKeys';
-import { checkOwned, read, write } from './internal/StyleCommands';
+import { checkOwned, propertyValue, read, write } from './internal/StyleCommands';
 
 // The properties that a layer keeps for its life.
 const FIXED_PROPERTIES = ['id', 'type', 'source', 'source-layer'];
@@ -78,11 +78,7 @@ export class LayerHandle implements LayerSummary {
       return Promise.resolve(false);
     }
     checkOwned(key.style.reconciler.ownsLayer(this.id), 'layer', this.id);
-    // MapLibre Native takes no null for a transition, but an empty one is its
-    // default.
-    const empty: Record<string, Object> = {};
-    const sent: Object | null = value === null && name.endsWith('-transition') ? empty : value;
     return write(() => key.holds(), `setting ${name} of layer ${this.id}`,
-      () => key.style.map.setStyleLayerProperty(this.id, name, sent));
+      () => key.style.map.setStyleLayerProperty(this.id, name, propertyValue(name, value)));
   }
 }
