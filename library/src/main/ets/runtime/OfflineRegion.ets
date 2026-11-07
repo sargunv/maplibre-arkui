@@ -32,23 +32,23 @@ export interface OfflineRegionDefinition {
 /** How much of an offline region has downloaded. */
 export interface OfflineRegionStatus {
   /** Whether the region is downloading, from `startDownload()` until `pauseDownload()`. */
-  downloading: boolean;
+  readonly downloading: boolean;
   /** Whether the region holds every resource that it needs. */
-  complete: boolean;
+  readonly complete: boolean;
   /** The resources downloaded so far, tiles included. */
-  completedResourceCount: number;
+  readonly completedResourceCount: number;
   /** The resources that the region needs, tiles included; only a lower bound until `requiredResourceCountPrecise`. */
-  requiredResourceCount: number;
+  readonly requiredResourceCount: number;
   /** Whether `requiredResourceCount` is exact. */
-  requiredResourceCountPrecise: boolean;
+  readonly requiredResourceCountPrecise: boolean;
   /** The size of the downloaded resources, tiles included. */
-  completedResourceBytes: number;
+  readonly completedResourceBytes: number;
   /** The tiles downloaded so far. */
-  completedTileCount: number;
+  readonly completedTileCount: number;
   /** The tiles that the region needs. */
-  requiredTileCount: number;
+  readonly requiredTileCount: number;
   /** The size of the downloaded tiles. */
-  completedTileBytes: number;
+  readonly completedTileBytes: number;
 }
 
 /**

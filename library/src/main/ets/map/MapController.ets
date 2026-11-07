@@ -371,15 +371,15 @@ export interface RenderedFeatureQueryOptions {
  */
 export interface RenderedFeature {
   /** The feature, with the geometry as the layer drew it. */
-  feature: GeoJsonFeature;
+  readonly feature: GeoJsonFeature;
   /** The ID of the layer that drew the feature. */
-  layerId: string;
+  readonly layerId: string;
   /** The ID of the feature's source. */
-  sourceId: string;
+  readonly sourceId: string;
   /** The layer of a vector source that the feature is in, or undefined for a source without layers. */
-  sourceLayer?: string;
+  readonly sourceLayer: string | undefined;
   /** The feature's state, by name. Empty for a feature without state. */
-  state: Record<string, Object>;
+  readonly state: Record<string, Object>;
 }
 
 /** Which features `MapController.querySourceFeatures()` finds. */
@@ -396,9 +396,9 @@ export interface SourceFeatureQueryOptions {
  */
 export interface SourceFeature {
   /** The feature, with the geometry as its tiles hold it. */
-  feature: GeoJsonFeature;
+  readonly feature: GeoJsonFeature;
   /** The layer of a vector source that the feature is in, or undefined for a source without layers. */
-  sourceLayer?: string;
+  readonly sourceLayer: string | undefined;
 }
 
 // The start camera, with MapLibre's defaults for the fields that `update`

@@ -10,7 +10,7 @@ export interface OffscreenMarkerAngleEvent {
    * The direction from the oval's center towards the coordinate, in degrees
    * clockwise from up: at least 0, and less than 360.
    */
-  angle: number;
+  readonly angle: number;
 }
 
 // Where content placed towards a coordinate goes: a point on the edge of the

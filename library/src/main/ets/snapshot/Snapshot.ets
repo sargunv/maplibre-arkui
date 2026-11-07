@@ -96,14 +96,14 @@ export interface MapSnapshot {
    * rounded up to a whole pixel, in the premultiplied `RGBA_8888` format. The
    * caller owns it: release it once nothing shows it.
    */
-  image: image.PixelMap;
+  readonly image: image.PixelMap;
   /**
    * The attribution of the style's sources, as HTML, without repeats, in the
    * order the style lists them, as `MapController.attributions` gives it. Show
    * it with the image, as the sources' terms usually require, such as with
    * `AttributionText`.
    */
-  attributions: string[];
+  readonly attributions: string[];
 }
 
 /**

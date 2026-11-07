@@ -310,17 +310,29 @@ only read or called by callers.
   [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#8-types-the-library-creates)
 - Give a class that only the library creates a constructor that takes a
   parameter of an internal type, so apps can't construct it.
+- Make their fields `readonly` and always present: write a field that may have
+  no value as `T | undefined`, not with `?`. Keep `?` for the fields that
+  callers write, as §5's options are. A type that callers also write, such as a
+  camera that they pass in and the library reports, stays writable. GeoJSON's
+  types are exempt: callers write them too, and their spec is closed.
 - When state can change outside the caller's control, and the caller can't check
   it first without a race, return `undefined` from reads, and resolve `false`
   from writes, instead of throwing.
   [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#3-general-api-design)
 
 ```ets
-export interface MapClickEvent {
-  /** The coordinate under the click. */
-  coordinate: LatLng;
-  /** The click's position on the map. */
-  point: ScreenPoint;
+// Do
+export interface RenderedFeature {
+  /** The ID of the layer that drew the feature. */
+  readonly layerId: string;
+  /** The layer of a vector source that the feature is in, or undefined for a source without layers. */
+  readonly sourceLayer: string | undefined;
+}
+
+// Don't
+export interface RenderedFeature {
+  layerId: string;
+  sourceLayer?: string;
 }
 ```
 

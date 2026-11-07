@@ -9,19 +9,19 @@ export interface FrameRenderedEvent {
    * Whether the frame drew everything that the view needs, or drew before
    * some tiles or images had loaded.
    */
-  complete: boolean;
+  readonly complete: boolean;
   /** Whether the map needs another frame to finish what this one started, such as a fade. */
-  needsRepaint: boolean;
+  readonly needsRepaint: boolean;
   /** Whether the symbols moved or changed in this frame. */
-  placementChanged: boolean;
+  readonly placementChanged: boolean;
   /** How long the frame took to encode, in milliseconds. */
-  encodingTimeMs: number;
+  readonly encodingTimeMs: number;
   /** How long the frame took to render, in milliseconds. */
-  renderingTimeMs: number;
+  readonly renderingTimeMs: number;
   /** The frames that the map has drawn, with this one. */
-  frameCount: number;
+  readonly frameCount: number;
   /** The draw calls of this frame. */
-  drawCallCount: number;
+  readonly drawCallCount: number;
   /** The draw calls of every frame that the map has drawn, with this one. */
-  totalDrawCallCount: number;
+  readonly totalDrawCallCount: number;
 }

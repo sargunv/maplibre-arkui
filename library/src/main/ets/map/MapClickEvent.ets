@@ -9,7 +9,7 @@ export interface MapClickEvent {
    * 180, so it names the copy of the world that the click is in, as
    * `Viewport.unproject()` does.
    */
-  coordinate: LatLng;
+  readonly coordinate: LatLng;
   /** The click's position on the map, as `MapController.queryRenderedFeatures()` takes it. */
-  point: ScreenPoint;
+  readonly point: ScreenPoint;
 }
