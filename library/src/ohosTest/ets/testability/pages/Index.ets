@@ -74,6 +74,20 @@ struct Index {
   }
 
   @Builder
+  clickableMarker() {
+    Marker({ coordinate: testMap.clickableMarker! }) {
+      Column()
+        .id('clickable-marker')
+        .width(20)
+        .height(10)
+        .backgroundColor(Color.Red)
+        .onClick(() => {
+          testMap.markerClicks++;
+        })
+    }
+  }
+
+  @Builder
   box(id: string) {
     Column()
       .id(id)
@@ -182,6 +196,10 @@ struct Index {
     .height('100%')
     .padding(testMap.placementPadding)
     .hitTestBehavior(HitTestMode.Transparent)
+    // Straight in the overlay, so its content keeps taps from the map.
+    if (testMap.clickableMarker !== undefined) {
+      this.clickableMarker()
+    }
   }
 
   build() {

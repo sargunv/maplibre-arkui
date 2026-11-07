@@ -346,9 +346,6 @@ export struct MaplibreMap {
     .height('100%')
     .clip(true)
     .id(this.scope.key)
-    .onAreaChange((old: Area, area: Area) => {
-      this.scope.origin = { x: area.globalPosition.x as number, y: area.globalPosition.y as number };
-    })
   }
 
   private panFingers(): number {

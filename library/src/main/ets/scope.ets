@@ -9,7 +9,6 @@
 
 import { FrameCallback } from '@ohos.arkui.UIContext';
 
-import { ScreenPoint } from './Geometry';
 import { Insets, NO_INSETS } from './Insets';
 import { logError } from './log';
 import { MapController } from './MapController';
@@ -26,9 +25,6 @@ export class MapScope {
   // The map's viewport insets in vp, the edges that the app's UI covers, which
   // the overlay presets keep their controls clear of.
   @Trace insets: Insets = NO_INSETS;
-  // Where the map's top-left corner is on the page, so a placement anywhere in
-  // the overlay can find the map's points in its own frame.
-  @Trace origin: ScreenPoint = { x: 0, y: 0 };
 
   constructor(key: string) {
     this.key = key;

@@ -168,7 +168,7 @@ function parseLength(text: string): LengthMetrics | undefined {
   }
 }
 
-function lengthInVp(length: LengthMetrics, scales: LengthScales): number {
+export function lengthInVp(length: LengthMetrics, scales: LengthScales): number {
   switch (length.unit) {
     case LengthUnit.VP:
       return length.value;

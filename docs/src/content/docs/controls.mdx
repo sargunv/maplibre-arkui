@@ -59,18 +59,21 @@ nothing. The logo is the exception: it works anywhere.
 
 <Api of="Marker" /> puts its content on a coordinate and moves it with the map.
 Its `alignment` picks the point of the content that sits on the coordinate;
-`Alignment.Bottom` stands a label on it:
+`Alignment.Bottom` stands a label on it. The marker is the size of its content,
+so taps beside it reach the map. Chain attributes such as `.onClick()` on the
+content rather than on the marker:
 
-<Code code={region(examples, "placed-at")} lang="ts" />
+<Code code={region(examples, "marker")} lang="ts" />
 
 ## Point to a coordinate off the screen
 
 <Api of="PointerPinButton" /> shows a pin on an oval inside the map that points
 towards a coordinate off the screen, and hides while the coordinate is inside
-the oval. Its `label` is what screen readers read for it. Pad its parent to move
-the oval in from the map's edges:
+the oval. Its `label` is what screen readers read for it. The oval fills the
+content box of its parent, so size the parent to the map and pad it to move the
+oval in from the map's edges:
 
-<Code code={region(examples, "placed-towards")} lang="ts" />
+<Code code={region(examples, "offscreen-marker")} lang="ts" />
 
 To draw your own pointer, put it in <Api of="OffscreenMarker" />, whose
 `onAngleChange` gives the direction to turn it.

@@ -90,6 +90,10 @@ export class TestMap {
   // A PointerPinButton towards this coordinate, and how often it was tapped.
   @Trace pointerPin: LatLng | undefined = undefined;
   pointerPinTaps: number = 0;
+  // A Marker at this coordinate whose content has an onClick, and how often
+  // it was clicked.
+  @Trace clickableMarker: LatLng | undefined = undefined;
+  markerClicks: number = 0;
   // The padding of the Stack that holds the placements.
   @Trace placementPadding: number = 0;
   @Trace userLocation: geoLocationManager.Location | undefined = undefined;
@@ -177,6 +181,8 @@ export class TestMap {
     this.placedTowardsAngles = [];
     this.pointerPin = undefined;
     this.pointerPinTaps = 0;
+    this.clickableMarker = undefined;
+    this.markerClicks = 0;
     this.placementPadding = 0;
     this.userLocation = undefined;
     this.userHeading = undefined;

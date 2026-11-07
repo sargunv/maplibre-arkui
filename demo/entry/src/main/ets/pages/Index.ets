@@ -91,6 +91,8 @@ struct Index {
                   .fillColor($r('sys.color.icon_primary'))
               }
             }
+            .width('100%')
+            .height('100%')
             .padding({ bottom: this.panelHeight })
             .hitTestBehavior(HitTestMode.Transparent)
           }

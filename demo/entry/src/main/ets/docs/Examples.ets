@@ -307,36 +307,42 @@ struct CustomControlsExample {
 }
 
 @ComponentV2
-struct PlacedAtExample {
+struct MarkerExample {
   private controller: MapController = new MapController({ camera: { center: PARIS_CENTER, zoom: 11 } });
 
   build() {
-    // #region placed-at
+    // #region marker
     MaplibreMap({ style: STYLE, controller: this.controller }) {
       DefaultControls()
       Marker({ coordinate: PARIS_CENTER, alignment: Alignment.Bottom }) {
+        // Attributes such as onClick go on the content, not on the marker.
         Text('Paris')
           .padding(6)
           .margin({ bottom: 4 })
           .borderRadius(6)
           .backgroundColor(Color.White)
+          .onClick(() => {
+            this.controller.updateCamera({ center: PARIS_CENTER, zoom: 13 }, { mode: CameraTransitionMode.EASE })
+              .catch((error: Error) => console.error(error.message));
+          })
       }
     }
-    // #endregion placed-at
+    // #endregion marker
   }
 }
 
 @ComponentV2
-struct PlacedTowardsExample {
+struct OffscreenMarkerExample {
   private controller: MapController = new MapController({
     camera: { center: { latitude: 51.5072, longitude: -0.1276 }, zoom: 9 },
   });
 
   build() {
-    // #region placed-towards
+    // #region offscreen-marker
     MaplibreMap({ style: STYLE, controller: this.controller }) {
       DefaultControls()
-      // The pin moves along an oval 48 vp in from the map's edges.
+      // The pin moves along an oval 48 vp in from the map's edges: the content
+      // box of its parent, which covers the map.
       Stack() {
         PointerPinButton({
           coordinate: PARIS_CENTER,
@@ -350,10 +356,12 @@ struct PlacedTowardsExample {
             .fontWeight(FontWeight.Bold)
         }
       }
+      .width('100%')
+      .height('100%')
       .padding(48)
       .hitTestBehavior(HitTestMode.Transparent)
     }
-    // #endregion placed-towards
+    // #endregion offscreen-marker
   }
 }
 
@@ -866,11 +874,11 @@ export struct DocExamples {
           CustomControlsExample()
         }.tabBar('Controls')
         TabContent() {
-          PlacedAtExample()
-        }.tabBar('Placed at')
+          MarkerExample()
+        }.tabBar('Marker')
         TabContent() {
-          PlacedTowardsExample()
-        }.tabBar('Placed towards')
+          OffscreenMarkerExample()
+        }.tabBar('Offscreen marker')
         TabContent() {
           CameraExample()
         }.tabBar('Camera')
