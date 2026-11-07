@@ -1,27 +1,20 @@
 // What runs on a runtime without a map on the page: snapshots, resource
-// requests, and offline regions.
+// requests, offline regions, and the runtimes themselves.
 
 import { describe, expect, it } from '@ohos/hypium';
 import {
-  addRuntimeEventListener,
   GeoJsonGeometry,
-  getDefaultRuntime,
   MapContent,
+  MapResourceError,
+  MapResourceErrorReason,
+  MapResourceLoadRequest,
+  MapResourceProvider,
+  MapResourceRequest,
+  MapResourceResponse,
+  MapRuntime,
+  MapRuntimeOptions,
   OfflineRegionDefinition,
-  OfflineRegionDownloadState,
-  OfflineRegionStatus,
-  removeRuntimeEventListener,
-  ResourceErrorReason,
-  ResourceKind,
-  ResourceRequestHandle,
-  ResourceRequestInfo,
-  ResourceResponseStatus,
-  ResourceTransformRequestHandle,
-  RuntimeEvent,
-  RuntimeEventFlag,
   renderSnapshot,
-  RuntimeHandle,
-  UrlMatchFlag,
 } from '@maplibre/arkui';
 
 import application from '@ohos.app.ability.application';
@@ -30,53 +23,63 @@ import fs from '@ohos.file.fs';
 import util from '@ohos.util';
 
 import { STYLE, STYLE_JSON, styleDocument } from '../testability/TestMaps';
-import { expectNear, pixelAt, readPixels, settled } from './helpers';
+import { expectNear, pixelAt, readPixels, until } from './helpers';
 
 // A style that the cases' resource provider serves.
 const APP_STYLE = 'app://styles/test.json';
 
-// Gives `use` a runtime of its own, with a cache file that no other case uses,
-// and deletes the file after.
-async function withRuntime(name: string, use: (runtime: RuntimeHandle) => Promise<void>): Promise<void> {
-  const path = `${application.getApplicationContext().cacheDir}/${name}-${Date.now()}.db`;
-  const runtime = await RuntimeHandle.create({ cachePath: path });
-  try {
-    await use(runtime);
-  } finally {
-    await runtime.release();
-    for (const file of [path, `${path}-journal`, `${path}-wal`, `${path}-shm`]) {
-      if (fs.accessSync(file)) {
-        fs.unlinkSync(file);
-      }
+// A cache file that no other case uses.
+function cachePath(name: string): string {
+  return `${application.getApplicationContext().cacheDir}/${name}-${Date.now()}.db`;
+}
+
+function deleteCache(path: string): void {
+  for (const file of [path, `${path}-journal`, `${path}-wal`, `${path}-shm`]) {
+    if (fs.accessSync(file)) {
+      fs.unlinkSync(file);
     }
   }
 }
 
-// Serves the test style at APP_STYLE, and records what it served.
-function serveStyle(runtime: RuntimeHandle, served: string[]): void {
-  runtime.discarding.setResourceProvider({
-    routes: [{ flags: UrlMatchFlag.glob, url: 'app://**' }],
-    callback: (request: ResourceRequestInfo, handle: ResourceRequestHandle) => {
-      served.push(request.requestedUrl);
-      if (request.requestedUrl === APP_STYLE) {
-        handle.complete({ status: ResourceResponseStatus.ok, bytes: new util.TextEncoder().encodeInto(STYLE_JSON) });
-      } else {
-        handle.complete({ status: ResourceResponseStatus.error, errorReason: ResourceErrorReason.notFound });
-      }
-    },
+// Gives `use` a runtime of its own with `options`, on a cache file that no
+// other case uses, and releases it and deletes the file after.
+async function withRuntime(name: string, options: MapRuntimeOptions,
+  use: (runtime: MapRuntime) => Promise<void>): Promise<void> {
+  const path = cachePath(name);
+  const runtime = new MapRuntime({
+    cachePath: path,
+    resourceProvider: options.resourceProvider,
+    rewriteUrl: options.rewriteUrl,
   });
+  try {
+    await use(runtime);
+  } finally {
+    await runtime.release();
+    deleteCache(path);
+  }
+}
+
+// Serves the test style at APP_STYLE, records what it served, and finds no
+// other app:// resource.
+function styleProvider(served: string[]): MapResourceProvider {
+  return {
+    urlPatterns: ['app://**'],
+    load: async (request: MapResourceLoadRequest): Promise<MapResourceResponse | undefined> => {
+      served.push(request.url);
+      if (request.url === APP_STYLE) {
+        return { data: new util.TextEncoder().encodeInto(STYLE_JSON) };
+      }
+      throw new MapResourceError(MapResourceErrorReason.NOT_FOUND, `No ${request.url}`);
+    },
+  };
 }
 
 const WORLD: OfflineRegionDefinition = {
-  kind: 'tilePyramid',
-  value: {
-    styleUrl: APP_STYLE,
-    bounds: { southwest: { latitude: -10, longitude: -10 }, northeast: { latitude: 10, longitude: 10 } },
-    minZoom: 0,
-    maxZoom: 1,
-    pixelRatio: 1,
-    includeIdeographs: false,
-  },
+  styleUrl: APP_STYLE,
+  bounds: { southwest: { latitude: -10, longitude: -10 }, northeast: { latitude: 10, longitude: 10 } },
+  minZoom: 0,
+  maxZoom: 1,
+  pixelRatio: 1,
 };
 
 export default function runtimeTest(): void {
@@ -144,67 +147,103 @@ export default function runtimeTest(): void {
         .assertPromiseIsRejected();
     });
 
-    // This case needs the network: the transform rewrites a host that doesn't
-    // exist to one that does.
-    it('rewrites request URLs with a resource transform', 0, async () => {
-      await withRuntime('transform', async (runtime: RuntimeHandle) => {
-        const original = 'https://maps.invalid/style.json';
-        const transformed: string[] = [];
-        runtime.discarding.setResourceTransform({
-          callback: (kind: ResourceKind, url: string, request: ResourceTransformRequestHandle) => {
-            transformed.push(url);
-            request.complete(url === original ? 'https://demotiles.maplibre.org/style.json' : url);
-          },
-        });
-        const snapshot = await renderSnapshot({ style: original, width: 16, height: 16, pixelRatio: 1, runtime: runtime });
+    it('draws nothing for a tile that a provider rejects as not found', 0, async () => {
+      // A raster over a blue background, whose tiles the provider rejects.
+      const style = styleDocument('{"version":8,"sources":{"raster":{"type":"raster","tileSize":256,' +
+        '"tiles":["app://tiles/{z}/{x}/{y}.png"]}},"layers":[' +
+        '{"id":"background","type":"background","paint":{"background-color":"#0000ff"}},' +
+        '{"id":"raster","type":"raster","source":"raster"}]}');
+      const served: string[] = [];
+      await withRuntime('not-found', { resourceProvider: styleProvider(served) }, async (runtime: MapRuntime) => {
+        const snapshot = await renderSnapshot({ style: style, width: 16, height: 16, pixelRatio: 1, runtime: runtime });
+        const pixels = await readPixels(snapshot.image);
         await snapshot.image.release();
-        expect(transformed.indexOf(original)).assertLarger(-1);
+        expect(served.some((url: string) => url.startsWith('app://tiles/'))).assertTrue();
+        expect(pixelAt(pixels, 16, 8, 8).join()).assertEqual('0,0,255,255');
       });
     });
 
-    it('keeps the default runtime\'s offline regions in the app\'s files', 0, async () => {
-      const runtime = await getDefaultRuntime();
-      const metadata = new util.TextEncoder().encodeInto('world');
-      const region = await runtime.createOfflineRegion(WORLD, metadata);
+    // This case needs the network: rewriteUrl rewrites a host that doesn't
+    // exist to one that does.
+    it('rewrites request URLs with rewriteUrl', 0, async () => {
+      const original = 'https://maps.invalid/style.json';
+      const rewritten: string[] = [];
+      const rewriteUrl = (request: MapResourceRequest): string | undefined => {
+        rewritten.push(request.url);
+        return request.url === original ? 'https://demotiles.maplibre.org/style.json' : undefined;
+      };
+      await withRuntime('rewrite', { rewriteUrl: rewriteUrl }, async (runtime: MapRuntime) => {
+        const snapshot = await renderSnapshot({ style: original, width: 16, height: 16, pixelRatio: 1, runtime: runtime });
+        await snapshot.image.release();
+        expect(rewritten.indexOf(original)).assertLarger(-1);
+      });
+    });
+
+    it('throws for a second runtime on a cache file that one uses', 0, async () => {
+      const path = cachePath('shared');
+      const first = new MapRuntime({ cachePath: path });
       try {
-        const listed = (await runtime.listOfflineRegions()).map((stored) => stored.id);
-        expect(listed.indexOf(region.id)).assertLarger(-1);
+        expect(() => new MapRuntime({ cachePath: path })).assertThrowError(
+          `Another runtime uses the cache database ${path}`);
+      } finally {
+        await first.release();
+      }
+      // Once the first is released, another can take the file.
+      await new MapRuntime({ cachePath: path }).release();
+      deleteCache(path);
+
+      const files = application.getApplicationContext().filesDir;
+      expect(() => new MapRuntime({ cachePath: `${files}/maplibre-cache.db` })).assertThrowError(
+        `Another runtime uses the cache database ${files}/maplibre-cache.db`);
+    });
+
+    it('throws for configureDefault() once the default runtime exists', 0, () => {
+      MapRuntime.getDefault();
+      expect(() => MapRuntime.configureDefault({})).assertThrowError(
+        'MapRuntime.configureDefault() must come before the first MapRuntime.getDefault()');
+    });
+
+    it('throws for an offline region without exactly one of bounds and geometry', 0, () => {
+      const origin: GeoJsonGeometry = { type: 'Point', coordinates: [0, 0] };
+      expect(() => MapRuntime.getDefault().createOfflineRegion({ styleUrl: APP_STYLE })).assertThrowError(
+        `An offline region needs exactly one of bounds and geometry, not neither: {"styleUrl":"${APP_STYLE}"}`);
+      expect(() => MapRuntime.getDefault().createOfflineRegion({
+        styleUrl: APP_STYLE, bounds: WORLD.bounds, geometry: origin,
+      })).assertThrowError(
+        'An offline region needs exactly one of bounds and geometry, not both: ' +
+          JSON.stringify({ styleUrl: APP_STYLE, bounds: WORLD.bounds, geometry: origin }));
+    });
+
+    it('keeps the default runtime\'s offline regions in the app\'s files, one object each', 0, async () => {
+      const runtime = MapRuntime.getDefault();
+      const region = await runtime.createOfflineRegion(WORLD, new util.TextEncoder().encodeInto('world'));
+      try {
+        // Its status is read by the time it resolves.
+        expect(region.status.downloading).assertFalse();
+        expect(region.status.complete).assertFalse();
+        expect(new util.TextDecoder().decodeToString(region.metadata)).assertEqual('world');
+        expect(region.definition?.bounds?.northeast.latitude).assertEqual(10);
+        expect((await runtime.getOfflineRegions()).indexOf(region)).assertLarger(-1);
         const files = application.getApplicationContext().filesDir;
         expect(fs.accessSync(`${files}/maplibre-cache.db`)).assertTrue();
       } finally {
-        await runtime.deleteOfflineRegion(region.id);
+        await region.delete();
       }
-      const remaining = (await runtime.listOfflineRegions()).map((stored) => stored.id);
-      expect(remaining.indexOf(region.id)).assertEqual(-1);
+      expect(region.deleted).assertTrue();
+      expect((await runtime.getOfflineRegions()).indexOf(region)).assertEqual(-1);
     });
 
-    it('reports offline download progress to runtime listeners', 0, async () => {
-      await withRuntime('offline', async (runtime: RuntimeHandle) => {
-        const served: string[] = [];
-        serveStyle(runtime, served);
-        const region = await runtime.createOfflineRegion(WORLD, new Uint8Array(0));
-        let listener: (event: RuntimeEvent) => void = () => {
-        };
-        const completed = new Promise<OfflineRegionStatus>((resolve) => {
-          listener = (event: RuntimeEvent) => {
-            const payload = event.payload;
-            if (payload.kind === 'offlineRegionStatus' && payload.value.regionId === region.id &&
-              payload.value.status.complete) {
-              resolve(payload.value.status);
-            }
-          };
-        });
-        addRuntimeEventListener(runtime, listener);
-        try {
-          await runtime.setOfflineRegionObserved(region.id, RuntimeEventFlag.offlineRegionStatusChanged);
-          await runtime.setOfflineRegionDownloadState(region.id, OfflineRegionDownloadState.active);
-          const status = await settled('the download completes', completed);
-          expect(Number(status.completedResourceCount)).assertLarger(0);
-          expect(served.indexOf(APP_STYLE)).assertLarger(-1);
-        } finally {
-          removeRuntimeEventListener(runtime, listener);
-          await runtime.setOfflineRegionDownloadState(region.id, OfflineRegionDownloadState.inactive);
-        }
+    it('downloads an offline region, whose status follows the download', 0, async () => {
+      const served: string[] = [];
+      await withRuntime('offline', { resourceProvider: styleProvider(served) }, async (runtime: MapRuntime) => {
+        const region = await runtime.createOfflineRegion(WORLD);
+        await region.startDownload();
+        await until('the download completes', () => region.status.complete);
+        expect(region.status.completedResourceCount).assertLarger(0);
+        expect(region.downloadError).assertUndefined();
+        expect(served.indexOf(APP_STYLE)).assertLarger(-1);
+        await region.pauseDownload();
+        expect(region.status.downloading).assertFalse();
       });
     });
   });

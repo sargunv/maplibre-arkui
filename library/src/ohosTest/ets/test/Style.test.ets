@@ -122,7 +122,11 @@ export default function styleTest(): void {
       await withMap((ffi: MapHandle) => ffi.setFeatureState(ONE, selected));
       const point = pixelFor({ latitude: 10, longitude: 20 });
 
-      const hits = await queryAt(point, ['circles']);
+      // The layer can draw before the state applies, so wait for both.
+      const hits = await eventually('the query finds the feature with its state', async () => {
+        const found = await testMap.controller.queryRenderedFeatures(point, { layers: ['circles'] });
+        return found !== undefined && found.length > 0 && JSON.stringify(found[0].state) !== '{}' ? found : undefined;
+      });
       expect(hits.length).assertEqual(1);
       expect(hits[0].layerId).assertEqual('circles');
       expect(hits[0].sourceId).assertEqual('places');

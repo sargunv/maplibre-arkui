@@ -131,6 +131,9 @@ isDisabled?: boolean;
 - Don't keep state in global variables or stateful top-level functions. Let
   callers pass the object in.
   [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#3-general-api-design)
+- Make settings that MapLibre Native keeps once per process static members of
+  `MapRuntime`, as ArkUI's `PersistenceV2` and `AppStorageV2` are: the default
+  runtime and its configuration, the connectivity mode, and the log handler.
 
 ```ets
 // Do
@@ -163,6 +166,11 @@ breaking change.
   [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#4-types-that-may-grow)
 - An input enum that a getter only echoes back, such as `FollowBearing` from
   `followedBearing`, stays open input.
+- An enum that callers pass in and the library also reports, such as
+  `MapResourceErrorReason`, or that callers compare against named values, such
+  as `MapLogLevel`, stays an enum, as ArkUI's `TouchType` does. Its doc asks for
+  a `default` branch.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#4-types-that-may-grow)
 - When a value means "no answer", use `undefined` instead of a named catch-all
   such as `UNKNOWN`.
   [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#4-types-that-may-grow)
@@ -356,6 +364,8 @@ get map(): MapHandle | undefined;
 | Screen position                | The library's `ScreenPoint`, in vp         |
 | Screen distance                | `number`, in vp                            |
 | Duration                       | `number`, named `…Ms`, in milliseconds     |
+| Point in time                  | `Date`                                     |
+| Size in bytes                  | `number`, named `…Bytes`                   |
 | Angle and bearing              | `number`, in degrees, clockwise from north |
 | Insets                         | ArkUI `Padding` or `LocalizedPadding`      |
 | Color                          | ArkUI `ResourceColor`                      |

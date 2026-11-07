@@ -15,12 +15,14 @@ import {
   CameraTransitionOutcome,
   CameraUpdateMode,
   CommandCompletion,
+  FramePacerHandle,
   LatLng as FfiLatLng,
   LogicalSize,
   MapHandle,
   MapMode,
   MapProjectionHandle,
   MapView as FrameView,
+  ohosFramePacerCreate,
   RenderDriverKind,
   RenderResult,
   RenderSessionHandle,
@@ -67,19 +69,22 @@ import { consumes, logError } from './log';
 import { addInsets, contextScales, Insets, NO_INSETS, paddingInVp, paddingInVpOrZero, sameInsets } from './Insets';
 import { MapClickEvent } from './MapClickEvent';
 import { MapError, StyleLoadError } from './MapError';
+import { RuntimeState, RuntimeUser } from './MapRuntime';
 import { queryRendered, RenderedFeature } from './Queries';
-import {
-  addRuntimeEventListener,
-  addRuntimeMap,
-  getDefaultRuntime,
-  getFramePacer,
-  removeRuntimeEventListener,
-  removeRuntimeMap,
-  runtimeEventMask,
-} from './runtime';
 import { FrameViewport } from './Viewport';
 
-// The map events that the view handles.
+// One pacer serves every session. It follows the display's VSync, so the
+// sessions need no redraw wake.
+let framePacer: FramePacerHandle | undefined = undefined;
+
+function getFramePacer(): FramePacerHandle {
+  if (framePacer === undefined) {
+    framePacer = ohosFramePacerCreate();
+  }
+  return framePacer;
+}
+
+// The map events that the view handles, the only ones its map reports.
 const HANDLED_EVENTS: RuntimeEventFlag = RuntimeEventFlag.mapLoadingFailed |
   RuntimeEventFlag.mapRenderError |
   RuntimeEventFlag.mapCameraDidChange |
@@ -102,8 +107,10 @@ export interface MapViewEvents {
 // A style's URL, or its document.
 export type MapStyle = string | Record<string, Object>;
 
-export class MapView extends XComponentController implements GestureTarget {
-  runtime: RuntimeHandle | undefined = undefined;
+export class MapView extends XComponentController implements GestureTarget, RuntimeUser {
+  // The runtime that the view's maps are on, and its FFI runtime once open.
+  private runtime: RuntimeState | undefined = undefined;
+  private handle: RuntimeHandle | undefined = undefined;
   // The map once it's ready. Before then, its snapshot isn't readable.
   map: MapHandle | undefined = undefined;
   session: RenderSessionHandle | undefined = undefined;
@@ -113,11 +120,7 @@ export class MapView extends XComponentController implements GestureTarget {
   private readonly context: UIContext;
   private readonly events: MapViewEvents;
   // Takes the events that this view's map raises.
-  private readonly listener = (event: RuntimeEvent): void => {
-    if (event.source === this.map?.id) {
-      this.onEvent(event);
-    }
-  };
+  private readonly listener = (event: RuntimeEvent): void => this.onEvent(event);
   // FFI fixes a map's scale factor for its life, so a new density takes a new
   // map.
   private readonly densityListener = (info: observer.DensityInfo): void => {
@@ -232,7 +235,7 @@ export class MapView extends XComponentController implements GestureTarget {
     });
   }
 
-  start(state: ControllerState, runtime: RuntimeHandle | undefined, style: MapStyle, content: MapContent,
+  start(state: ControllerState, runtime: RuntimeState, style: MapStyle, content: MapContent,
     bounds: CameraBoundsOptions): void {
     this.state = state;
     this.style = style;
@@ -242,17 +245,22 @@ export class MapView extends XComponentController implements GestureTarget {
     this.context.getUIObserver().on('densityUpdate', this.densityListener);
     this.environmentCallbackId = this.context.getHostContext()?.getApplicationContext()
       .on('environment', this.environmentCallback);
-    const runtimeReady = runtime === undefined ? getDefaultRuntime() : Promise.resolve(runtime);
-    runtimeReady.then((runtime: RuntimeHandle) => {
-      if (this.disposed) {
+    this.runtime = runtime;
+    runtime.addUser(this);
+    runtime.open().then((handle: RuntimeHandle) => {
+      if (this.disposed || runtime.released) {
         return;
       }
-      // The view's listener asks for the events it handles, so the map reports
-      // them with those the app's listeners ask for.
-      this.runtime = runtime;
-      addRuntimeEventListener(runtime, this.listener, HANDLED_EVENTS);
+      this.handle = handle;
       return this.createMap(true, undefined);
     }).catch((error: Error) => this.fail(error));
+  }
+
+  // The app released the runtime, so the view shows no map from now on.
+  runtimeReleased(): void {
+    this.fail(new MapError('The map\'s runtime was released'));
+    this.releaseMap();
+    this.handle = undefined;
   }
 
   // A style document that an app writes in `build()` is a new value each
@@ -651,14 +659,9 @@ export class MapView extends XComponentController implements GestureTarget {
       this.context.getHostContext()?.getApplicationContext().off('environment', this.environmentCallbackId);
     }
     this.gestures.dispose();
-    const runtime = this.runtime;
-    // The map goes first, so the mask change that the listener's removal makes
-    // skips the map being released.
+    this.runtime?.removeUser(this);
     this.releaseMap();
-    if (runtime !== undefined) {
-      removeRuntimeEventListener(runtime, this.listener);
-    }
-    this.runtime = undefined;
+    this.handle = undefined;
   }
 
   // Replaces the map and its session with new ones at the new density. The
@@ -677,11 +680,10 @@ export class MapView extends XComponentController implements GestureTarget {
   // Releases the map and its session, with the controller keeping the map's
   // camera.
   private releaseMap(): void {
-    const runtime = this.runtime;
     const map = this.created;
     const session = this.session;
-    if (runtime !== undefined && map !== undefined) {
-      removeRuntimeMap(runtime, map);
+    if (map !== undefined) {
+      this.runtime?.removeMap(map);
     }
     const current = this.map;
     this.state?.detach(this, current === undefined ? undefined : this.appCamera(current.getSnapshot().view.camera));
@@ -695,11 +697,12 @@ export class MapView extends XComponentController implements GestureTarget {
     this.loading = undefined;
     this.frameView = '';
     // After any target change in flight, release the session, and only then
-    // the map it renders. The runtime outlives its maps.
+    // the map it renders. The runtime closes only after its maps.
     this.targets = this.targets.then(async () => {
       await session?.release();
       map?.dispose();
     }).catch((error: Error) => logError(error.message));
+    this.runtime?.track(this.targets);
   }
 
   // Creates the map at the current density. It takes the controller if
@@ -708,20 +711,22 @@ export class MapView extends XComponentController implements GestureTarget {
   private async createMap(attach: boolean, camera: CameraPosition | undefined): Promise<void> {
     const state = this.state;
     const runtime = this.runtime;
-    if (this.disposed || state === undefined || runtime === undefined) {
+    const handle = this.handle;
+    if (this.disposed || state === undefined || runtime === undefined || handle === undefined || runtime.released) {
       return;
     }
     const scaleFactor = this.context.vp2px(1);
     const size = this.logicalSize();
-    const map = runtime.createMap({
+    const map = handle.createMap({
       initialExtent: {
         width: size?.width ?? 1,
         height: size?.height ?? 1,
         scaleFactor: scaleFactor,
       },
       mapMode: MapMode.continuous,
-      eventMask: runtimeEventMask(runtime),
+      eventMask: HANDLED_EVENTS,
     });
+    runtime.addMap(map, this.listener);
     this.created = map;
     this.scaleFactor = scaleFactor;
     // Insets in px, fp, or lpx change with the density. An invalid side was
@@ -737,7 +742,6 @@ export class MapView extends XComponentController implements GestureTarget {
     this.reconciler = new ContentReconciler(map, (error: Error) => this.fail(error), scaleFactor);
     this.reconciler.setContent(this.content);
     this.reconciler.setFontScale(fontScaleOf(this.context));
-    addRuntimeMap(runtime, map, (error: Error) => this.fail(error));
     // The controller's camera moves go to the map once it shows a frame, and
     // the map runs commands in order, so they follow the starting camera. The
     // insets go around the start camera's padding.

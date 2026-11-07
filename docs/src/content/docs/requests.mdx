@@ -9,33 +9,67 @@ import { region } from "../../snippets";
 
 import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
 
-These are [MapLibre Native FFI]'s API, which the package re-exports. Maps and
-snapshots share a default runtime unless the app passes its own. Set request
-handlers on it, before or after maps appear:
+Maps and snapshots load their styles, tiles, and other resources through a
+<Api of="MapRuntime" />, which holds the cache and decides how requests load.
+They share the default runtime, from
+<Api of="MapRuntime.getDefault" display="MapRuntime.getDefault()" />, unless
+the app passes its own.
+
+## Rewrite URLs
+
+To add an API key to tile URLs, give the default runtime a `rewriteUrl` before
+the first map, such as in the ability's `onCreate()`, with
+<Api of="MapRuntime.configureDefault" display="MapRuntime.configureDefault()" />:
 
 <Code code={region(examples, "resource-transform")} lang="ts" />
 
-For other rewrites, pass a `callback` instead of `rules`; it must answer every
-request. On OpenHarmony, FFI has no header transform: serve the requests that
-need headers with `runtime.setResourceProvider()` instead. See FFI's [network
-guide].
+`rewriteUrl` answers at once, so it only computes URLs. To load a resource in
+another way, use a resource provider.
 
-The default runtime, from <Api of="getDefaultRuntime" display="getDefaultRuntime()" />,
-keeps its cache database, `maplibre-cache.db`, in the app's files directory, so
-[offline regions] last between launches. The library owns the runtime's one
-event handler, so watch a download with
-<Api of="addRuntimeEventListener" display="addRuntimeEventListener()" />:
+## Serve requests
+
+A <Api of="MapResourceProvider" /> loads the requests that its URL patterns
+match, in place of MapLibre: from the app's files, a database, or another
+client. This one serves styles from the app's rawfile directory, on a runtime
+of the page's own:
+
+<Code code={region(examples, "resource-provider")} lang="ts" />
+
+A runtime that the app creates holds its cache in memory unless it has a
+`cachePath`. Keep it in a field, pass it to each map and snapshot that uses it,
+and release it once they're gone.
+
+A provider also adds HTTP headers, such as a token. MapLibre Native FFI can't
+add headers to MapLibre's own requests on OpenHarmony, so fetch those requests
+in a provider with `@ohos.net.http`:
+
+<Code code={region(examples, "headers")} lang="ts" />
+
+A provider that rejects with a <Api of="MapResourceError" /> gives MapLibre a
+reason: a tile that isn't found draws nothing, and MapLibre tries again after
+server and connection failures.
+
+## Offline regions
+
+The default runtime keeps its cache database, `maplibre-cache.db`, in the app's
+files directory, so offline regions last between launches. The runtime's
+<Api of="MapRuntime.createOfflineRegion" display="createOfflineRegion()" /> stores
+a region, and its `startDownload()` downloads it. Its `status` is observable,
+so a component shows the progress as it goes:
 
 <Code code={region(examples, "offline")} lang="ts" />
 
-A listener gets the runtime's own events, such as offline progress, and only the
-map events that it asks for. The library sets each map's event mask to what the
-listeners ask for, so a map's other events cost nothing:
+Maps on the runtime use the region's resources once they load its style URL,
+also while the device is offline.
+<Api of="MapRuntime.getOfflineRegions" display="getOfflineRegions()" /> lists
+the regions of earlier launches.
 
-<Code code={region(examples, "map-events")} lang="ts" />
+## Logs
 
-MapLibre logs to hilog with the tag `MapLibreNative`. To take the logs, set a
-callback with <Api of="setLogCallback" display="setLogCallback()" />:
+MapLibre logs to hilog: the library with the prefix `MapLibre:`, and MapLibre
+Native with the tag `MapLibreNative`. To take the log too, such as for a crash
+reporter, set a handler with
+<Api of="MapRuntime.setLogHandler" display="MapRuntime.setLogHandler()" />:
 
 <Code code={region(examples, "logs")} lang="ts" />
 
@@ -48,13 +82,7 @@ again. To follow the device, the library needs
 [Getting started](/maplibre-arkui/getting-started/)); without it, MapLibre
 always tries the network. To keep maps offline, or online, whatever the device
 does, set a mode with
-<Api of="setConnectivityMode" display="setConnectivityMode()" />. The mode
-applies to every runtime of the app.
+<Api of="MapRuntime.setConnectivityMode" display="MapRuntime.setConnectivityMode()" />.
+The mode applies to every runtime of the app.
 
 <Code code={region(examples, "connectivity")} lang="ts" />
-
-[MapLibre Native FFI]: https://maplibre.org/maplibre-native-ffi/
-
-[network guide]: https://maplibre.org/maplibre-native-ffi/guides/network/
-
-[offline regions]: https://maplibre.org/maplibre-native-ffi/guides/offline/

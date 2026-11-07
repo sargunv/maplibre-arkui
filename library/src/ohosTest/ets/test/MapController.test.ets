@@ -1,26 +1,19 @@
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
 import {
-  addRuntimeEventListener,
   CameraTransitionMode,
   GeoJsonGeometry,
-  getDefaultRuntime,
   LatLng,
   LatLngBounds,
   MapController,
-  removeRuntimeEventListener,
-  RuntimeEvent,
-  RuntimeEventFlag,
-  RuntimeEventType,
   StyleLoadError,
 } from '@maplibre/arkui';
 
-import { MapHandle, MapMode } from '@maplibre/native-ffi';
+import { MapHandle, MapMode, RuntimeHandle } from '@maplibre/native-ffi';
 
 import { backgroundStyle, NO_INSETS, showsMap, styleDocument, testMap } from '../testability/TestMaps';
 import {
   camera,
   expectNear,
-  mapId,
   mapSnapshot,
   near,
   nextFrame,
@@ -113,10 +106,6 @@ function expectPadding(actual: Padding | Sides, expected: Padding): void {
 
 function expectNoPadding(actual: Padding): void {
   expectPadding(actual, NO_INSETS);
-}
-
-function reports(flag: RuntimeEventFlag): boolean {
-  return (mapSnapshot().eventMask & flag) !== RuntimeEventFlag.none;
 }
 
 async function hideMap(): Promise<void> {
@@ -429,49 +418,6 @@ export default function mapControllerTest(): void {
       expectNear(unused.camera.zoom, 0, 0);
     });
 
-    it('reports the map events that a runtime listener asks for, while it listens', 0, async () => {
-      const runtime = await getDefaultRuntime();
-      // The library's own events don't include idle.
-      expect(reports(RuntimeEventFlag.mapIdle)).assertFalse();
-      expect(reports(RuntimeEventFlag.mapCameraDidChange)).assertTrue();
-      let idles = 0;
-      let unaskedIdles = 0;
-      const listener = (event: RuntimeEvent) => {
-        if (event.type === RuntimeEventType.mapIdle && event.source === mapId()) {
-          idles++;
-        }
-      };
-      // A listener that asks for no map events gets none.
-      const other = (event: RuntimeEvent) => {
-        if (event.type === RuntimeEventType.mapIdle) {
-          unaskedIdles++;
-        }
-      };
-      addRuntimeEventListener(runtime, other);
-      addRuntimeEventListener(runtime, listener, RuntimeEventFlag.mapIdle);
-      try {
-        await until('the map reports idle events', () => reports(RuntimeEventFlag.mapIdle));
-        await map.updateCamera({ zoom: 3 });
-        await until('the map goes idle', () => idles > 0);
-
-        // A map that appears while the listener listens reports them from the
-        // start.
-        await hideMap();
-        testMap.shown = true;
-        await until('the map comes back', () => map.styleLoaded);
-        expect(reports(RuntimeEventFlag.mapIdle)).assertTrue();
-        const before = idles;
-        await map.updateCamera({ zoom: 4 });
-        await until('the new map goes idle', () => idles > before);
-      } finally {
-        removeRuntimeEventListener(runtime, listener);
-      }
-      await until('the map stops reporting idle events', () => !reports(RuntimeEventFlag.mapIdle));
-      expect(reports(RuntimeEventFlag.mapCameraDidChange)).assertTrue();
-      removeRuntimeEventListener(runtime, other);
-      expect(unaskedIdles).assertEqual(0);
-    });
-
     it('keeps the camera within the bounds the map is given', 0, async () => {
       testMap.cameraBounds = { maxZoom: 4 };
       await until('the bounds apply', () => mapSnapshot().bounds.maxZoom === 4);
@@ -501,13 +447,15 @@ export default function mapControllerTest(): void {
     it('puts back the limits that FFI gives a new map when the app removes its own', 0, async () => {
       // A map's lowest zoom keeps the world as tall as the map, so the new
       // map takes the test map's size.
-      const fresh = (await getDefaultRuntime()).createMap({
+      const runtime = await RuntimeHandle.create({});
+      const fresh = runtime.createMap({
         initialExtent: mapSnapshot().view.extent,
         mapMode: MapMode.static,
       });
       await fresh.ready;
       const defaults = fresh.getSnapshot().bounds;
       await fresh.release();
+      await runtime.release();
       testMap.cameraBounds = { bounds: SWITZERLAND, minZoom: 2, maxZoom: 9, minPitch: 10, maxPitch: 30 };
       await until('the bounds apply', () => mapSnapshot().bounds.maxZoom === 9);
       testMap.cameraBounds = {};

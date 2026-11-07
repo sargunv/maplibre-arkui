@@ -9,14 +9,15 @@ import AbilityConstant from '@ohos.app.ability.AbilityConstant';
 import common from '@ohos.app.ability.common';
 import UIAbility from '@ohos.app.ability.UIAbility';
 import Want from '@ohos.app.ability.Want';
+import application from '@ohos.app.ability.application';
 import { AppStorageV2 } from '@ohos.arkui.StateManagement';
 import geoLocationManager from '@ohos.geoLocationManager';
+import http from '@ohos.net.http';
 import image from '@ohos.multimedia.image';
 import sensor from '@ohos.sensor';
 import util from '@ohos.util';
 
 import {
-  addRuntimeEventListener,
   AttributionControls,
   AttributionText,
   CameraPosition,
@@ -34,38 +35,36 @@ import {
   GeoJsonFeatureCollection,
   get,
   geometryType,
-  getDefaultRuntime,
   interpolate,
   LatLngBounds,
   LayerSummary,
   linear,
   literal,
-  LogEvent,
-  LogSeverity,
-  LogSeverityFlag,
   LatLng,
   MapClickEvent,
   MapContent,
   MapController,
   MapError,
+  MapLogLevel,
+  MapLogRecord,
   MaplibreMap,
+  MapResourceError,
+  MapResourceErrorReason,
+  MapResourceLoadRequest,
+  MapResourceProvider,
+  MapResourceRequest,
+  MapResourceResponse,
+  MapRuntime,
   MapSnapshot,
   Marker,
   match,
+  OfflineRegion,
   OfflineRegionDefinition,
-  OfflineRegionDownloadState,
   PointerPinButton,
   RenderedFeature,
   renderSnapshot,
-  RuntimeEvent,
-  RuntimeEventFlag,
-  RuntimeEventType,
-  RuntimeHandle,
   ScaleBar,
-  setConnectivityMode,
-  setLogCallback,
   StyleLayer,
-  UrlMatchFlag,
   WheelAction,
   zoom,
   ZoomButtons,
@@ -827,71 +826,119 @@ function reportMapError(error: MapError): void {
 // Requests, offline regions, and logs
 
 // #region resource-transform
-async function useApiKey(): Promise<void> {
-  const runtime = await getDefaultRuntime();
-  await runtime.setResourceTransform({
-    rules: [{
-      flags: UrlMatchFlag.glob,
-      url: 'https://tiles.example.com/**',
-      parameters: [{ name: 'key', value: API_KEY }],
-    }],
+// In the ability's onCreate(), before the first map: every map and snapshot on
+// the default runtime adds the key to the URLs of tiles.example.com.
+function configureMaps(): void {
+  MapRuntime.configureDefault({
+    rewriteUrl: (request: MapResourceRequest) => request.url.startsWith('https://tiles.example.com/') ?
+      `${request.url}${request.url.includes('?') ? '&' : '?'}key=${API_KEY}` : undefined,
   });
 }
 // #endregion resource-transform
 
-const PARIS_REGION: OfflineRegionDefinition = {
-  kind: 'tilePyramid',
-  value: {
-    styleUrl: STYLE,
-    bounds: { southwest: { latitude: 48.81, longitude: 2.22 }, northeast: { latitude: 48.91, longitude: 2.42 } },
-    minZoom: 10,
-    maxZoom: 14,
-    pixelRatio: 2,
-    includeIdeographs: false,
+// #region resource-provider
+// Serves app://styles/<name> from the app's rawfile/styles directory.
+const APP_STYLES: MapResourceProvider = {
+  urlPatterns: ['app://styles/*'],
+  load: async (request: MapResourceLoadRequest): Promise<MapResourceResponse | undefined> => {
+    const name = request.url.substring('app://styles/'.length);
+    try {
+      return { data: await application.getApplicationContext().resourceManager.getRawFileContent(`styles/${name}`) };
+    } catch (error) {
+      throw new MapResourceError(MapResourceErrorReason.NOT_FOUND, `The app has no style ${name}`);
+    }
   },
 };
 
-async function downloadParis(runtime: RuntimeHandle): Promise<void> {
-  // #region offline
-  const region = await runtime.createOfflineRegion(PARIS_REGION, new util.TextEncoder().encodeInto('Paris'));
-  addRuntimeEventListener(runtime, (event: RuntimeEvent) => {
-    const payload = event.payload;
-    if (payload.kind === 'offlineRegionStatus' && payload.value.regionId === region.id) {
-      const status = payload.value.status;
-      console.info(`Paris: ${status.completedResourceCount} of ${status.requiredResourceCount} resources`);
-    }
-  });
-  await runtime.setOfflineRegionObserved(region.id, RuntimeEventFlag.offlineRegionStatusChanged);
-  await runtime.setOfflineRegionDownloadState(region.id, OfflineRegionDownloadState.active);
-  // #endregion offline
+@ComponentV2
+struct AppStyleMap {
+  // A runtime of the page's own, which it releases as it goes.
+  private readonly runtime: MapRuntime = new MapRuntime({ resourceProvider: APP_STYLES });
+
+  aboutToDisappear(): void {
+    this.runtime.release().catch((error: Error) => console.error(error.message));
+  }
+
+  build() {
+    MaplibreMap({ style: 'app://styles/outdoors.json', runtime: this.runtime })
+  }
 }
+// #endregion resource-provider
+
+// #region headers
+// Loads the tiles of tiles.example.com with a token in a header.
+const TOKEN_TILES: MapResourceProvider = {
+  urlPatterns: ['https://tiles.example.com/**'],
+  load: async (request: MapResourceLoadRequest): Promise<MapResourceResponse | undefined> => {
+    const client = http.createHttp();
+    request.onCancel(() => client.destroy());
+    const header: Record<string, string> = { 'Authorization': `Bearer ${API_KEY}` };
+    try {
+      const response = await client.request(request.url,
+        { header: header, expectDataType: http.HttpDataType.ARRAY_BUFFER });
+      if (response.responseCode === 404) {
+        throw new MapResourceError(MapResourceErrorReason.NOT_FOUND, `No tile at ${request.url}`);
+      } else if (response.responseCode >= 500) {
+        throw new MapResourceError(MapResourceErrorReason.SERVER, `HTTP ${response.responseCode}`);
+      } else if (response.responseCode !== 200) {
+        throw new MapResourceError(MapResourceErrorReason.OTHER, `HTTP ${response.responseCode}`);
+      }
+      return { data: response.result as ArrayBuffer };
+    } finally {
+      client.destroy();
+    }
+  },
+};
+// #endregion headers
+
+const PARIS_REGION: OfflineRegionDefinition = {
+  styleUrl: STYLE,
+  bounds: { southwest: { latitude: 48.81, longitude: 2.22 }, northeast: { latitude: 48.91, longitude: 2.42 } },
+  minZoom: 10,
+  maxZoom: 14,
+};
+
+// #region offline
+@ComponentV2
+struct OfflineParis {
+  @Local region: OfflineRegion | undefined = undefined;
+
+  async download(): Promise<void> {
+    const name = new util.TextEncoder().encodeInto('Paris');
+    this.region = await MapRuntime.getDefault().createOfflineRegion(PARIS_REGION, name);
+    await this.region.startDownload();
+  }
+
+  build() {
+    Column({ space: 8 }) {
+      if (this.region === undefined) {
+        Button('Download Paris').onClick(() => this.download().catch((error: Error) => console.error(error.message)))
+      } else {
+        // The status is observable, so the progress follows the download.
+        Progress({
+          value: this.region.status.completedResourceCount,
+          total: Math.max(1, this.region.status.requiredResourceCount),
+        })
+        Text(this.region.status.complete ? 'Paris is offline' : 'Downloading Paris…')
+      }
+    }
+  }
+}
+// #endregion offline
 
 // #region connectivity
 // An app setting that keeps maps to the cache and offline regions.
 function setMapsUseNetwork(allowed: boolean): void {
-  setConnectivityMode(allowed ? ConnectivityMode.automatic : ConnectivityMode.forceOffline);
+  MapRuntime.setConnectivityMode(allowed ? ConnectivityMode.AUTOMATIC : ConnectivityMode.FORCE_OFFLINE);
 }
 // #endregion connectivity
 
-function watchMissingImages(runtime: RuntimeHandle): void {
-  // #region map-events
-  addRuntimeEventListener(runtime, (event: RuntimeEvent) => {
-    const payload = event.payload;
-    if (event.type === RuntimeEventType.mapStyleImageMissing && payload.kind === 'styleImage') {
-      console.warn(`The style needs the image ${payload.value.imageId}`);
-    }
-  }, RuntimeEventFlag.mapStyleImageMissing);
-  // #endregion map-events
-}
-
 function takeLogs(): void {
   // #region logs
-  setLogCallback({
-    callback: (severity: LogSeverity, event: LogEvent, code: bigint, message: string) => {
-      console.info(`MapLibre (${event}): ${message}`);
-    },
-    // Errors still go to hilog too.
-    platformSeverities: LogSeverityFlag.error,
+  MapRuntime.setLogHandler((record: MapLogRecord) => {
+    if (record.level === MapLogLevel.ERROR) {
+      console.warn(`MapLibre (${record.category ?? 'library'}): ${record.message}`);
+    }
   });
   // #endregion logs
 }
@@ -947,6 +994,12 @@ export struct DocExamples {
         TabContent() {
           SnapshotOfExample()
         }.tabBar('Snapshot of a map')
+        TabContent() {
+          AppStyleMap()
+        }.tabBar('App style')
+        TabContent() {
+          OfflineParis()
+        }.tabBar('Offline')
       }
       .barMode(BarMode.Scrollable)
     }
@@ -955,5 +1008,5 @@ export struct DocExamples {
 }
 
 // Keeps the functions that no tab calls from being unused.
-export const COMPILED_EXAMPLES: Object[] = [styleWithExpressions, reportMapError, useApiKey, downloadParis,
-  watchMissingImages, takeLogs];
+export const COMPILED_EXAMPLES: Object[] = [styleWithExpressions, reportMapError, configureMaps, TOKEN_TILES,
+  setMapsUseNetwork, takeLogs];

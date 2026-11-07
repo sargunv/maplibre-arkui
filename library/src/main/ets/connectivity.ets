@@ -7,24 +7,28 @@ import { BusinessError } from '@ohos.base';
 
 import { logError } from './log';
 
-/** How MapLibre decides whether it may use the network. */
+/**
+ * How MapLibre decides whether it may use the network; see
+ * `MapRuntime.setConnectivityMode()`.
+ *
+ * Values may be added in later releases; give a `switch` over it a `default`
+ * branch.
+ */
 export enum ConnectivityMode {
   /**
    * Follows the device's default network: online while one connects, offline
-   * while none does. The library starts watching the network once the app
-   * gets the default runtime, shows a map, takes a snapshot, listens to a
-   * runtime's events, or sets a mode. Without
-   * `ohos.permission.GET_NETWORK_INFO`, it can't watch the network, so MapLibre
-   * stays online.
+   * while none does. The library starts watching the network once a runtime
+   * opens or the app sets a mode. Without `ohos.permission.GET_NETWORK_INFO`,
+   * it can't watch the network, so MapLibre stays online.
    */
-  automatic,
+  AUTOMATIC,
   /** Online whatever the device's network. */
-  forceOnline,
+  FORCE_ONLINE,
   /** Offline: maps use offline regions and the resources that they cached. */
-  forceOffline,
+  FORCE_OFFLINE,
 }
 
-let mode: ConnectivityMode = ConnectivityMode.automatic;
+let mode: ConnectivityMode = ConnectivityMode.AUTOMATIC;
 // The device's default network as the monitor last saw it: its ID while one
 // connects, `undefined` while none does, and `null` until the monitor reads
 // it. A `null` network is online, as FFI starts.
@@ -33,37 +37,19 @@ let monitor: Promise<boolean> | undefined = undefined;
 // Kept so that its callbacks live as long as the app.
 let watcher: connection.NetConnection | undefined = undefined;
 
-/**
- * Sets how MapLibre decides whether it may use the network, for every runtime
- * of the app and its maps, snapshots, and offline downloads, as FFI's network
- * status does. The mode is `ConnectivityMode.automatic` until the app sets
- * another, and it applies at once.
- *
- * ```ets
- * // Save data on a metered connection: only cached tiles and offline regions.
- * setConnectivityMode(ConnectivityMode.forceOffline);
- * ```
- *
- * While MapLibre is offline, it starts no network requests, and the requests
- * that wait start once it's online again. Requests that have started may
- * finish, and a runtime's resource provider does its own networking.
- * `getNetworkStatus()` reads the status that the mode sets. Set the mode here
- * instead of calling FFI's `setNetworkStatus()`, which the automatic mode
- * would overwrite.
- */
+// Sets the mode for every runtime, at once.
 export function setConnectivityMode(value: ConnectivityMode): void {
   mode = value;
   followConnectivity();
   applyNetworkStatus();
 }
 
-/** The connectivity mode that `setConnectivityMode()` set last. */
 export function getConnectivityMode(): ConnectivityMode {
   return mode;
 }
 
-// Starts the monitor once, the first time the library uses a runtime or the
-// app sets a mode, and keeps it for the app's life. It resolves with whether
+// Starts the monitor once, the first time a runtime opens or the app sets a
+// mode, and keeps it for the app's life. It resolves with whether
 // the monitor registered, which it doesn't without the permission.
 export function followConnectivity(): Promise<boolean> {
   if (monitor === undefined) {
@@ -126,8 +112,8 @@ function networkChanged(netId: number | undefined): void {
 }
 
 function applyNetworkStatus(): void {
-  const offline = mode === ConnectivityMode.forceOffline ||
-    (mode === ConnectivityMode.automatic && defaultNet === undefined);
+  const offline = mode === ConnectivityMode.FORCE_OFFLINE ||
+    (mode === ConnectivityMode.AUTOMATIC && defaultNet === undefined);
   const status: NetworkStatus = offline ? NetworkStatus.offline : NetworkStatus.online;
   if (getNetworkStatus() !== status) {
     setNetworkStatus(status);

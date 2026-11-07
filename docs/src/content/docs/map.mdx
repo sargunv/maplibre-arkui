@@ -37,6 +37,7 @@ Each limit that it leaves out takes its default, so removing one puts the
 default back. Invalid limits, such as a minimum zoom above the maximum, go to
 `onError`, and the map keeps the limits it had.
 
-`runtime` takes an FFI runtime of the app's own, for another cache.
+`runtime` takes a <Api of="MapRuntime" /> of the app's own, for another cache or
+other request handling (see [Requests](/maplibre-arkui/requests/)).
 
 [style spec]: https://maplibre.org/maplibre-style-spec/

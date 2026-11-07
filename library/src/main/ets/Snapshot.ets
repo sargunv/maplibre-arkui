@@ -14,13 +14,12 @@ import display from '@ohos.display';
 import image from '@ohos.multimedia.image';
 
 import { CameraUpdate } from './CameraPosition';
-import { followConnectivity } from './connectivity';
 import { ContentReconciler, loadStyle, MapContent, styleAttributions } from './Content';
 import { checkCamera, toFfiCamera } from './FfiValues';
 import { fontScaleOf } from './fontScale';
 import { contextScales, LengthScales, NO_INSETS, paddingInVp } from './Insets';
 import { logError } from './log';
-import { getDefaultRuntime } from './runtime';
+import { MapRuntime, runtimeState } from './MapRuntime';
 
 /** What `renderSnapshot()` renders. */
 export interface MapSnapshotOptions {
@@ -77,10 +76,10 @@ export interface MapSnapshotOptions {
   fontScale?: number;
   /**
    * The runtime that loads the style and its resources, with that runtime's
-   * cache, offline regions, and request handlers. Defaults to the default
-   * runtime.
+   * cache, offline regions, and request handling. The default runtime by
+   * default.
    */
-  runtime?: RuntimeHandle;
+  runtime?: MapRuntime;
 }
 
 /**
@@ -121,9 +120,10 @@ export interface MapSnapshot {
  *
  * The promise resolves once every resource that the image needs has loaded,
  * so it stays pending for as long as one of them does, such as while
- * `setConnectivityMode()` keeps MapLibre offline. It rejects with an `Error`
- * when the style fails to load, when a style document is one that MapLibre
- * rejects, and when a resource that the image needs fails to load.
+ * `MapRuntime.setConnectivityMode()` keeps MapLibre offline. It rejects with
+ * an `Error` when the style fails to load, when a style document is one that
+ * MapLibre rejects, when a resource that the image needs fails to load, and
+ * when the runtime fails to open or is released.
  *
  * The image holds the style and the content only: no user location indicator
  * and no ArkUI controls. To capture what a `MaplibreMap` shows, pass its
@@ -151,8 +151,12 @@ export function renderSnapshot(options: MapSnapshotOptions): Promise<MapSnapshot
     bearing: camera.bearing ?? 0,
     pitch: camera.pitch ?? 0,
   }, padding);
-  followConnectivity();
-  return render(options, width, height, pixelRatio, fontScale, start);
+  // The runtime closes only after the snapshot releases its map.
+  const runtime = runtimeState(options.runtime ?? MapRuntime.getDefault());
+  const rendering = render(options, runtime.open(), width, height, pixelRatio, fontScale, start);
+  runtime.track(rendering.then(() => {
+  }));
+  return rendering;
 }
 
 // FFI takes whole vp, so a size rounds to one.
@@ -170,9 +174,9 @@ function checkScale(value: number, what: string): void {
   }
 }
 
-async function render(options: MapSnapshotOptions, width: number, height: number, pixelRatio: number,
-  fontScale: number, camera: FfiCameraOptions): Promise<MapSnapshot> {
-  const runtime = options.runtime ?? await getDefaultRuntime();
+async function render(options: MapSnapshotOptions, opening: Promise<RuntimeHandle>, width: number, height: number,
+  pixelRatio: number, fontScale: number, camera: FfiCameraOptions): Promise<MapSnapshot> {
+  const runtime = await opening;
   const map = runtime.createMap({
     initialExtent: { width: width, height: height, scaleFactor: pixelRatio },
     mapMode: MapMode.static,
