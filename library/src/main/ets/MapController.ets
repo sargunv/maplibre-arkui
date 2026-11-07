@@ -466,7 +466,11 @@ export class MapController {
 // the app's end handler, then the promise.
 function endEarly(options: FitCameraOptions, outcome: CameraTransitionOutcome): CameraTransitionOutcome {
   try {
-    options.animation?.endHandler?.callback?.({ outcome: outcome, generation: BigInt(0) });
+    options.animation?.endHandler?.callback?.({
+      outcome: outcome,
+      generation: BigInt(0),
+      velocity: { pan: { x: 0, y: 0 }, zoom: 0, bearing: 0, pitch: 0 },
+    });
   } catch (error) {
     logError(`A camera transition's end handler threw: ${(error as Error).message}`);
   }

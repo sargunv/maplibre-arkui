@@ -39,6 +39,7 @@ export type {
   Camera as CameraPosition,
   CameraOptions,
   CameraTransitionEnd,
+  CameraVelocity,
   CameraUpdate,
   EdgeInsets,
   LatLng,
@@ -116,7 +117,6 @@ export type {
 // what ArkUI apps need besides.
 export {
   ConstrainMode,
-  GeoJsonSourceDataHandle,
   latLngForProjectedMeters,
   MapDebugFlag,
   MaplibreError,

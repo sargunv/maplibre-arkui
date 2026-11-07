@@ -5,7 +5,6 @@ import {
   fp,
   GeoJsonFeatureCollection,
   GeoJsonGeometry,
-  GeoJsonSourceDataHandle,
   get,
   MapContent,
   MapLayer,
@@ -530,12 +529,7 @@ export default function contentTest(): void {
       // The app replaces the data behind the content's back, which the map
       // keeps until the content's data changes.
       const map = requireMap();
-      const prepared = GeoJsonSourceDataHandle.create(THREE, (await map.getStyleSource('places'))?.geoJson);
-      try {
-        await map.setGeoJsonSourceData('places', prepared);
-      } finally {
-        prepared.release();
-      }
+      await map.setGeoJsonSourceData('places', THREE);
       await untilFeatures(3);
 
       testMap.content = content(TWO, [circles('dots', '#00ff00')]);

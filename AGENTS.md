@@ -37,9 +37,9 @@ code.
 - FFI's CI keeps the packages `mise run ffi:download` fetches for 30 days. Move
   the pin to a newer FFI main commit whose CI run has them before then, or CI
   breaks.
-- On the Oniro emulator, Mesa's llvmpipe crashes the app during most full test
-  runs (maplibre-native-ffi#1692). A run that ends without hypium's tally
-  crashed; don't retry it.
+- A test run that ends without hypium's tally didn't finish. Don't retry it:
+  inspect the device's freeze reports (`/data/log/eventlog/`) and crash logs
+  (`/data/log/faultlog/faultlogger/`).
 - On DevEco Studio's emulator, the OpenGL driver crashes the app during some
   full test runs (maplibre-native-ffi#1728). It corrupts memory when a map's
   surface goes away while the emulator still shows it, so the app dies later,
@@ -98,8 +98,8 @@ what the diff, its doc comments, and CI can't:
 
 - Open with the problem and what users can now do, or what maintainers gain.
 - Show one small example of new API, or a bug's trigger with before and after.
-- List checks that CI can't run, such as the hypium suite on a device. Leave out
-  the builds and checks that CI runs.
+- List checks that CI can't run, such as a run on a phone or on DevEco Studio's
+  emulator. Leave out the builds, checks, and hypium suite that CI runs.
 - Rewrite both when review changes the scope.
 
 Append this disclosure to any AI-assisted content you post on GitHub, such as an

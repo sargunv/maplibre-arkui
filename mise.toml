@@ -19,10 +19,10 @@ auto_install_disable_tools = ["ohos-sdk", "http:oniro-emulator"]
 # FFI isn't on OHPM in the form this library needs, so `ffi:download` fetches
 # the packages that FFI's CI packed at this commit, and `ffi:pack` packs them
 # from a checkout. See AGENTS.md.
-ffi_commit = "5c4c9084ab442ed62e48c6ced764396eae2cdc80"
-# Oniro publishes its emulator image against the matching OpenHarmony release,
-# so the SDK and the image share this version, as in MapLibre Native FFI.
-ohos_sdk_version = "6.1"
+ffi_commit = "b813912956cc8b85507cd9aceafcfaa3a46398e4"
+# Oniro publishes its emulator image against the matching OpenHarmony release.
+# Keep the SDK and emulator on the same version.
+ohos_sdk_version = "7.0"
 
 [tools]
 "github:jdx/hk" = "2.11.1"
@@ -49,7 +49,7 @@ ohos_sdk_version = "6.1"
 # the plugin in [plugins]. The plugin unpacks the SDK with python3 from the
 # host.
 ohos-sdk = { version = "{{vars.ohos_sdk_version}}", os = ["linux", "macos"] }
-"http:oniro-emulator" = { version = "{{vars.ohos_sdk_version}}", url = "https://github.com/eclipse-oniro4openharmony/device_board_oniro/releases/download/v{{ version }}/oniro_emulator.zip", checksum = "sha256:a30e01f1b161e0fdcd91263f30f29cc92bfa49c1776d5ee2c46caefef055b2da", size = "1449068188", bin_path = ".", os = [
+"http:oniro-emulator" = { version = "{{vars.ohos_sdk_version}}", url = "https://github.com/eclipse-oniro4openharmony/device_board_oniro/releases/download/v{{ version }}/oniro_emulator.zip", checksum = "sha256:5db9a636f04f3115e97e5d6daf96316c680642ad90ea9e275adc4f0382cf0109", size = "969434898", bin_path = ".", os = [
   "linux",
   "macos",
 ] }
@@ -158,6 +158,11 @@ run = '''
 device=${usage_device:-$(scripts/ohos-key.sh)}
 abi=$(scripts/device-abi.sh "$device")
 mise run test:build --abi "$abi" --backend "$usage_backend"
+# Recheck the emulator's lock screen after boot services settle during the
+# build; an explicitly named device is left as it is.
+if [[ -z ${usage_device:-} ]]; then
+  scripts/wake-device.sh "$device"
+fi
 scripts/run-tests.sh "$device" "build/test/$abi/entry_test.hap"
 '''
 
