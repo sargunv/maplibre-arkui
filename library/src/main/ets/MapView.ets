@@ -461,6 +461,10 @@ export class MapView extends XComponentController implements GestureTarget {
     map.discarding.applyCameraDelta(delta);
   }
 
+  cancelTransitions(transitionId: bigint): void {
+    this.map?.discarding.cancelCameraTransitionsWithId(transitionId);
+  }
+
   readBearing(read: (bearing: number | undefined) => void): void {
     const map = this.map;
     if (map === undefined) {

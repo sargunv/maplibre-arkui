@@ -40,6 +40,13 @@ class Recorder implements GestureTarget {
     this.deltas.push(delta);
   }
 
+  // The IDs of the transitions that the gestures stopped.
+  cancelled: bigint[] = [];
+
+  cancelTransitions(transitionId: bigint): void {
+    this.cancelled.push(transitionId);
+  }
+
   clicked(point: ScreenPoint, long: boolean): void {
     this.clicks.push({ x: point.x, y: point.y });
     this.long.push(long);
@@ -635,13 +642,16 @@ export default function gesturesTest(): void {
         snapping.options = { rotate: { snapBearings: [90, -90] } };
         end = twist(snapping, 100, 60, 20);
         snapping.touch(end + 100, []);
-        expectNear(other.deltas[other.deltas.length - 1].bearing ?? NaN, 3, 0.01);
+        const ease = other.deltas[other.deltas.length - 1];
+        expectNear(ease.bearing ?? NaN, 3, 0.01);
         if (app) {
           snapping.stop();
         } else {
           snapping.touch(end + 200, [touch(1, 100, 100)]);
         }
         expect(other.ends).assertEqual(1);
+        // The ease stops where it is.
+        expect(other.cancelled.includes(ease.animation?.transitionId ?? BigInt(-1))).assertTrue();
         other.endAnimation();
         expect(other.ends).assertEqual(1);
         snapping.dispose();

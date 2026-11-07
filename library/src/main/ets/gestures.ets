@@ -162,6 +162,8 @@ export interface TouchPoint {
 /** What gestures move and tell. The map implements it over its FFI map. */
 export interface GestureTarget {
   applyCameraDelta(delta: CameraDelta): void;
+  /** Stops the camera animations of the deltas whose animation has `transitionId`. */
+  cancelTransitions(transitionId: bigint): void;
   /** The user clicked at `point`: a tap, or a long press or right click if `long`. */
   clicked(point: ScreenPoint, long: boolean): void;
   /** The camera's bearing, as the map last applied the changes. */
@@ -241,6 +243,8 @@ const NOTCH_REARM = 2;
 const NOTCH_MIN_MS = 50;
 // Taps, a key's step, and the snap take this long.
 export const GESTURE_ANIMATION_MS = 300;
+// The ID of the animated steps' camera transitions, which stops them.
+const STEP_TRANSITION = BigInt('0x6d61706c69627265');
 // Zoom levels and vp per unit of the wheel's axis value, 15 to a notch. A
 // touchpad's axis values are vp.
 const WHEEL_LEVELS_PER_UNIT = 1 / 60;
@@ -302,7 +306,10 @@ export class MapGestures {
     const before = this.currentOptions;
     this.currentOptions = options;
     this.snapBearings.set(options.rotate?.snapBearings, this.target);
-    this.hapticBearings.set(options.rotate?.hapticBearings, this.target);
+    if (this.hapticBearings.set(options.rotate?.hapticBearings, this.target)) {
+      // A rotation under way ticks at the new bearings.
+      this.notches = undefined;
+    }
     if ((enabled(before.pan) && !enabled(options.pan)) || (enabled(before.zoom) && !enabled(options.zoom)) ||
       (enabled(before.rotate) && !enabled(options.rotate)) || (enabled(before.pitch) && !enabled(options.pitch))) {
       this.stop();
@@ -1426,6 +1433,7 @@ export class MapGestures {
   private animateStep(delta: CameraDelta, step: number): void {
     delta.animation = {
       durationMs: GESTURE_ANIMATION_MS,
+      transitionId: STEP_TRANSITION,
       endHandler: {
         callback: () => {
           if (this.step === step) {
@@ -1437,11 +1445,13 @@ export class MapGestures {
     this.target.applyCameraDelta(delta);
   }
 
-  // Ends the animated step, if one is under way, and the gesture with it.
+  // Ends the animated step, if one is under way, and the gesture with it. A
+  // step that something else ends stops where it is.
   private endStep(snapBearing?: number): void {
     this.step++;
     if (this.moving && !this.phaseOpen) {
       this.moving = false;
+      this.target.cancelTransitions(STEP_TRANSITION);
       this.target.gestureEnded(snapBearing);
     }
   }
@@ -1458,11 +1468,12 @@ class Bearings {
     this.name = name;
   }
 
-  set(bearings: number[] | undefined, target: GestureTarget): void {
+  // Returns whether the bearings changed.
+  set(bearings: number[] | undefined, target: GestureTarget): boolean {
     const given = bearings ?? [0];
     // Options that an app writes in `build()` are a new value each time.
     if (given.join() === this.given) {
-      return;
+      return false;
     }
     this.given = given.join();
     this.values = [];
@@ -1473,6 +1484,7 @@ class Bearings {
         target.fail(new Error(`interactions.rotate.${this.name} has a bearing that isn't finite: ${bearing}`));
       }
     }
+    return true;
   }
 }
 
