@@ -4,10 +4,15 @@ import fs from '@ohos.file.fs';
 import geoLocationManager from '@ohos.geoLocationManager';
 import image from '@ohos.multimedia.image';
 import {
+  cases,
   ContentError,
+  featureState,
+  GeoJsonFeature,
   GeoJsonFeatureCollection,
   GeoJsonSourceHandle,
+  has,
   ImageSourceHandle,
+  LatLng,
   LayerHandle,
   MapContent,
   MapController,
@@ -17,13 +22,14 @@ import {
   ScreenPoint,
   SourceHandle,
   StyleLayer,
+  toBoolean,
 } from '@maplibre/arkui';
 import { readPixelMap } from '@maplibre/arkui/src/main/ets/content/internal/PixelMaps';
 import { USER_LOCATION_LAYER } from '@maplibre/arkui/src/main/ets/location/internal/UserLocationLayer';
 import { CommandCompletion, FeatureStateSelector, LatLng as FfiLatLng, MapHandle } from '@maplibre/native-ffi';
 
 import { backgroundStyle, showsMap, styleDocument, testMap } from '../testability/TestMaps';
-import { eventually, pixelFor, setStyle, until, withMap } from './helpers';
+import { eventually, mapBounds, pixelFor, screenPixel, setStyle, until, vp2px, withMap } from './helpers';
 
 const PLACES: GeoJsonFeatureCollection = {
   type: 'FeatureCollection',
@@ -34,6 +40,16 @@ const PLACES: GeoJsonFeatureCollection = {
 };
 
 const ONE: FeatureStateSelector = { sourceId: 'places', featureId: { kind: 'doubleValue', value: 1 } };
+
+// Five points close together, which a clustered source draws as one cluster,
+// and one far away.
+const CROWD: GeoJsonFeatureCollection = {
+  type: 'FeatureCollection',
+  features: [[0, 0], [0.1, 0], [0, 0.1], [0.1, 0.1], [0.05, 0.05], [-40, -20]].map(
+    (position: number[], i: number): GeoJsonFeature => ({
+      type: 'Feature', id: i + 1, geometry: { type: 'Point', coordinates: position }, properties: { 'n': i },
+    })),
+};
 
 const FIRST_PLACE: GeoJsonFeatureCollection = { type: 'FeatureCollection', features: PLACES.features.slice(0, 1) };
 
@@ -103,6 +119,39 @@ async function untilFeatures(id: string, count: number): Promise<void> {
     const features = await testMap.controller.querySourceFeatures(id);
     return features?.length === count ? true : undefined;
   });
+}
+
+// Waits until the content's GeoJSON source `id` is in the style, and returns
+// its handle.
+function geoJsonNamed(id: string): Promise<GeoJsonSourceHandle> {
+  return eventually(`the style has source ${id}`, () => mapStyle().getGeoJsonSource(id));
+}
+
+// The places as content, in circles that are red while their feature state
+// is selected, and white otherwise.
+function selectableDots(): MapContent {
+  const color = cases([[toBoolean(featureState('selected')), '#ff0000']], '#ffffff');
+  const layer: StyleLayer = { id: 'dots', type: 'circle', source: 'places',
+    paint: { 'circle-radius': 12, 'circle-color': color } };
+  return { sources: [{ id: 'places', json: geoJson(PLACES) }], layers: [layer] };
+}
+
+// Waits until the screen shows red at `coordinate` of the map, or doesn't.
+async function untilRed(coordinate: LatLng, red: boolean): Promise<void> {
+  await eventually(`the map draws ${red ? 'red' : 'white'} at ${coordinate.latitude}, ${coordinate.longitude}`,
+    async () => {
+      const bounds = await mapBounds();
+      const point = pixelFor(coordinate);
+      const pixel = await screenPixel({
+        x: bounds.left + Math.round(vp2px(point.x)), y: bounds.top + Math.round(vp2px(point.y)),
+      });
+      return pixel[0] > 200 && (pixel[1] < 80) === red && (pixel[2] < 80) === red ? true : undefined;
+    });
+}
+
+// A feature state as JSON, with its keys in order.
+function state(value: Record<string, Object> | undefined): string {
+  return value === undefined ? 'undefined' : JSON.stringify(value, Object.keys(value).sort());
 }
 
 function contentFailed(id: string): boolean {
@@ -499,6 +548,118 @@ export default function styleTest(): void {
       expect(await mapStyle().getGlobalStateProperty('size')).assertEqual(2);
       expect(await mapStyle().setGlobalStateProperty('size', null)).assertTrue();
       expect(await mapStyle().getGlobalStateProperty('size')).assertUndefined();
+    });
+
+    it('sets, reads, removes, and resets the feature state of a content source', 0, async () => {
+      testMap.content = selectableDots();
+      const source = await geoJsonNamed('places');
+      const one: Record<string, Object> = { 'selected': true, 'size': 2 };
+      // The map compares IDs as text: feature 1's ID is the number 1.
+      expect(await source.setFeatureState('1', one)).assertTrue();
+      expect(state(await source.getFeatureState('1'))).assertEqual('{"selected":true,"size":2}');
+      const hit = await eventually('the query finds the state', async () => {
+        const hits = await queryAt(pixelFor({ latitude: 10, longitude: 20 }), ['dots']);
+        return state(hits[0].state).includes('selected') ? hits[0] : undefined;
+      });
+      expect(state(hit.state)).assertEqual('{"selected":true,"size":2}');
+
+      // Merges, and removes one key.
+      const size: Record<string, Object> = { 'size': 3 };
+      expect(await source.setFeatureState('1', size)).assertTrue();
+      expect(state(await source.getFeatureState('1'))).assertEqual('{"selected":true,"size":3}');
+      expect(await source.removeFeatureState('1', 'size')).assertTrue();
+      expect(state(await source.getFeatureState('1'))).assertEqual('{"selected":true}');
+      expect(await source.removeFeatureState('1')).assertTrue();
+      expect(state(await source.getFeatureState('1'))).assertEqual('{}');
+
+      expect(await source.setFeatureState('1', one)).assertTrue();
+      expect(await source.setFeatureState('2', one)).assertTrue();
+      expect(await source.resetFeatureStates()).assertTrue();
+      expect(state(await source.getFeatureState('1'))).assertEqual('{}');
+      expect(state(await source.getFeatureState('2'))).assertEqual('{}');
+
+      const cyclic: Record<string, Object> = {};
+      cyclic['self'] = cyclic;
+      expectThrow('JSON', () => source.setFeatureState('1', cyclic));
+    });
+
+    it('draws a feature state change on an idle map', 0, async () => {
+      testMap.content = selectableDots();
+      const source = await geoJsonNamed('places');
+      const one: LatLng = { latitude: 10, longitude: 20 };
+      const two: LatLng = { latitude: -20, longitude: -40 };
+      await untilRed(two, false);
+      const selected: Record<string, Object> = { 'selected': true };
+      expect(await source.setFeatureState('1', selected)).assertTrue();
+      await untilRed(one, true);
+
+      // A selection that moves: the map applies both in one frame.
+      await Promise.all([source.removeFeatureState('1'), source.setFeatureState('2', selected)]);
+      await untilRed(two, true);
+      await untilRed(one, false);
+    });
+
+    it('keeps feature state by source ID in a new style, and expires the old handles', 0, async () => {
+      testMap.content = selectableDots();
+      const source = await geoJsonNamed('places');
+      const selected: Record<string, Object> = { 'selected': true };
+      expect(await source.setFeatureState('1', selected)).assertTrue();
+
+      await setStyle(backgroundStyle('#4ad94a'));
+      expect(await source.setFeatureState('1', selected)).assertFalse();
+      expect(await source.removeFeatureState('1')).assertFalse();
+      expect(await source.resetFeatureStates()).assertFalse();
+      expect(await source.getFeatureState('1')).assertUndefined();
+      const again = await geoJsonNamed('places');
+      expect(state(await again.getFeatureState('1'))).assertEqual('{"selected":true}');
+      expect(await again.resetFeatureStates()).assertTrue();
+      expect(state(await again.getFeatureState('1'))).assertEqual('{}');
+    });
+
+    it('reads a cluster\'s expansion zoom, children, and leaves', 0, async () => {
+      const json = geoJson(CROWD);
+      json['cluster'] = true;
+      const plain: StyleLayer = dots('plain');
+      plain.id = 'plain-dots';
+      testMap.content = {
+        sources: [{ id: 'crowd', json: json }, { id: 'plain', json: geoJson(PLACES) }],
+        layers: [{ id: 'clusters', type: 'circle', source: 'crowd', filter: has('point_count'),
+          paint: { 'circle-radius': 12 } }, plain],
+      };
+      const source = await geoJsonNamed('crowd');
+      const hits = await queryAt(pixelFor({ latitude: 0.05, longitude: 0.05 }), ['clusters']);
+      const cluster = hits[0].feature;
+      expect(cluster.properties?.['point_count']).assertEqual(5);
+
+      const zoom = await source.getClusterExpansionZoom(cluster);
+      expect(zoom ?? 0).assertLarger(1);
+      // The children hold the cluster's five points between them.
+      const children = await source.getClusterChildren(cluster);
+      expect(children?.features.length ?? 0).assertLarger(0);
+      const points = (children?.features ?? []).reduce((sum: number, child: GeoJsonFeature): number =>
+        sum + ((child.properties?.['point_count'] as number | undefined) ?? 1), 0);
+      expect(points).assertEqual(5);
+
+      expect((await source.getClusterLeaves(cluster, 10, 0))?.features.length).assertEqual(5);
+      expect((await source.getClusterLeaves(cluster, 2, 0))?.features.length).assertEqual(2);
+      expect((await source.getClusterLeaves(cluster, 10, 3))?.features.length).assertEqual(2);
+      expect((await source.getClusterLeaves(cluster, 0, 0))?.features.length).assertEqual(0);
+      const leaves = await source.getClusterLeaves(cluster, 10, 0);
+      expect(leaves?.features.every((leaf: GeoJsonFeature) => leaf.properties?.['cluster'] === undefined))
+        .assertTrue();
+      expectThrow('-1', () => source.getClusterLeaves(cluster, -1, 0));
+      expectThrow('0.5', () => source.getClusterLeaves(cluster, 1, 0.5));
+
+      // A point, a cluster that the source doesn't have, and a source that
+      // doesn't cluster.
+      const point: GeoJsonFeature = { type: 'Feature', geometry: null, properties: { 'n': 0 } };
+      expect(await source.getClusterExpansionZoom(point)).assertUndefined();
+      const unknown: GeoJsonFeature = { type: 'Feature', geometry: null, properties: { 'cluster_id': 123456 } };
+      expect(await source.getClusterExpansionZoom(unknown)).assertUndefined();
+      expect(await source.getClusterChildren(unknown)).assertUndefined();
+      expect(await source.getClusterLeaves(unknown, 10, 0)).assertUndefined();
+      await queryAt(pixelFor({ latitude: 10, longitude: 20 }), ['plain-dots']);
+      expect(await (await geoJsonNamed('plain')).getClusterExpansionZoom(cluster)).assertUndefined();
     });
 
     it('reads back the transition and the light that it sets', 0, async () => {

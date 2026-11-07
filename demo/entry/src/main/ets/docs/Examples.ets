@@ -22,21 +22,25 @@ import {
   AttributionText,
   CameraPosition,
   CameraTransitionMode,
+  cases,
   CompassButton,
   ConnectivityMode,
   ContentError,
   DefaultControls,
   eq,
   FeatureClickEvent,
+  featureState,
   FollowBearing,
   fp,
   FullControls,
   GeoJsonFeature,
   GeoJsonFeatureCollection,
+  GeoJsonPoint,
   GeoJsonSourceHandle,
   get,
   geometryType,
   globalState,
+  has,
   interpolate,
   LatLngBounds,
   LayerHandle,
@@ -61,6 +65,7 @@ import {
   MapSnapshot,
   Marker,
   match,
+  not,
   OfflineRegion,
   OfflineRegionDefinition,
   PointerPinButton,
@@ -68,6 +73,7 @@ import {
   renderSnapshot,
   ScaleBar,
   StyleLayer,
+  toBoolean,
   WheelAction,
   zoom,
   ZoomButtons,
@@ -824,6 +830,7 @@ struct StyleExample {
   private controller: MapController = new MapController({
     camera: { center: { latitude: 48.858, longitude: 2.315 }, zoom: 12 },
   });
+  private selected: string | undefined = undefined;
 
   // A layer that the content declares shows the places of the kind that the
   // global state names.
@@ -834,7 +841,14 @@ struct StyleExample {
       layers: [
         {
           id: 'places', type: 'circle', source: 'places', filter: eq(get('kind'), globalState('kind')),
-          paint: { 'circle-radius': 8, 'circle-color': '#fb8c00' },
+          paint: {
+            'circle-radius': 8,
+            'circle-color': cases([[toBoolean(featureState('selected')), '#e53935']], '#fb8c00'),
+          },
+          onClick: (event: FeatureClickEvent): boolean => {
+            this.select(event.features[0]).catch((error: Error) => console.error(error.message));
+            return true;
+          },
         },
       ],
     };
@@ -875,6 +889,62 @@ struct StyleExample {
     await this.controller.style.setGlobalStateProperty('kind', kind);
   }
   // #endregion style-global-state
+
+  // #region feature-state
+  // Highlights the place under a click: the layer's paint reads its
+  // `selected` state. The map compares feature IDs as text.
+  private async select(place: GeoJsonFeature): Promise<void> {
+    const places = await this.controller.style.getGeoJsonSource('places');
+    const previous = this.selected;
+    this.selected = `${place.id}`;
+    if (previous !== undefined) {
+      await places?.removeFeatureState(previous);
+    }
+    await places?.setFeatureState(this.selected, { 'selected': true });
+  }
+  // #endregion feature-state
+}
+
+@ComponentV2
+struct ClusterExample {
+  private controller: MapController = new MapController({
+    camera: { center: { latitude: 48.858, longitude: 2.315 }, zoom: 11 },
+  });
+
+  build() {
+    MaplibreMap({ style: STYLE, controller: this.controller, content: this.content })
+  }
+
+  // #region cluster-zoom
+  // The places in clusters, and a click on a cluster zooms in until it splits.
+  @Computed
+  get content(): MapContent {
+    return {
+      sources: [{ id: 'places', json: { 'type': 'geojson', 'data': PARIS, 'cluster': true } }],
+      layers: [{
+        id: 'clusters', type: 'circle', source: 'places', filter: has('point_count'),
+        paint: { 'circle-radius': 16, 'circle-color': '#1e88e5' },
+        onClick: (event: FeatureClickEvent): boolean => {
+          this.zoomInto(event.features[0]).catch((error: Error) => console.error(error.message));
+          return true;
+        },
+      }, {
+        id: 'places', type: 'circle', source: 'places', filter: not(has('point_count')),
+        paint: { 'circle-radius': 8, 'circle-color': '#fb8c00' },
+      }],
+    };
+  }
+
+  private async zoomInto(cluster: GeoJsonFeature): Promise<void> {
+    const places = await this.controller.style.getGeoJsonSource('places');
+    const zoom = await places?.getClusterExpansionZoom(cluster);
+    if (zoom !== undefined && cluster.geometry?.type === 'Point') {
+      const position = (cluster.geometry as GeoJsonPoint).coordinates;
+      await this.controller.updateCamera({ center: { latitude: position[1], longitude: position[0] }, zoom: zoom },
+        { mode: CameraTransitionMode.EASE });
+    }
+  }
+  // #endregion cluster-zoom
 }
 
 // Errors
@@ -1025,6 +1095,9 @@ export struct DocExamples {
         TabContent() {
           StyleExample()
         }.tabBar('Style API')
+        TabContent() {
+          ClusterExample()
+        }.tabBar('Clusters')
         TabContent() {
           PresetExample()
         }.tabBar('Preset')

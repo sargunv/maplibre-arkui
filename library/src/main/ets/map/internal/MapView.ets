@@ -841,7 +841,7 @@ export class MapView extends XComponentController implements GestureTarget, Runt
       if (current() && reconciler !== undefined) {
         if (state !== undefined && state.view === this) {
           state.styleLoaded = true;
-          state.loadedStyle = new LoadedStyle(map, reconciler);
+          state.loadedStyle = new LoadedStyle(map, reconciler, () => state.frameSession());
           this.readAttributions(map, state);
         }
         this.events.onStyleLoaded();

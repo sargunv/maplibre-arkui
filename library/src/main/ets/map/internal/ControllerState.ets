@@ -291,7 +291,7 @@ export class ControllerState {
   }
 
   // The session of the map that shows a frame.
-  private frameSession(): RenderSessionHandle | undefined {
+  frameSession(): RenderSessionHandle | undefined {
     return this.viewport === undefined ? undefined : this.view?.session;
   }
 

@@ -16,7 +16,7 @@ import { StyleImage } from '../../content/StyleImage';
 import { StyleSource } from '../../content/StyleSource';
 import { LayerHandle } from '../LayerHandle';
 import { MapStyle, StyleTransitionOptions } from '../MapStyle';
-import { GeoJsonSourceHandle, ImageSourceHandle, SourceHandle } from '../SourceHandle';
+import { GeoJsonSourceHandle, ImageSourceHandle, SourceHandle, VectorSourceHandle } from '../SourceHandle';
 import { LayerKey, SourceKey } from './HandleKeys';
 import { LoadedStyle } from './LoadedStyle';
 import {
@@ -54,6 +54,11 @@ export class StyleApi implements MapStyle {
   getImageSource(id: string): Promise<ImageSourceHandle | undefined> {
     return this.findSource(id).then((source: SourceHandle | undefined): ImageSourceHandle | undefined =>
       source instanceof ImageSourceHandle ? source as ImageSourceHandle : undefined);
+  }
+
+  getVectorSource(id: string): Promise<VectorSourceHandle | undefined> {
+    return this.findSource(id).then((source: SourceHandle | undefined): VectorSourceHandle | undefined =>
+      source instanceof VectorSourceHandle ? source as VectorSourceHandle : undefined);
   }
 
   getSources(): Promise<SourceHandle[] | undefined> {
@@ -234,6 +239,9 @@ export class StyleApi implements MapStyle {
     }
     if (info.type === StyleSourceType.image) {
       return new ImageSourceHandle(key);
+    }
+    if (info.type === StyleSourceType.vector) {
+      return new VectorSourceHandle(key);
     }
     return new SourceHandle(key);
   }

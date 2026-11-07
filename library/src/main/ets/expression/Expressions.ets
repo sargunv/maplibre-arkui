@@ -101,7 +101,11 @@ export function has(name: ExpressionInput, object?: Expression): Expression {
   return object === undefined ? call('has', name) : call('has', name, object);
 }
 
-/** The feature's state property `name`. Only paint properties can read it. */
+/**
+ * The feature's state property `name`, which the app sets with the
+ * `setFeatureState()` of a source's handle, such as
+ * `GeoJsonSourceHandle.setFeatureState()`. Only paint properties can read it.
+ */
 export function featureState(name: ExpressionInput): Expression {
   return call('feature-state', name);
 }

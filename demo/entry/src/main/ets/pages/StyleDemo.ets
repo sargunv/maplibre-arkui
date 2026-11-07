@@ -1,5 +1,3 @@
-import { CommandCompletion, FeatureStateSelector, MapHandle } from '@maplibre/native-ffi';
-import { FrameCallback } from '@ohos.arkui.UIContext';
 import image from '@ohos.multimedia.image';
 
 import {
@@ -12,6 +10,7 @@ import {
   featureState,
   GeoJsonFeature,
   GeoJsonFeatureCollection,
+  GeoJsonSourceHandle,
   geometryType,
   get,
   LatLng,
@@ -152,8 +151,8 @@ function loadPin(context: UIContext): image.PixelMap {
 // A map whose content comes from the page's state: a GeoJSON source, layers
 // styled with expressions, and an icon from the app's resources. The buttons
 // change the state, and the map applies the change, in each base style. The
-// style API hides the base style's 3D buildings. A tap on a feature selects it
-// with feature state, through FFI, and a long press adds a point.
+// style API hides the base style's 3D buildings, and a tap on a feature
+// selects it with feature state. A long press adds a point.
 @ComponentV2
 export struct StyleDemo {
   @Local style: string = LIBERTY;
@@ -168,7 +167,10 @@ export struct StyleDemo {
   });
   // Kept while the content has it, and released as the page goes.
   private pin: image.PixelMap = loadPin(this.getUIContext());
-  private selected: FeatureStateSelector | undefined = undefined;
+  // The content's source in the current style, and the ID of the feature
+  // that a tap selected in it.
+  private places: GeoJsonSourceHandle | undefined = undefined;
+  private selected: string | undefined = undefined;
   private gone: boolean = false;
   // The layers are on top of each other, so the topmost feature under a click
   // takes it, and the layers under it don't get it.
@@ -212,8 +214,10 @@ export struct StyleDemo {
             this.message = error.message;
           },
           // Each style starts with its buildings as its document has them.
+          // The map keeps the selection's feature state.
           onStyleLoaded: () => {
             this.showBuildings();
+            this.findPlaces();
           },
           // A click that no feature took clears the selection.
           onUnhandledClick: (event: MapClickEvent) => {
@@ -289,6 +293,15 @@ export struct StyleDemo {
     }
   }
 
+  private async findPlaces(): Promise<void> {
+    this.places = undefined;
+    try {
+      this.places = await this.controller.style.getGeoJsonSource('paris');
+    } catch (error) {
+      this.message = (error as Error).message;
+    }
+  }
+
   // A still image of the same style, content, and camera, without the camera
   // padding.
   private async takeSnapshot(): Promise<void> {
@@ -313,55 +326,33 @@ export struct StyleDemo {
     }
   }
 
-  // Selects the feature that a click hit, or nothing. The library has no
-  // feature state yet, so this goes through FFI's map.
+  // Selects the feature that a click hit, or nothing.
   private async select(event: MapClickEvent, feature?: GeoJsonFeature, layer?: string): Promise<void> {
     try {
       const where = `at ${event.point.x.toFixed(0)}, ${event.point.y.toFixed(0)} vp`;
       this.message = feature === undefined ? `Nothing here ${where}` :
         `${feature.properties?.['name']} in ${layer} ${where}`;
 
-      // The map compares feature IDs as text. Every layer draws the paris
-      // source.
-      const next: FeatureStateSelector | undefined = feature?.id === undefined ? undefined :
-        { sourceId: 'paris', featureId: { kind: 'stringValue', value: `${feature.id}` } };
-      // Swap the selection before awaiting, so a later tap's swap follows this
-      // one. The map runs the commands in order.
-      const changes = this.controller.withFfiMap((map: MapHandle): Promise<CommandCompletion>[] => {
-        const previous = this.selected;
-        this.selected = next;
-        const sent: Promise<CommandCompletion>[] = [];
-        if (previous !== undefined) {
-          sent.push(map.removeFeatureState(previous));
-        }
-        if (next !== undefined) {
-          sent.push(map.setFeatureState(next, SELECTED_STATE));
-        }
-        return sent;
-      });
-      if (changes === undefined) {
+      // Every layer draws the paris source. Swap the selection before
+      // awaiting, so a later tap's swap follows this one: the map applies the
+      // changes in order.
+      const places = this.places;
+      if (places === undefined) {
         return;
       }
+      const previous = this.selected;
+      const next = feature?.id === undefined ? undefined : `${feature.id}`;
+      this.selected = next;
+      const changes: Promise<boolean>[] = [];
+      if (previous !== undefined) {
+        changes.push(places.removeFeatureState(previous));
+      }
+      if (next !== undefined) {
+        changes.push(places.setFeatureState(next, SELECTED_STATE));
+      }
       await Promise.all(changes);
-      // FFI draws a feature state change only from the frame after the one
-      // that applies it, so ask for that frame (maplibre-native-ffi#1706).
-      this.getUIContext().postDelayedFrameCallback(new Repaint(this.controller), 100);
     } catch (error) {
       this.message = (error as Error).message;
     }
-  }
-}
-
-// Asks the map on screen for one more frame.
-class Repaint extends FrameCallback {
-  private readonly controller: MapController;
-
-  constructor(controller: MapController) {
-    super();
-    this.controller = controller;
-  }
-
-  onFrame(frameTimeInNano: number): void {
-    this.controller.withFfiMap((map: MapHandle) => map.discarding.requestRepaint());
   }
 }

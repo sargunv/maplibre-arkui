@@ -1,6 +1,6 @@
 ---
 title: The style API
-description: Read and change the loaded style, query features, and reach MapLibre Native FFI's map for the rest.
+description: Read and change the loaded style, set feature state, query features and clusters, and reach MapLibre Native FFI's map for the rest.
 ---
 
 import { Code } from "@astrojs/starlight/components";
@@ -50,6 +50,38 @@ to the loaded style alone, for one that depends on what that style has, which
 the app adds in `onStyleLoaded` after it reads the style. Until it's in, a
 content layer that draws it fails with a `ContentError`.
 
+### Feature state
+
+Feature state gives a feature of a source values by name, which paint
+properties read with <Api of="featureState" display="featureState()" />, such
+as to highlight the feature that a click selects. It works on every source,
+the base style's and the content's too. A
+<Api of="GeoJsonSourceHandle" />'s
+
+<Api of="GeoJsonSourceHandle.setFeatureState" display="setFeatureState()" />
+
+merges values into a feature's state, and
+
+<Api of="GeoJsonSourceHandle.removeFeatureState" display="removeFeatureState()" />
+
+removes them; a <Api of="VectorSourceHandle" />, from
+<Api of="MapStyle.getVectorSource" display="getVectorSource()" />, does the same
+in one of its source layers. A feature state method takes the feature's ID as
+text, and the change draws on the next frame:
+
+<Code code={region(examples, "feature-state")} lang="ts" />
+
+### Clusters
+
+A GeoJSON source with `cluster` set groups nearby points into cluster features,
+which have a `cluster_id` property. A <Api of="GeoJsonSourceHandle" /> reads a
+cluster: the zoom at which it splits, the clusters and points that it splits
+into, and the points that it holds. Each resolves `undefined` for a feature that
+isn't one of the source's clusters. A click on a cluster can zoom in until it
+splits:
+
+<Code code={region(examples, "cluster-zoom")} lang="ts" />
+
 ### Images
 
 <Api of="MapStyle.setImage" display="setImage()" /> adds a
@@ -79,9 +111,9 @@ property's default.
 ## Who owns an ID
 
 The content owns the IDs of its sources, layers, and images. The style API
-reads them, but its writes throw for them: change the content instead. A
-handle's `fromContent` says whether its layer or source is the content's, so a
-loop over `getLayers()` can skip them. When the
+reads them, but its writes throw for them, except those of feature state: change
+the content instead. A handle's `fromContent` says whether its layer or source
+is the content's, so a loop over `getLayers()` can skip them. When the
 content declares the ID of a source that the app added, the content's source
 replaces it. The library reserves the IDs that start with `maplibre-arkui`,
 such as the user location indicator's, and the global state names that start
@@ -91,11 +123,17 @@ reads: reads leave them out, and writes throw.
 ## What the next style keeps
 
 A new style starts from its own document. It doesn't keep what the app changed
-through the style API or the FFI map, such as a source it added, a property it
-set, or feature state, and the handles of the last style expire. A new `style`
-value, a map that appears again, and a map that starts again at a new display
-density each load a new style. Make the changes again in `onStyleLoaded`, or
-declare them as content.
+through the style API or the FFI map, such as a source it added or a property it
+set, and the handles of the last style expire. A new `style` value, a map that
+appears again, and a map that starts again at a new display density each load a
+new style. Make the changes again in `onStyleLoaded`, or declare them as
+content.
+
+Feature state is the map's, not the style's: a source of the next style with
+the same ID shows the state that the app set, until the app removes it, such
+as with <Api of="GeoJsonSourceHandle.resetFeatureStates" display="resetFeatureStates()" />.
+A map that appears again, or starts again at a new display density, starts
+without it.
 
 ## Query features
 
@@ -115,8 +153,10 @@ finds the features of a source in the tiles that it has loaded. Both resolve
 
 ## The FFI map
 
-For what the library doesn't cover yet, such as feature state, clusters, or
-debug overlays, <Api of="MapController.withFfiMap" display="withFfiMap()" />
+For what the library doesn't cover yet, such as debug overlays,
+
+<Api of="MapController.withFfiMap" display="withFfiMap()" />
+
 lends a callback the FFI map, a `MapHandle`, and its render session, a
 `RenderSessionHandle`. Their API is MapLibre Native FFI's: see its [TypeScript
 reference]. Import their types from `@maplibre/native-ffi`, at the version that
@@ -129,11 +169,4 @@ Don't change what the library owns through the FFI map: the style, the
 content's sources, layers, and images, the camera padding, the camera bounds,
 the runtime's event handler, and the map's event mask.
 
-On an idle map, a feature state change draws only from the frame after the one
-that applies it; until FFI fixes that, request one, as the demo's style page
-does with `map.discarding.requestRepaint()` from a delayed frame callback
-([maplibre-native-ffi#1706]).
-
 [TypeScript reference]: https://maplibre.org/maplibre-native-ffi/reference/typescript/
-
-[maplibre-native-ffi#1706]: https://github.com/maplibre/maplibre-native-ffi/issues/1706
