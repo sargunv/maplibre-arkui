@@ -364,7 +364,11 @@ export class ContentReconciler {
     for (const id of Array.from(replaced)) {
       if (await this.run(generation, id, `removing source ${id}`, map.removeStyleSource(id))) {
         this.sources.delete(id);
-        this.displaced.delete(id);
+        // The content's source, which the map may have rejected while the
+        // app's held the ID, goes in next.
+        if (this.displaced.delete(id)) {
+          this.rejectedSources.delete(id);
+        }
         bump(this.sourceVersions, id);
       }
     }

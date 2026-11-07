@@ -163,7 +163,7 @@ export class StyleApi implements MapStyle {
           return undefined;
         }
         await applied;
-        return this.findSource(source.id);
+        return holds() ? this.findSource(source.id, style) : undefined;
       });
   }
 
@@ -292,8 +292,7 @@ export class StyleApi implements MapStyle {
     return write(() => this.current() === style, 'setting the light', () => style.map.setStyleLightJson(light));
   }
 
-  private findSource(id: string): Promise<SourceRef | undefined> {
-    const style = this.current();
+  private findSource(id: string, style: LoadedStyle | undefined = this.current()): Promise<SourceRef | undefined> {
     if (style === undefined || reservedId(id)) {
       return Promise.resolve(undefined);
     }
