@@ -9,16 +9,15 @@
 
 import { FrameCallback } from '@ohos.arkui.UIContext';
 
-import { ScreenPoint } from './Geometry';
 import { Insets, NO_INSETS } from './Insets';
+import { logError } from './log';
 import { MapController } from './MapController';
 
 @ObservedV2
 export class MapScope {
   // The ID of the map's root node.
   readonly key: string;
-  // The controller of the map. Outside a map, a controller that no map shows,
-  // so the controls there draw nothing.
+  // The controller of the map, which the map sets as it appears.
   @Trace controller: MapController = new MapController();
   // Whether the user's gesture moves the camera, from onGestureStart until
   // onGestureEnd.
@@ -26,11 +25,8 @@ export class MapScope {
   // The map's viewport insets in vp, the edges that the app's UI covers, which
   // the overlay presets keep their controls clear of.
   @Trace insets: Insets = NO_INSETS;
-  // Where the map's top-left corner is on the page, so a placement anywhere in
-  // the overlay can find the map's points in its own frame.
-  @Trace origin: ScreenPoint = { x: 0, y: 0 };
 
-  constructor(key: string = '') {
+  constructor(key: string) {
     this.key = key;
   }
 }
@@ -58,9 +54,11 @@ export function controlKey(): string {
   return `maplibre-control-${++lastControl}`;
 }
 
-// The scope of the map whose overlay holds the node with ID `key`, or an
-// empty one outside a map. Call it once the node attaches to the tree.
-export function findScope(context: UIContext, key: string): MapScope {
+// The scope of the map whose overlay holds the node with ID `key`, the root
+// node of the control `name`. Outside a map's overlay, it logs that and
+// returns undefined, and the control draws nothing. Call it once the node
+// attaches to the tree.
+export function findScope(context: UIContext, key: string, name: string): MapScope | undefined {
   let node = context.getAttachedFrameNodeById(key);
   while (node !== null && node !== undefined) {
     const scope = scopes.get(node.getId());
@@ -69,7 +67,8 @@ export function findScope(context: UIContext, key: string): MapScope {
     }
     node = node.getParent();
   }
-  return new MapScope();
+  logError(`${name} must be in a MaplibreMap's overlay`);
+  return undefined;
 }
 
 class Delayed extends FrameCallback {

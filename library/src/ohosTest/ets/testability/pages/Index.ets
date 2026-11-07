@@ -1,22 +1,22 @@
 import {
+  AttributionButton,
+  AttributionControls,
   CameraIdleEvent,
-  LatLng,
-  MapAttributionButton,
-  MapAttributionOnlyOverlay,
+  CompassButton,
+  DefaultControls,
+  DisappearingCompassButton,
+  DisappearingScaleBar,
+  FullControls,
   MapClickEvent,
-  MapCompassButton,
-  MapDefaultOverlay,
-  MapDisappearingCompassButton,
-  MapDisappearingScaleBar,
   MapError,
-  MapFullOverlay,
   MaplibreMap,
-  MapPlacedAt,
-  MapPlacedTowards,
-  MapPointerPinButton,
-  MapScaleBar,
-  MapZoomButtons,
+  Marker,
+  OffscreenMarker,
+  OffscreenMarkerAngleEvent,
+  PointerPinButton,
+  ScaleBar,
   ScaleBarUnits,
+  ZoomButtons,
 } from '@maplibre/arkui';
 
 import { STYLE, testMap } from '../TestMaps';
@@ -34,11 +34,11 @@ struct Index {
   @Builder
   placedAt() {
     if (testMap.placedAtAlignment === undefined) {
-      MapPlacedAt({ coordinate: testMap.placedAt! }) {
+      Marker({ coordinate: testMap.placedAt! }) {
         this.box('placed-at')
       }
     } else {
-      MapPlacedAt({ coordinate: testMap.placedAt!, alignment: testMap.placedAtAlignment }) {
+      Marker({ coordinate: testMap.placedAt!, alignment: testMap.placedAtAlignment }) {
         this.box('placed-at')
       }
     }
@@ -46,10 +46,10 @@ struct Index {
 
   @Builder
   placedTowards() {
-    MapPlacedTowards({
+    OffscreenMarker({
       coordinate: testMap.placedTowards!,
-      onAngleChange: (angle: number) => {
-        testMap.placedTowardsAngles.push(angle);
+      onAngleChange: (event: OffscreenMarkerAngleEvent) => {
+        testMap.placedTowardsAngles.push(event.angle);
       },
     }) {
       this.box('placed-towards')
@@ -58,9 +58,10 @@ struct Index {
 
   @Builder
   pointerPin() {
-    MapPointerPinButton({
+    PointerPinButton({
       coordinate: testMap.pointerPin!,
-      onTap: () => {
+      label: 'Pin',
+      onPinClick: () => {
         testMap.pointerPinTaps++;
       },
     }) {
@@ -69,6 +70,20 @@ struct Index {
         .width(24)
         .height(24)
         .backgroundColor(Color.Red)
+    }
+  }
+
+  @Builder
+  clickableMarker() {
+    Marker({ coordinate: testMap.clickableMarker! }) {
+      Column()
+        .id('clickable-marker')
+        .width(20)
+        .height(10)
+        .backgroundColor(Color.Red)
+        .onClick(() => {
+          testMap.markerClicks++;
+        })
     }
   }
 
@@ -84,23 +99,23 @@ struct Index {
   @Builder
   scaleBar() {
     if (testMap.scaleBarMaxWidth === undefined) {
-      MapScaleBar({ units: testMap.scaleBar ?? ScaleBarUnits.metric })
+      ScaleBar({ units: testMap.scaleBar ?? ScaleBarUnits.METRIC })
     } else {
-      MapScaleBar({ units: testMap.scaleBar ?? ScaleBarUnits.metric, maxWidth: testMap.scaleBarMaxWidth })
+      ScaleBar({ units: testMap.scaleBar ?? ScaleBarUnits.METRIC, maxWidth: testMap.scaleBarMaxWidth })
     }
   }
 
   @Builder
   disappearingScaleBar() {
-    MapDisappearingScaleBar({ units: ScaleBarUnits.metric, visibilityDurationMs: testMap.disappearingScaleBarMs ?? 3000 })
+    DisappearingScaleBar({ units: ScaleBarUnits.METRIC, visibilityDurationMs: testMap.disappearingScaleBarMs ?? 3000 })
   }
 
   @Builder
   compass() {
     if (testMap.compassMs === undefined) {
-      MapDisappearingCompassButton()
+      DisappearingCompassButton()
     } else {
-      MapDisappearingCompassButton({ visibilityDurationMs: testMap.compassMs })
+      DisappearingCompassButton({ visibilityDurationMs: testMap.compassMs })
     }
   }
 
@@ -119,7 +134,7 @@ struct Index {
     .hitTestBehavior(HitTestMode.Transparent)
     Stack({ alignContent: Alignment.End }) {
       if (testMap.zoomButtons) {
-        MapZoomButtons()
+        ZoomButtons()
       }
     }
     .width('100%')
@@ -128,7 +143,7 @@ struct Index {
     .hitTestBehavior(HitTestMode.Transparent)
     Stack({ alignContent: Alignment.BottomEnd }) {
       if (testMap.attribution) {
-        MapAttributionButton()
+        AttributionButton()
       }
     }
     .width('100%')
@@ -140,11 +155,11 @@ struct Index {
   @Builder
   preset() {
     if (testMap.overlay === 'default') {
-      MapDefaultOverlay()
+      DefaultControls()
     } else if (testMap.overlay === 'full') {
-      MapFullOverlay()
+      FullControls()
     } else if (testMap.overlay === 'attributionOnly') {
-      MapAttributionOnlyOverlay()
+      AttributionControls()
     }
   }
 
@@ -160,7 +175,7 @@ struct Index {
         this.disappearingScaleBar()
       }
       if (testMap.alwaysShownCompass) {
-        MapCompassButton()
+        CompassButton()
       }
     }
     .padding(8)
@@ -181,6 +196,10 @@ struct Index {
     .height('100%')
     .padding(testMap.placementPadding)
     .hitTestBehavior(HitTestMode.Transparent)
+    // Straight in the overlay, so its content keeps taps from the map.
+    if (testMap.clickableMarker !== undefined) {
+      this.clickableMarker()
+    }
   }
 
   build() {

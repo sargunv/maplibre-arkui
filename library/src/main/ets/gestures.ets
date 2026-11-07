@@ -27,8 +27,8 @@ import { callHandler } from './log';
  * ```
  *
  * A gesture is input on the map that moves the camera, as `interactions`
- * allows, until it and its momentum stop. The overlay's `MapZoomButtons` and
- * `MapCompassButton` move the camera through the controller, so they don't
+ * allows, until it and its momentum stop. The overlay's `ZoomButtons` and
+ * `CompassButton` move the camera through the controller, so they don't
  * count. The map's `onGestureStart` and `onGestureEnd` bracket each gesture:
  *
  * - Each `onGestureStart` is followed by exactly one `onGestureEnd` before the

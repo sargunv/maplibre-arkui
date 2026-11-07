@@ -17,14 +17,18 @@ import util from '@ohos.util';
 
 import {
   addRuntimeEventListener,
+  AttributionControls,
   CameraPosition,
   CameraTransitionMode,
+  CompassButton,
   ConnectivityMode,
   ContentError,
+  DefaultControls,
   eq,
   FeatureClickEvent,
   FollowBearing,
   fp,
+  FullControls,
   GeoJsonFeature,
   GeoJsonFeatureCollection,
   get,
@@ -39,27 +43,22 @@ import {
   LogSeverity,
   LogSeverityFlag,
   LatLng,
-  MapAttributionOnlyOverlay,
   MapClickEvent,
-  MapCompassButton,
   MapContent,
   MapController,
-  MapDefaultOverlay,
   MapError,
-  MapFullOverlay,
   MaplibreMap,
-  MapPlacedAt,
-  MapPointerPinButton,
-  MapScaleBar,
-  MapZoomButtons,
+  Marker,
   match,
   OfflineRegionDefinition,
   OfflineRegionDownloadState,
+  PointerPinButton,
   RenderedFeature,
   RuntimeEvent,
   RuntimeEventFlag,
   RuntimeEventType,
   RuntimeHandle,
+  ScaleBar,
   setConnectivityMode,
   setLogCallback,
   snapshot,
@@ -67,6 +66,7 @@ import {
   UrlMatchFlag,
   WheelAction,
   zoom,
+  ZoomButtons,
 } from '@maplibre/arkui';
 
 const STYLE = 'https://tiles.openfreemap.org/styles/liberty';
@@ -256,7 +256,7 @@ struct PresetExample {
   build() {
     // #region overlay-preset
     MaplibreMap({ style: STYLE, controller: this.controller }) {
-      MapFullOverlay()
+      FullControls()
     }
     // #endregion overlay-preset
   }
@@ -291,11 +291,11 @@ struct CustomControlsExample {
   build() {
     // #region overlay-custom
     MaplibreMap({ style: STYLE, controller: this.controller }) {
-      MapAttributionOnlyOverlay()
+      AttributionControls()
       Column({ space: 8 }) {
-        MapCompassButton()
-        MapZoomButtons()
-        MapScaleBar()
+        CompassButton()
+        ZoomButtons()
+        ScaleBar()
       }
       .width('100%')
       .padding(16)
@@ -307,40 +307,47 @@ struct CustomControlsExample {
 }
 
 @ComponentV2
-struct PlacedAtExample {
+struct MarkerExample {
   private controller: MapController = new MapController({ camera: { center: PARIS_CENTER, zoom: 11 } });
 
   build() {
-    // #region placed-at
+    // #region marker
     MaplibreMap({ style: STYLE, controller: this.controller }) {
-      MapDefaultOverlay()
-      MapPlacedAt({ coordinate: PARIS_CENTER, alignment: Alignment.Bottom }) {
+      DefaultControls()
+      Marker({ coordinate: PARIS_CENTER, alignment: Alignment.Bottom }) {
+        // Attributes such as onClick go on the content, not on the marker.
         Text('Paris')
           .padding(6)
           .margin({ bottom: 4 })
           .borderRadius(6)
           .backgroundColor(Color.White)
+          .onClick(() => {
+            this.controller.updateCamera({ center: PARIS_CENTER, zoom: 13 }, { mode: CameraTransitionMode.EASE })
+              .catch((error: Error) => console.error(error.message));
+          })
       }
     }
-    // #endregion placed-at
+    // #endregion marker
   }
 }
 
 @ComponentV2
-struct PlacedTowardsExample {
+struct OffscreenMarkerExample {
   private controller: MapController = new MapController({
     camera: { center: { latitude: 51.5072, longitude: -0.1276 }, zoom: 9 },
   });
 
   build() {
-    // #region placed-towards
+    // #region offscreen-marker
     MaplibreMap({ style: STYLE, controller: this.controller }) {
-      MapDefaultOverlay()
-      // The pin moves along an oval 48 vp in from the map's edges.
+      DefaultControls()
+      // The pin moves along an oval 48 vp in from the map's edges: the content
+      // box of its parent, which covers the map.
       Stack() {
-        MapPointerPinButton({
+        PointerPinButton({
           coordinate: PARIS_CENTER,
-          onTap: () => {
+          label: 'Paris',
+          onPinClick: () => {
             this.controller.updateCamera({ center: PARIS_CENTER }, { mode: CameraTransitionMode.FLY })
               .catch((error: Error) => console.error(error.message));
           },
@@ -349,10 +356,12 @@ struct PlacedTowardsExample {
             .fontWeight(FontWeight.Bold)
         }
       }
+      .width('100%')
+      .height('100%')
       .padding(48)
       .hitTestBehavior(HitTestMode.Transparent)
     }
-    // #endregion placed-towards
+    // #endregion offscreen-marker
   }
 }
 
@@ -453,7 +462,7 @@ struct InsetsExample {
         controller: this.controller,
         viewportInsets: { bottom: this.panelHeight },
       }) {
-        MapFullOverlay()
+        FullControls()
       }
       Column() {
         Text('A panel over the map')
@@ -865,11 +874,11 @@ export struct DocExamples {
           CustomControlsExample()
         }.tabBar('Controls')
         TabContent() {
-          PlacedAtExample()
-        }.tabBar('Placed at')
+          MarkerExample()
+        }.tabBar('Marker')
         TabContent() {
-          PlacedTowardsExample()
-        }.tabBar('Placed towards')
+          OffscreenMarkerExample()
+        }.tabBar('Offscreen marker')
         TabContent() {
           CameraExample()
         }.tabBar('Camera')

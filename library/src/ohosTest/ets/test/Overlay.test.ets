@@ -269,25 +269,36 @@ export default function overlayTest(): void {
       expectNear(map.viewport?.metersPerVpAtLatitude(60) ?? 0, expected, expected * 1e-4);
       // The bar is at most 100 vp, which spans 122 km, or 76 mi, here, and
       // 60 m, or 196 ft, at zoom 16.
-      await expectScaleBar(ScaleBarUnits.metric, '100 km');
-      await expectScaleBar(ScaleBarUnits.imperial, '50 mi');
+      await expectScaleBar(ScaleBarUnits.METRIC, '100 km');
+      await expectScaleBar(ScaleBarUnits.FEET_AND_MILES, '50 mi');
       await jumpTo(60, 16);
-      await expectScaleBar(ScaleBarUnits.metric, '50 m');
-      await expectScaleBar(ScaleBarUnits.imperial, '100 ft');
+      await expectScaleBar(ScaleBarUnits.METRIC, '50 m');
+      await expectScaleBar(ScaleBarUnits.FEET_AND_MILES, '100 ft');
       // At 85 degrees and zoom 22, 100 vp spans 0.16 m, or 0.53 ft, so the
       // bar counts in fractions rather than growing past 100 vp.
       await jumpTo(85, 22);
-      await expectScaleBar(ScaleBarUnits.metric, '0.1 m');
-      await expectScaleBar(ScaleBarUnits.imperial, '0.5 ft');
+      await expectScaleBar(ScaleBarUnits.METRIC, '0.1 m');
+      await expectScaleBar(ScaleBarUnits.FEET_AND_MILES, '0.5 ft');
+    });
+
+    it('measures the scale bar in yards and miles', 0, async () => {
+      // 100 vp spans 76 mi at 60 degrees and zoom 5, and 65 yd at zoom 16.
+      await jumpTo(60, 5);
+      await expectScaleBar(ScaleBarUnits.YARDS_AND_MILES, '50 mi');
+      await jumpTo(60, 16);
+      await expectScaleBar(ScaleBarUnits.YARDS_AND_MILES, '50 yd');
     });
 
     it('grows the scale bar up to its maxWidth', 0, async () => {
       // 100 vp spans 122 km here, so 50 vp spans 61 km and 300 vp 367 km.
       await jumpTo(60, 5);
       testMap.scaleBarMaxWidth = 50;
-      await expectScaleBar(ScaleBarUnits.metric, '50 km');
+      await expectScaleBar(ScaleBarUnits.METRIC, '50 km');
       testMap.scaleBarMaxWidth = 300;
-      await expectScaleBar(ScaleBarUnits.metric, '200 km');
+      await expectScaleBar(ScaleBarUnits.METRIC, '200 km');
+      // A maxWidth that isn't above 0 falls back to 100 vp.
+      testMap.scaleBarMaxWidth = 0;
+      await expectScaleBar(ScaleBarUnits.METRIC, '100 km');
     });
 
     it('shows the disappearing scale bar as the zoom changes, until it stays', 0, async () => {

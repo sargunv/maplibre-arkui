@@ -2,13 +2,14 @@
 // itself, as MapLibre Compose's `MapOverlay` presets.
 
 import {
+  AttributionButton,
+  DisappearingCompassButton,
+  DisappearingScaleBar,
   LOGO_WIDTH,
-  MapAttributionButton,
-  MapDisappearingCompassButton,
-  MapDisappearingScaleBar,
-  MapLibreLogo,
-  MapZoomButtons,
+  MaplibreLogo,
+  ZoomButtons,
 } from './Controls';
+import { NO_INSETS } from './Insets';
 import { controlKey, findScope, MapScope } from './scope';
 
 // The space between the presets' controls and the edges of the part of the
@@ -17,8 +18,8 @@ const SPACING = 8;
 
 // The padding that keeps the presets' controls clear of the map's viewport
 // insets, and SPACING in from them.
-function controlsPadding(scope: MapScope): Padding {
-  const insets = scope.insets;
+function controlsPadding(scope: MapScope | undefined): Padding {
+  const insets = scope?.insets ?? NO_INSETS;
   return {
     top: insets.top + SPACING,
     left: insets.left + SPACING,
@@ -52,13 +53,16 @@ const BOTTOM_END: LocalizedAlignRuleOptions = {
 };
 
 /**
- * The MapLibre logo at the map's bottom start, and a `MapAttributionButton`
- * at its bottom end. Most sources' terms require their attribution, so a map
+ * A `MaplibreLogo` at the map's bottom start, and an `AttributionButton` at
+ * its bottom end. Most sources' terms require their attribution, so a map
  * keeps these unless the app shows the attribution elsewhere.
+ *
+ * Place it in a `MaplibreMap`'s overlay, where it fills its parent. Anywhere
+ * else, it logs an error and draws nothing.
  */
 @ComponentV2
-export struct MapAttributionOnlyOverlay {
-  @Local scope: MapScope = new MapScope();
+export struct AttributionControls {
+  @Local scope: MapScope | undefined = undefined;
   private readonly nodeId: string = controlKey();
   // The overlay's width, so the expanded attribution stops short of the logo.
   @Local overlayWidth: number = 0;
@@ -74,11 +78,13 @@ export struct MapAttributionOnlyOverlay {
 
   build() {
     RelativeContainer() {
-      MapLibreLogo()
-        .alignRules(BOTTOM_START)
-      MapAttributionButton()
-        .alignRules(BOTTOM_END)
-        .constraintSize({ maxWidth: this.attributionMaxWidth })
+      if (this.scope !== undefined) {
+        MaplibreLogo()
+          .alignRules(BOTTOM_START)
+        AttributionButton()
+          .alignRules(BOTTOM_END)
+          .constraintSize({ maxWidth: this.attributionMaxWidth })
+      }
     }
     .width('100%')
     .height('100%')
@@ -89,80 +95,90 @@ export struct MapAttributionOnlyOverlay {
     })
     .id(this.nodeId)
     .onAttach(() => {
-      this.scope = findScope(this.getUIContext(), this.nodeId);
+      this.scope = findScope(this.getUIContext(), this.nodeId, 'AttributionControls');
     })
   }
 }
 
 /**
  * What a `MaplibreMap` draws without an overlay of the app's own: a
- * `MapDisappearingScaleBar` at the map's top start and a
- * `MapDisappearingCompassButton` at its top end, which show only while they
- * matter, and the controls of `MapAttributionOnlyOverlay` along the bottom.
+ * `DisappearingScaleBar` at the map's top start and a
+ * `DisappearingCompassButton` at its top end, which show only while they
+ * matter, and the controls of `AttributionControls` along the bottom.
+ *
+ * Place it in a `MaplibreMap`'s overlay, where it fills its parent. Anywhere
+ * else, it logs an error and draws nothing.
  */
 @ComponentV2
-export struct MapDefaultOverlay {
-  @Local scope: MapScope = new MapScope();
+export struct DefaultControls {
+  @Local scope: MapScope | undefined = undefined;
   private readonly nodeId: string = controlKey();
 
   build() {
     Stack() {
-      RelativeContainer() {
-        MapDisappearingScaleBar()
-          .alignRules(TOP_START)
-        MapDisappearingCompassButton()
-          .alignRules(TOP_END)
-      }
-      .width('100%')
-      .height('100%')
-      .padding(controlsPadding(this.scope))
-      .hitTestBehavior(HitTestMode.Transparent)
+      if (this.scope !== undefined) {
+        RelativeContainer() {
+          DisappearingScaleBar()
+            .alignRules(TOP_START)
+          DisappearingCompassButton()
+            .alignRules(TOP_END)
+        }
+        .width('100%')
+        .height('100%')
+        .padding(controlsPadding(this.scope))
+        .hitTestBehavior(HitTestMode.Transparent)
 
-      MapAttributionOnlyOverlay()
+        AttributionControls()
+      }
     }
     .width('100%')
     .height('100%')
     .hitTestBehavior(HitTestMode.Transparent)
     .id(this.nodeId)
     .onAttach(() => {
-      this.scope = findScope(this.getUIContext(), this.nodeId);
+      this.scope = findScope(this.getUIContext(), this.nodeId, 'DefaultControls');
     })
   }
 }
 
 /**
- * The controls of `MapDefaultOverlay`, and `MapZoomButtons` in the middle of
- * the map's end edge, for users with a mouse and for accessibility.
+ * The controls of `DefaultControls`, and `ZoomButtons` in the middle of the
+ * map's end edge, for users with a mouse and for accessibility.
+ *
+ * Place it in a `MaplibreMap`'s overlay, where it fills its parent. Anywhere
+ * else, it logs an error and draws nothing.
  */
 @ComponentV2
-export struct MapFullOverlay {
-  @Local scope: MapScope = new MapScope();
+export struct FullControls {
+  @Local scope: MapScope | undefined = undefined;
   private readonly nodeId: string = controlKey();
 
   build() {
     Stack() {
-      MapDefaultOverlay()
-      RelativeContainer() {
-        MapZoomButtons()
-          .alignRules(CENTER_END)
+      if (this.scope !== undefined) {
+        DefaultControls()
+        RelativeContainer() {
+          ZoomButtons()
+            .alignRules(CENTER_END)
+        }
+        .width('100%')
+        .height('100%')
+        .padding(controlsPadding(this.scope))
+        .hitTestBehavior(HitTestMode.Transparent)
       }
-      .width('100%')
-      .height('100%')
-      .padding(controlsPadding(this.scope))
-      .hitTestBehavior(HitTestMode.Transparent)
     }
     .width('100%')
     .height('100%')
     .hitTestBehavior(HitTestMode.Transparent)
     .id(this.nodeId)
     .onAttach(() => {
-      this.scope = findScope(this.getUIContext(), this.nodeId);
+      this.scope = findScope(this.getUIContext(), this.nodeId, 'FullControls');
     })
   }
 }
 
 // What a MaplibreMap draws when the app leaves out its trailing closure.
 @Builder
-export function defaultOverlay() {
-  MapDefaultOverlay()
+export function defaultControls() {
+  DefaultControls()
 }

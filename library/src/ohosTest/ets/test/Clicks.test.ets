@@ -10,10 +10,22 @@ import {
   RenderedFeature,
   StyleLayer,
 } from '@maplibre/arkui';
-import { Driver, MouseButton } from '@ohos.UiTest';
+import { Driver, MouseButton, ON } from '@ohos.UiTest';
 
 import { STYLE, testMap } from '../testability/TestMaps';
-import { camera, eventually, expectNear, frames, inMap, mapBounds, mapCenter, offset, until } from './helpers';
+import {
+  camera,
+  eventually,
+  expectNear,
+  frames,
+  inMap,
+  mapBounds,
+  mapCenter,
+  near,
+  offset,
+  until,
+  vp2px,
+} from './helpers';
 
 const ZOOM = 3;
 
@@ -172,6 +184,28 @@ export default function clicksTest(): void {
       await driver.click(beside.x, beside.y);
       await settle(3);
       expect(JSON.stringify(testMap.clicks)).assertEqual('["click","dot","unhandled"]');
+    });
+
+    it('gives a tap on a marker to its onClick, and a tap beside it to the map', 0, async () => {
+      // The marker's 20 by 10 vp box sits on the center of the map.
+      testMap.clickableMarker = { latitude: 0, longitude: 0 };
+      const box = await eventually('the marker shows', async () => {
+        const marker = await driver.findComponent(ON.id('clickable-marker'));
+        const bounds = marker === null ? undefined : await marker.getBounds();
+        const c = await mapCenter();
+        return bounds !== undefined && near((bounds.left + bounds.right) / 2, c.x, vp2px(1)) &&
+          near((bounds.top + bounds.bottom) / 2, c.y, vp2px(1)) ? bounds : undefined;
+      });
+      await driver.click(Math.round((box.left + box.right) / 2), Math.round((box.top + box.bottom) / 2));
+      await until('the marker gets the tap', () => testMap.markerClicks === 1);
+      await frames(40);
+      expect(JSON.stringify(testMap.clicks)).assertEqual('[]');
+
+      const beside = offset(await mapCenter(), 40, 0);
+      await driver.click(beside.x, beside.y);
+      await settle(2);
+      expect(JSON.stringify(testMap.clicks)).assertEqual('["click","unhandled"]');
+      expect(testMap.markerClicks).assertEqual(1);
     });
 
     it('zooms at a double tap without a click', 0, async () => {

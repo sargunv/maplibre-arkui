@@ -46,7 +46,8 @@ it's `undefined`. The compass needs no permission. An app reads it from
 it by following with `FollowBearing.HEADING`.
 
 A rotation by the user keeps following but stops turning the map, and so does a
-camera move by the app that sets the bearing, such as a tap on the compass. The
+camera move by the app that sets the bearing, such as a tap on the
+<Api of="CompassButton" display="compass button" />. The
 controller's observable `followedBearing` becomes `undefined`, so a button can
 turn the map with the heading again:
 
