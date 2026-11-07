@@ -14,8 +14,7 @@ state, a style API that reads and changes the loaded style, style expressions,
 and snapshots. It lends FFI's map for what it doesn't cover, and passes on FFI's
 request handlers, offline regions, and logs as they are.
 
-It's a preview, and it isn't on [ohpm] yet: it waits for FFI to publish its
-packages there ([#26]).
+It's a preview, and it isn't on [ohpm] yet ([#26]).
 
 The [documentation] has the guides and the API reference.
 

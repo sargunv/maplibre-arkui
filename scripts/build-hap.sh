@@ -87,7 +87,7 @@ resource_inputs=()
 api=0
 for package in "$@"; do
   if [[ ! -e $package ]]; then
-    echo "error: no package at $package. For FFI's, run mise run ffi:download or ffi:pack." >&2
+    echo "error: no package at $package" >&2
     exit 1
   elif [[ -f $package ]]; then
     unpacked=$(mktemp -d "$work/package.XXXXXX")
@@ -135,8 +135,8 @@ while IFS= read -r -d '' file; do
   done
 done < <(find "$src/ets" \( -name '*.ets' -o -name '*.ts' \) -type f -print0)
 
-# A package built for other ABIs, such as an FFI backend that ffi:pack packed
-# for the emulator, would leave the HAP without the libraries the app loads.
+# A package built for other ABIs would leave the HAP without the libraries the
+# app loads.
 if [[ -z $(find "$work/libs/$abi" -name '*.so' -print -quit) ]]; then
   echo "error: no package supplies native libraries for $abi" >&2
   exit 1

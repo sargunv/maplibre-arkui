@@ -33,7 +33,7 @@ jobs:
       - run: mise run check
 
   # Builds the library HAR, the demo HAP, the test HAP, and the documentation
-  # site against the FFI packages that FFI's CI packed at the pinned commit.
+  # site against the FFI release that mise.toml pins.
   # The site's API reference needs the SDK too. The test job boots the emulator.
   build:
     name: build
@@ -56,9 +56,6 @@ jobs:
       - uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
         with:
           cache: false
-      - run: mise run ffi:download
-        env:
-          GH_TOKEN: ${{ github.token }}
       - run: mise run demo:build
       - run: mise run test:build
       # The deploy builds the site for the origin that Pages serves it at.
@@ -107,9 +104,6 @@ jobs:
       - uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
         with:
           cache: false
-      - run: mise run ffi:download
-        env:
-          GH_TOKEN: ${{ github.token }}
       - run: mise run test
 
   # Publishes the documentation site that the build job built from main. Pages

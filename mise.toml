@@ -15,11 +15,10 @@ lockfile_mode = "merge"
 auto_install_disable_tools = ["ohos-sdk", "http:oniro-emulator"]
 
 [vars]
-# The MapLibre Native FFI commit whose OHPM packages the library builds against.
-# FFI isn't on OHPM in the form this library needs, so `ffi:download` fetches
-# the packages that FFI's CI packed at this commit, and `ffi:pack` packs them
-# from a checkout. See AGENTS.md.
-ffi_commit = "b813912956cc8b85507cd9aceafcfaa3a46398e4"
+# The MapLibre Native FFI release on ohpm that the library depends on and
+# builds against: the facade and its two backends share one version. Keep it
+# equal to the facade's version in library/oh-package.json5.
+ffi_version = "0.202611.0"
 # Oniro publishes its emulator image against the matching OpenHarmony release.
 # Keep the SDK and emulator on the same version.
 ohos_sdk_version = "7.0"
@@ -30,8 +29,6 @@ ohos_sdk_version = "7.0"
 "aqua:jdx/jactionlint" = "2.4.0"
 "aqua:koalaman/shellcheck" = "0.11.0"
 "aqua:jqlang/jq" = "1.8.2"
-# Fetches FFI's CI packages in `ffi:download`.
-"aqua:cli/cli" = "2.103.3"
 # ets-loader, the SDK's ArkTS compiler front end, runs on Node.
 "core:node" = "26.13.0"
 # Installs the documentation site's packages in docs/.
@@ -59,6 +56,19 @@ ohos-sdk = { version = "{{vars.ohos_sdk_version}}", os = ["linux", "macos"] }
   "linux",
   "macos",
 ] }
+# MapLibre Native FFI's facade and backends, which the builds bundle.
+"http:maplibre-native-ffi" = { version = "{{vars.ffi_version}}", url = "https://ohpm.openharmony.cn/ohpm/@maplibre/native-ffi/-/native-ffi-{{ version }}.har", format = "tar.gz", checksum = "sha256:8cc03475d8f22833f959c85e937805b78603b41daefaa42845d5269702b24be6", bin_path = ".", os = [
+  "linux",
+  "macos",
+] }
+"http:maplibre-native-ffi-opengl" = { version = "{{vars.ffi_version}}", url = "https://ohpm.openharmony.cn/ohpm/@maplibre/native-ffi-opengl/-/native-ffi-opengl-{{ version }}.har", format = "tar.gz", checksum = "sha256:8400dc404be16a6e5efd09f5f719e10cb9d6fd50bd166b3969e482b182b61873", bin_path = ".", os = [
+  "linux",
+  "macos",
+] }
+"http:maplibre-native-ffi-vulkan" = { version = "{{vars.ffi_version}}", url = "https://ohpm.openharmony.cn/ohpm/@maplibre/native-ffi-vulkan/-/native-ffi-vulkan-{{ version }}.har", format = "tar.gz", checksum = "sha256:f47a2219de46492dc32392d7f9f4753980b4349ccb1baaae5e6973dbcdcf279d", bin_path = ".", os = [
+  "linux",
+  "macos",
+] }
 
 [plugins]
 ohos-sdk = "https://github.com/sargunv/mise-ohos-sdk#v0.1.0"
@@ -77,47 +87,32 @@ description = "Apply every formatter and linter fix."
 depends = ["docs:install"]
 run = "hk fix --all"
 
-[tasks."ffi:download"]
-description = "Download the FFI OHPM packages that FFI's CI packed at the pinned commit into build/ffi."
-run = 'scripts/ffi-download.sh "{{vars.ffi_commit}}" build/ffi'
-
-[tasks."ffi:pack"]
-description = "Pack the FFI OHPM packages from the FFI checkout that FFI_DIR names into build/ffi."
-usage = '''
-arg "[preset]" default="ohos-x64-egl" help="The FFI OpenHarmony preset to build"
-'''
-run = '''
-scripts/ffi-pack.sh "${FFI_DIR:?FFI_DIR must name a MapLibre Native FFI checkout}" "$usage_preset" build/ffi
-if [[ $(<build/ffi/COMMIT) != "{{vars.ffi_commit}}" ]]; then
-  echo "warning: FFI_DIR is not at the pinned FFI commit, {{vars.ffi_commit}}; CI builds against that one" >&2
-fi
-'''
-
 [tasks.pack]
 description = "Pack the library into an OHPM source HAR in build/har."
 run = "scripts/pack-har.sh library build/har"
 
 [tasks."demo:build"]
-description = "Build and sign the demo HAP into build/demo/<abi> against the packed library and build/ffi."
+description = "Build and sign the demo HAP into build/demo/<abi> against the packed library and the pinned FFI release."
 usage = '''
 flag "--abi <abi>" default="x86_64" help="The ABI of the native libraries: x86_64 for the Oniro emulator, arm64-v8a for most devices" {
   choices "x86_64" "arm64-v8a"
 }
-flag "--backend <backend>" default="opengl" help="The FFI backend whose HAR from build/ffi the build bundles" {
+flag "--backend <backend>" default="opengl" help="The FFI backend that the build bundles" {
   choices "opengl" "vulkan"
 }
 '''
 depends = ["pack"]
 run = '''
 scripts/build-hap.sh demo/entry/src/main "build/demo/$usage_abi" "$usage_abi" \
-  build/har/maplibre-arkui.har build/ffi/native-ffi.har "build/ffi/native-ffi-$usage_backend.har"
+  build/har/maplibre-arkui.har "$(mise where http:maplibre-native-ffi)/package" \
+  "$(mise where "http:maplibre-native-ffi-$usage_backend")/package"
 '''
 
 [tasks.demo]
 description = "Build the demo for the device's ABI, then install and start it on this worktree's emulator or the device that --device names."
 usage = '''
 flag "--device <key>" help="The hdc connect key of the device, which defaults to this worktree's emulator"
-flag "--backend <backend>" default="opengl" help="The FFI backend whose HAR from build/ffi the build bundles" {
+flag "--backend <backend>" default="opengl" help="The FFI backend that the build bundles" {
   choices "opengl" "vulkan"
 }
 '''
@@ -130,27 +125,27 @@ hdc -t "$device" shell aa start -a EntryAbility -b org.maplibre.arkui.demo
 '''
 
 [tasks."test:build"]
-description = "Build and sign the library's hypium suite into build/test/<abi> against the packed library and build/ffi."
+description = "Build and sign the library's hypium suite into build/test/<abi> against the packed library and the pinned FFI release."
 usage = '''
 flag "--abi <abi>" default="x86_64" help="The ABI of the native libraries: x86_64 for the Oniro emulator, arm64-v8a for most devices" {
   choices "x86_64" "arm64-v8a"
 }
-flag "--backend <backend>" default="opengl" help="The FFI backend whose HAR from build/ffi the build bundles" {
+flag "--backend <backend>" default="opengl" help="The FFI backend that the build bundles" {
   choices "opengl" "vulkan"
 }
 '''
 depends = ["pack"]
 run = '''
 scripts/build-hap.sh library/src/ohosTest "build/test/$usage_abi" "$usage_abi" \
-  build/har/maplibre-arkui.har build/ffi/native-ffi.har "build/ffi/native-ffi-$usage_backend.har" \
-  "$(mise where http:hypium)/package"
+  build/har/maplibre-arkui.har "$(mise where http:maplibre-native-ffi)/package" \
+  "$(mise where "http:maplibre-native-ffi-$usage_backend")/package" "$(mise where http:hypium)/package"
 '''
 
 [tasks.test]
 description = "Build the library's hypium suite for the device's ABI and run it on this worktree's emulator or the device that --device names."
 usage = '''
 flag "--device <key>" help="The hdc connect key of the device, which defaults to this worktree's emulator"
-flag "--backend <backend>" default="opengl" help="The FFI backend whose HAR from build/ffi the build bundles" {
+flag "--backend <backend>" default="opengl" help="The FFI backend that the build bundles" {
   choices "opengl" "vulkan"
 }
 '''
@@ -174,18 +169,14 @@ outputs = ["node_modules/.modules.yaml"]
 run = "pnpm install --frozen-lockfile"
 
 [tasks."docs:api"]
-description = "Generate the API reference from the library's doc comments into docs/public/api, against build/ffi."
+description = "Generate the API reference from the library's doc comments into docs/public/api, against the pinned FFI release."
 depends = ["docs:install"]
 run = '''
-if [[ ! -f build/ffi/native-ffi.har ]]; then
-  echo "error: build/ffi has no FFI packages; run mise run ffi:download" >&2
-  exit 1
-fi
 rm -rf build/docs docs/public/api
 mkdir -p build/docs/ffi
 # FFI's types, as a package that TypeDoc links to FFI's reference: the escape
 # hatch's MapHandle and RenderSessionHandle.
-tar -xzf build/ffi/native-ffi.har -C build/docs/ffi --strip-components 1 package/index.d.ts
+cp "$(mise where http:maplibre-native-ffi)/package/index.d.ts" build/docs/ffi/
 echo '{ "name": "@maplibre/native-ffi", "types": "index.d.ts" }' > build/docs/ffi/package.json
 node docs/scripts/emit-declarations.mjs "$(dirname "$OHOS_SDK_NATIVE")/ets" library/Index.ets \
   build/docs/ffi/index.d.ts build/docs/declarations
