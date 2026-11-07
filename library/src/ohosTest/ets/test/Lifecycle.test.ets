@@ -4,23 +4,21 @@
 
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
 import {
-  addRuntimeEventListener,
   CameraPosition,
   CameraTransitionMode,
   ContentError,
-  getDefaultRuntime,
+  MapResourceLoadRequest,
+  MapResourceResponse,
+  MapRuntime,
   StyleLayer,
-  removeRuntimeEventListener,
-  RuntimeEvent,
-  RuntimeEventFlag,
-  RuntimeEventType,
-  RuntimeHandle,
   StyleLoadError,
   Viewport,
 } from '@maplibre/arkui';
 import { CameraUpdateMode, MapHandle, MapSnapshot } from '@maplibre/native-ffi';
 
-import { backgroundStyle, showsMap, STYLE, testMap } from '../testability/TestMaps';
+import util from '@ohos.util';
+
+import { backgroundStyle, backgroundStyleJson, showsMap, STYLE, testMap } from '../testability/TestMaps';
 import {
   camera,
   eventually,
@@ -36,18 +34,6 @@ import {
 } from './helpers';
 
 const map = testMap.controller;
-
-// A runtime for the map to take instead of the default one. Its cache is in
-// memory. It stays for the suite's life: FFI releases a runtime only after its
-// maps, and the map releases its FFI map some time after it leaves.
-let ownRuntime: RuntimeHandle | undefined = undefined;
-
-async function getOwnRuntime(): Promise<RuntimeHandle> {
-  if (ownRuntime === undefined) {
-    ownRuntime = await RuntimeHandle.create({});
-  }
-  return ownRuntime;
-}
 
 async function hideMap(): Promise<void> {
   testMap.shown = false;
@@ -205,69 +191,28 @@ export default function lifecycleTest(): void {
       }
     });
 
-    it('creates the map on the runtime it is given', 0, async () => {
-      const runtime = await getOwnRuntime();
+    it('creates the map on the runtime it is given, and reports the runtime\'s release', 0, async () => {
+      // Only this runtime serves the style, in red.
+      const runtime = new MapRuntime({
+        resourceProvider: {
+          urlPatterns: ['app://styles/red.json'],
+          load: async (request: MapResourceLoadRequest): Promise<MapResourceResponse | undefined> => {
+            const response: MapResourceResponse = {
+              data: new util.TextEncoder().encodeInto(backgroundStyleJson('#ff0000')),
+            };
+            return response;
+          },
+        },
+      });
       await hideMap();
       testMap.runtime = runtime;
+      testMap.style = 'app://styles/red.json';
       await showMap();
+      expect(testMap.errors.length).assertEqual(0);
 
-      // Its map reports to that runtime's listeners.
-      let idles = 0;
-      const listener = (event: RuntimeEvent) => {
-        if (event.type === RuntimeEventType.mapIdle && event.source === mapId()) {
-          idles++;
-        }
-      };
-      addRuntimeEventListener(runtime, listener, RuntimeEventFlag.mapIdle);
-      try {
-        await map.updateCamera({ zoom: 3 });
-        await until('the map goes idle', () => idles > 0);
-      } finally {
-        removeRuntimeEventListener(runtime, listener);
-      }
-    });
-
-    it('calls the other runtime listeners when one throws or removes itself', 0, async () => {
-      const runtime = await getDefaultRuntime();
-      let thrown = 0;
-      let once = 0;
-      let counted = 0;
-      const idle = (event: RuntimeEvent): boolean =>
-        event.type === RuntimeEventType.mapIdle && event.source === mapId();
-      const throwing = (event: RuntimeEvent) => {
-        if (idle(event)) {
-          thrown++;
-          throw new Error('the listener failed');
-        }
-      };
-      const removing = (event: RuntimeEvent) => {
-        if (idle(event)) {
-          once++;
-          removeRuntimeEventListener(runtime, removing);
-        }
-      };
-      const counting = (event: RuntimeEvent) => {
-        if (idle(event)) {
-          counted++;
-        }
-      };
-      addRuntimeEventListener(runtime, throwing, RuntimeEventFlag.mapIdle);
-      addRuntimeEventListener(runtime, removing, RuntimeEventFlag.mapIdle);
-      addRuntimeEventListener(runtime, counting, RuntimeEventFlag.mapIdle);
-      try {
-        await map.updateCamera({ zoom: 3 });
-        await until('the listeners after them hear the event', () => counted > 0);
-        expect(once).assertEqual(1);
-        const before = counted;
-        await map.updateCamera({ zoom: 4 });
-        await until('the map goes idle again', () => counted > before);
-        expect(once).assertEqual(1);
-        expect(thrown).assertLarger(1);
-      } finally {
-        removeRuntimeEventListener(runtime, throwing);
-        removeRuntimeEventListener(runtime, removing);
-        removeRuntimeEventListener(runtime, counting);
-      }
+      await runtime.release();
+      expect(showsMap(map)).assertFalse();
+      expect(testMap.errors.indexOf('The map\'s runtime was released')).assertLarger(-1);
     });
 
     it('reports a style that fails to load, and loads the next style', 0, async () => {

@@ -10,7 +10,7 @@ import {
   MapController,
   MapError,
   InteractionOptions,
-  RuntimeHandle,
+  MapRuntime,
   UserLocationIndicatorOptions,
   ScaleBarUnits,
 } from '@maplibre/arkui';
@@ -112,7 +112,7 @@ export class TestMap {
   @Trace firstMap: boolean = true;
   @Trace content: MapContent = {};
   // The runtime that the map takes as it appears, or the default one.
-  @Trace runtime: RuntimeHandle | undefined = undefined;
+  @Trace runtime: MapRuntime | undefined = undefined;
   // What the map's events reported.
   styleLoads: number = 0;
   errors: string[] = [];

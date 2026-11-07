@@ -1,53 +1,45 @@
 import {
-  addRuntimeEventListener,
   AttributionText,
-  getDefaultRuntime,
-  OfflineRegionDefinition,
-  OfflineRegionDownloadState,
-  OfflineRegionInfo,
-  OfflineRegionStatus,
-  removeRuntimeEventListener,
-  ResourceKind,
-  ResourceTransformRequestHandle,
-  RuntimeEvent,
-  RuntimeEventFlag,
+  MapResourceRequest,
+  MapRuntime,
   MapSnapshot,
+  OfflineRegion,
+  OfflineRegionDefinition,
   renderSnapshot,
-  RuntimeHandle,
 } from '@maplibre/arkui';
 import util from '@ohos.util';
 
 import { LIBERTY } from './common';
 
-// A style URL on a host that doesn't exist, which the page's resource
-// transform rewrites to LIBERTY.
+// A style URL on a host that doesn't exist, which the page's runtime rewrites
+// to LIBERTY.
 const REWRITTEN = 'https://styles.demo.invalid/liberty';
 
 const PARIS: OfflineRegionDefinition = {
-  kind: 'tilePyramid',
-  value: {
-    styleUrl: LIBERTY,
-    bounds: { southwest: { latitude: 48.81, longitude: 2.22 }, northeast: { latitude: 48.91, longitude: 2.42 } },
-    minZoom: 10,
-    maxZoom: 14,
-    pixelRatio: 2,
-    includeIdeographs: false,
-  },
+  styleUrl: LIBERTY,
+  bounds: { southwest: { latitude: 48.81, longitude: 2.22 }, northeast: { latitude: 48.91, longitude: 2.42 } },
+  minZoom: 10,
+  maxZoom: 14,
 };
 
-// What the default runtime does besides maps: a snapshot of a style whose URL
-// a resource transform rewrites, and the download of an offline region.
+// What a runtime does besides maps: a snapshot of a style whose URL the page's
+// runtime rewrites, and the download of an offline region on the default
+// runtime, whose cache database outlasts the app.
 @ComponentV2
 export struct RuntimeDemo {
   @Local preview: MapSnapshot | undefined = undefined;
   @Local requests: number = 0;
-  @Local region: OfflineRegionInfo | undefined = undefined;
-  @Local status: OfflineRegionStatus | undefined = undefined;
+  @Local region: OfflineRegion | undefined = undefined;
   @Local message: string = '';
-  // The runtime once start() has set the page's transform and listener on it.
-  private runtime: RuntimeHandle | undefined = undefined;
+  // A runtime of the page's own, with its cache in memory, which rewrites
+  // REWRITTEN.
+  private readonly runtime: MapRuntime = new MapRuntime({
+    rewriteUrl: (request: MapResourceRequest) => {
+      this.requests++;
+      return request.url === REWRITTEN ? LIBERTY : undefined;
+    },
+  });
   private gone: boolean = false;
-  private readonly listener: (event: RuntimeEvent) => void = (event: RuntimeEvent) => this.onEvent(event);
 
   aboutToAppear(): void {
     this.start().catch((error: Error) => this.message = error.message);
@@ -55,12 +47,8 @@ export struct RuntimeDemo {
 
   aboutToDisappear(): void {
     this.gone = true;
-    const runtime = this.runtime;
-    if (runtime !== undefined) {
-      runtime.discarding.clearResourceTransform();
-      removeRuntimeEventListener(runtime, this.listener);
-    }
     this.preview?.image.release();
+    this.runtime.release().catch((error: Error) => console.error(error.message));
   }
 
   build() {
@@ -77,15 +65,27 @@ export struct RuntimeDemo {
           } else {
             Text('Rendering…').height(200)
           }
-          Text(`Its style URL is ${REWRITTEN}, which a resource transform rewrites. ` +
-            `The transform has seen ${this.requests} requests.`)
+          Text(`Its style URL is ${REWRITTEN}, which the runtime's rewriteUrl rewrites. ` +
+            `It has seen ${this.requests} requests.`)
             .fontSize(14)
           Text('An offline region of Paris, zoom 10 to 14').fontSize(16).fontWeight(FontWeight.Medium)
+          if (this.region !== undefined) {
+            // The region's status is observable, so the progress follows the
+            // download.
+            Progress({
+              value: this.region.status.completedResourceCount,
+              total: Math.max(1, this.region.status.requiredResourceCount),
+            })
+              .width(320)
+          }
           Text(this.describeRegion()).fontSize(14)
           Row({ space: 8 }) {
             Button('Download').onClick(() => this.report(this.download()))
-            Button('Pause').enabled(this.region !== undefined).onClick(() => this.report(this.pause()))
+            Button('Pause').enabled(this.region !== undefined).onClick(() => this.report(this.region!.pauseDownload()))
             Button('Delete').enabled(this.region !== undefined).onClick(() => this.report(this.delete()))
+          }
+          if (this.region?.downloadError !== undefined) {
+            Text(this.region.downloadError.message).fontSize(14).fontColor(Color.Red)
           }
           if (this.message !== '') {
             Text(this.message).fontSize(14).fontColor(Color.Red)
@@ -102,28 +102,10 @@ export struct RuntimeDemo {
   }
 
   private async start(): Promise<void> {
-    const runtime = await getDefaultRuntime();
-    if (this.gone) {
-      return;
-    }
-    this.runtime = runtime;
-    runtime.discarding.setResourceTransform({
-      callback: (kind: ResourceKind, url: string, request: ResourceTransformRequestHandle) => {
-        this.requests++;
-        if (url === REWRITTEN) {
-          console.info(`MapLibre demo: the transform rewrote ${url} to ${LIBERTY}`);
-          request.complete(LIBERTY);
-        } else {
-          request.complete(url);
-        }
-      },
-    });
-    addRuntimeEventListener(runtime, this.listener);
-    // The cache database outlasts the app, so a region from an earlier launch
-    // is still there.
-    const regions = await runtime.listOfflineRegions();
-    if (regions.length > 0) {
-      await this.show(regions[0]);
+    // A region from an earlier launch is still there.
+    const regions = await MapRuntime.getDefault().getOfflineRegions();
+    if (!this.gone && regions.length > 0) {
+      this.region = regions[0];
     }
     const preview = await renderSnapshot({
       style: REWRITTEN,
@@ -131,6 +113,7 @@ export struct RuntimeDemo {
       height: 200,
       camera: { center: { latitude: 48.8584, longitude: 2.2945 }, zoom: 14, pitch: 45 },
       uiContext: this.getUIContext(),
+      runtime: this.runtime,
     });
     if (this.gone) {
       preview.image.release();
@@ -140,59 +123,27 @@ export struct RuntimeDemo {
   }
 
   private async download(): Promise<void> {
-    const runtime = await getDefaultRuntime();
-    let region = this.region;
-    if (region === undefined) {
-      region = await runtime.createOfflineRegion(PARIS, new util.TextEncoder().encodeInto('Paris'));
-      await this.show(region);
+    if (this.region === undefined) {
+      this.region = await MapRuntime.getDefault().createOfflineRegion(PARIS,
+        new util.TextEncoder().encodeInto('Paris'));
     }
-    await runtime.setOfflineRegionDownloadState(region.id, OfflineRegionDownloadState.active);
-  }
-
-  private async pause(): Promise<void> {
-    if (this.region !== undefined) {
-      const runtime = await getDefaultRuntime();
-      await runtime.setOfflineRegionDownloadState(this.region.id, OfflineRegionDownloadState.inactive);
-      this.status = await runtime.getOfflineRegionStatus(this.region.id);
-    }
+    await this.region.startDownload();
   }
 
   private async delete(): Promise<void> {
-    if (this.region !== undefined) {
-      const runtime = await getDefaultRuntime();
-      const id = this.region.id;
-      this.region = undefined;
-      this.status = undefined;
-      await runtime.deleteOfflineRegion(id);
-    }
-  }
-
-  // Shows a region's progress, and the progress events of its download.
-  private async show(region: OfflineRegionInfo): Promise<void> {
-    const runtime = await getDefaultRuntime();
-    this.region = region;
-    this.status = await runtime.getOfflineRegionStatus(region.id);
-    await runtime.setOfflineRegionObserved(region.id,
-      RuntimeEventFlag.offlineRegionStatusChanged | RuntimeEventFlag.offlineRegionResponseError);
-  }
-
-  private onEvent(event: RuntimeEvent): void {
-    const payload = event.payload;
-    if (payload.kind === 'offlineRegionStatus' && payload.value.regionId === this.region?.id) {
-      this.status = payload.value.status;
-    } else if (payload.kind === 'offlineRegionResponseError' && payload.value.regionId === this.region?.id) {
-      this.message = event.message;
-    }
+    const region = this.region;
+    this.region = undefined;
+    await region?.delete();
   }
 
   private describeRegion(): string {
-    const status = this.status;
-    if (status === undefined) {
+    const region = this.region;
+    if (region === undefined) {
       return 'Not downloaded';
     }
-    const megabytes = (Number(status.completedResourceSize) / 1e6).toFixed(1);
-    const state = status.complete ? 'complete' :
-      status.downloadState === OfflineRegionDownloadState.active ? 'downloading' : 'paused';
+    const status = region.status;
+    const megabytes = (status.completedResourceBytes / 1e6).toFixed(1);
+    const state = status.complete ? 'complete' : status.downloading ? 'downloading' : 'paused';
     return `${status.completedResourceCount} of ${status.requiredResourceCount} resources, ` +
       `${megabytes} MB, ${state}`;
   }

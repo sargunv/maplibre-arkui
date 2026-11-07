@@ -40,9 +40,20 @@ export { WheelAction } from './src/main/ets/gestures';
 export type { InteractionOptions, MovementOptions, RotationOptions } from './src/main/ets/gestures';
 export { FollowBearing } from './src/main/ets/location';
 export type { FollowUserLocationOptions, UserLocationIndicatorOptions } from './src/main/ets/location';
-export { addRuntimeEventListener, getDefaultRuntime, removeRuntimeEventListener } from './src/main/ets/runtime';
-export type { RuntimeEventListener } from './src/main/ets/runtime';
-export { ConnectivityMode, getConnectivityMode, setConnectivityMode } from './src/main/ets/connectivity';
+export { MapRuntime } from './src/main/ets/MapRuntime';
+export type { MapRuntimeOptions } from './src/main/ets/MapRuntime';
+export { MapResourceError, MapResourceErrorReason } from './src/main/ets/MapResource';
+export type {
+  MapResourceLoadRequest,
+  MapResourceProvider,
+  MapResourceRange,
+  MapResourceRequest,
+  MapResourceResponse,
+} from './src/main/ets/MapResource';
+export type { OfflineRegion, OfflineRegionDefinition, OfflineRegionStatus } from './src/main/ets/OfflineRegion';
+export { ConnectivityMode } from './src/main/ets/connectivity';
+export { MapLogLevel } from './src/main/ets/log';
+export type { MapLogHandler, MapLogRecord } from './src/main/ets/log';
 export { renderSnapshot } from './src/main/ets/Snapshot';
 export type { MapSnapshot, MapSnapshotOptions } from './src/main/ets/Snapshot';
 export type {
@@ -55,9 +66,6 @@ export type {
   StyleLayer,
   StyleSource,
 } from './src/main/ets/Content';
-
-// The FFI runtime that a map and a snapshot take.
-export { RuntimeHandle } from '@maplibre/native-ffi';
 
 export {
   abs,
@@ -129,68 +137,6 @@ export type {
   MatchLabel,
   Stop,
 } from './src/main/ets/Expressions';
-
-// The FFI API for requests, offline regions, events, and logs, which apps call
-// on a runtime. FFI's `setNetworkStatus()` isn't here: `setConnectivityMode()`
-// sets the status.
-export {
-  CacheDatabaseOperation,
-  CameraChangeMode,
-  clearLogCallback,
-  getNetworkStatus,
-  LogEvent,
-  LogSeverity,
-  LogSeverityFlag,
-  MapLoadError,
-  NetworkStatus,
-  OfflineRegionDownloadState,
-  RenderMode,
-  ResourceErrorReason,
-  ResourceKind,
-  ResourceKindFlag,
-  ResourceRequestHandle,
-  ResourceResponseStatus,
-  ResourceTransformRequestHandle,
-  RuntimeEventFlag,
-  RuntimeEventSourceType,
-  RuntimeEventType,
-  setLogAsyncSeverityMask,
-  setLogCallback,
-  TileOperation,
-  UrlMatchFlag,
-} from '@maplibre/native-ffi';
-export type {
-  LogHandler,
-  OfflineGeometryRegionDefinition,
-  OfflineRegionDefinition,
-  OfflineRegionInfo,
-  OfflineRegionStatus,
-  OfflineTilePyramidRegionDefinition,
-  RenderingStats,
-  ResourceProvider,
-  ResourceRequestInfo,
-  ResourceResponse,
-  ResourceRoute,
-  ResourceTransform,
-  ResourceTransformError,
-  ResourceTransformRule,
-  RuntimeEvent,
-  RuntimeEventCameraChange,
-  RuntimeEventGlyphs,
-  RuntimeEventLoadingFailed,
-  RuntimeEventOfflineRegionResponseError,
-  RuntimeEventOfflineRegionStatus,
-  RuntimeEventOfflineRegionTileCountLimit,
-  RuntimeEventPayload,
-  RuntimeEventRenderFrame,
-  RuntimeEventSourceChanged,
-  RuntimeEventSprite,
-  RuntimeEventStyleImage,
-  RuntimeEventTileAction,
-  RuntimeOptions,
-  TileId,
-  UrlQueryParameter,
-} from '@maplibre/native-ffi';
 
 export { AttributionControls, DefaultControls, FullControls } from './src/main/ets/Overlay';
 export {

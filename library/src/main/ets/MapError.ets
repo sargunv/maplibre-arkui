@@ -6,8 +6,8 @@
  *
  * Subclasses may be added in later releases; match them with `instanceof` and
  * keep a fallback. Failures without a subclass, such as a frame that fails to
- * render, a runtime that fails to start, or an invalid parameter, arrive as a
- * plain `MapError`.
+ * render, a runtime that fails to open or that the app released, or an invalid
+ * parameter, arrive as a plain `MapError`.
  */
 export class MapError extends Error {
   /** Creates an error with `message`, which describes the failure. */

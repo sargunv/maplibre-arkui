@@ -1,4 +1,3 @@
-import { RuntimeHandle } from '@maplibre/native-ffi';
 import geoLocationManager from '@ohos.geoLocationManager';
 
 import { CameraBoundsOptions } from './CameraBounds';
@@ -9,6 +8,7 @@ import { callHandler, consumes } from './log';
 import { MapClickEvent } from './MapClickEvent';
 import { controllerState, MapController } from './MapController';
 import { MapError } from './MapError';
+import { MapRuntime, runtimeState } from './MapRuntime';
 import { UserLocationIndicatorOptions } from './location';
 import { MapView } from './MapView';
 import { defaultControls } from './Overlay';
@@ -72,11 +72,10 @@ export struct MaplibreMap {
   /** Reads and moves the camera. Without one, the map keeps its own. */
   @Param @Once controller: MapController = new MapController();
   /**
-   * The FFI runtime that creates the map. Without one, maps share the
-   * library's default runtime. The map sets the runtime's event handler, so
-   * listen with `addRuntimeEventListener()` instead of setting one.
+   * The runtime whose cache and request handling the map uses. The default
+   * runtime by default.
    */
-  @Param @Once runtime: RuntimeHandle | undefined = undefined;
+  @Param @Once runtime: MapRuntime = MapRuntime.getDefault();
   /**
    * Sources, layers, and images to draw over the style, in each style the map
    * loads. Give the map a new value to change them, such as from a `@Computed`
@@ -244,7 +243,7 @@ export struct MaplibreMap {
     this.view.setUserLocation(this.userLocation);
     this.view.setUserHeading(this.userHeading);
     this.view.setViewportInsets(this.viewportInsets);
-    this.view.start(controllerState(this.controller), this.runtime, this.style, this.content, this.cameraBounds);
+    this.view.start(controllerState(this.controller), runtimeState(this.runtime), this.style, this.content, this.cameraBounds);
   }
 
   aboutToDisappear(): void {

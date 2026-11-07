@@ -3,8 +3,9 @@
 // change the device's, and give it back the device's network after.
 
 import { afterEach, describe, expect, it } from '@ohos/hypium';
-import { ConnectivityMode, getConnectivityMode, getNetworkStatus, NetworkStatus, setConnectivityMode } from '@maplibre/arkui';
+import { ConnectivityMode, MapRuntime } from '@maplibre/arkui';
 import { followConnectivity, networkAvailable, networkLost } from '@maplibre/arkui/src/main/ets/connectivity';
+import { getNetworkStatus, NetworkStatus } from '@maplibre/native-ffi';
 
 import connection from '@ohos.net.connection';
 
@@ -17,13 +18,13 @@ const CELLULAR = 1000002;
 export default function connectivityTest(): void {
   describe('Connectivity', () => {
     afterEach(() => {
-      setConnectivityMode(ConnectivityMode.automatic);
+      MapRuntime.setConnectivityMode(ConnectivityMode.AUTOMATIC);
       networkAvailable(connection.getDefaultNetSync().netId);
     });
 
     it('follows the device with the permission', 0, async () => {
       expect(await settled('the monitor registers', followConnectivity())).assertTrue();
-      expect(getConnectivityMode()).assertEqual(ConnectivityMode.automatic);
+      expect(MapRuntime.getConnectivityMode()).assertEqual(ConnectivityMode.AUTOMATIC);
       expect(connection.hasDefaultNetSync()).assertTrue();
       expect(getNetworkStatus()).assertEqual(NetworkStatus.online);
     });
@@ -48,14 +49,14 @@ export default function connectivityTest(): void {
 
     it('forces a status whatever the network does', 0, async () => {
       networkAvailable(WIFI);
-      setConnectivityMode(ConnectivityMode.forceOffline);
-      expect(getConnectivityMode()).assertEqual(ConnectivityMode.forceOffline);
+      MapRuntime.setConnectivityMode(ConnectivityMode.FORCE_OFFLINE);
+      expect(MapRuntime.getConnectivityMode()).assertEqual(ConnectivityMode.FORCE_OFFLINE);
       expect(getNetworkStatus()).assertEqual(NetworkStatus.offline);
       networkAvailable(CELLULAR);
       expect(getNetworkStatus()).assertEqual(NetworkStatus.offline);
 
       networkLost(CELLULAR);
-      setConnectivityMode(ConnectivityMode.forceOnline);
+      MapRuntime.setConnectivityMode(ConnectivityMode.FORCE_ONLINE);
       expect(getNetworkStatus()).assertEqual(NetworkStatus.online);
       networkAvailable(WIFI);
       networkLost(WIFI);
@@ -63,15 +64,15 @@ export default function connectivityTest(): void {
     });
 
     it('follows the network again once automatic', 0, async () => {
-      setConnectivityMode(ConnectivityMode.forceOnline);
+      MapRuntime.setConnectivityMode(ConnectivityMode.FORCE_ONLINE);
       networkAvailable(WIFI);
       networkLost(WIFI);
-      setConnectivityMode(ConnectivityMode.automatic);
+      MapRuntime.setConnectivityMode(ConnectivityMode.AUTOMATIC);
       expect(getNetworkStatus()).assertEqual(NetworkStatus.offline);
 
-      setConnectivityMode(ConnectivityMode.forceOffline);
+      MapRuntime.setConnectivityMode(ConnectivityMode.FORCE_OFFLINE);
       networkAvailable(WIFI);
-      setConnectivityMode(ConnectivityMode.automatic);
+      MapRuntime.setConnectivityMode(ConnectivityMode.AUTOMATIC);
       expect(getNetworkStatus()).assertEqual(NetworkStatus.online);
     });
   });

@@ -6,9 +6,9 @@
 // It writes <out dir>/ffi-reference.json, which maps each FFI name to its page
 // for TypeDoc's `externalSymbolLinkMappings` and the site's <Api> links, and
 // <out dir>/reference.md, the reference's front page, which lists the
-// re-exports. FFI's reference documents its main branch, so a name that it
-// doesn't list, such as one that FFI renamed since the pinned commit, links to
-// its module page with a warning.
+// re-exports, if any. FFI's reference documents its main branch, so a name
+// that it doesn't list, such as one that FFI renamed since the pinned commit,
+// links to its module page with a warning.
 import fs from "node:fs";
 import path from "node:path";
 
@@ -35,22 +35,20 @@ for (const match of source.matchAll(
     }
   }
 }
-if (reexports.length === 0) {
-  throw new Error(`${index} re-exports nothing from @maplibre/native-ffi`);
-}
-
-const response = await fetch(MODULE);
-if (!response.ok) {
-  throw new Error(`${MODULE}: ${response.status} ${response.statusText}`);
-}
 const pages = new Map();
-for (const match of (await response.text()).matchAll(
-  /href="\.\.\/(\w+)\/index\.(\w+)\.html"/g,
-)) {
-  pages.set(match[2], {
-    kind: match[1],
-    url: `${FFI_REFERENCE}${match[1]}/index.${match[2]}.html`,
-  });
+if (reexports.length > 0) {
+  const response = await fetch(MODULE);
+  if (!response.ok) {
+    throw new Error(`${MODULE}: ${response.status} ${response.statusText}`);
+  }
+  for (const match of (await response.text()).matchAll(
+    /href="\.\.\/(\w+)\/index\.(\w+)\.html"/g,
+  )) {
+    pages.set(match[2], {
+      kind: match[1],
+      url: `${FFI_REFERENCE}${match[1]}/index.${match[2]}.html`,
+    });
+  }
 }
 
 const links = {};
@@ -95,21 +93,24 @@ fs.writeFileSync(
   path.join(out, "ffi-reference.json"),
   `${JSON.stringify({ reexports, links }, null, 2)}\n`,
 );
+const reexported =
+  sections.length === 0
+    ? ""
+    : `
+## Re-exported from MapLibre Native FFI
+
+The package also re-exports these [MapLibre Native FFI](${MODULE}) types and
+functions. FFI's reference documents them, and the links here and in the
+signatures go to it. FFI publishes its reference with each release, so the
+names that FFI added since link to its module page.
+
+${sections.join("\n\n")}
+`;
 fs.writeFileSync(
   path.join(out, "reference.md"),
   `The API reference of \`@maplibre/arkui\`, generated from the library's doc
 comments. Struct components and classes show their ArkUI decorators as badges,
 such as \`@Param\` for a component's params.
-
-## Re-exported from MapLibre Native FFI
-
-The package also re-exports the [MapLibre Native FFI](${MODULE}) types and
-functions that its API takes and returns, and the FFI API for styles, queries,
-requests, offline regions, and logs. FFI's reference documents them, and the
-links here and in the signatures go to it. FFI publishes its reference with
-each release, so the names that FFI added since link to its module page.
-
-${sections.join("\n\n")}
-`,
+${reexported}`,
 );
 console.log(`Linked ${reexports.length} FFI re-exports to FFI's reference.`);
