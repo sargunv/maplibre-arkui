@@ -213,6 +213,10 @@ export default function lifecycleTest(): void {
       await runtime.release();
       expect(showsMap(map)).assertFalse();
       expect(testMap.errors.indexOf('The map\'s runtime was released')).assertLarger(-1);
+      // The map shows nothing from now on, so the page drops it before the
+      // next case shows a map on the default runtime.
+      testMap.shown = false;
+      await frames(2);
     });
 
     it('reports a style that fails to load, and loads the next style', 0, async () => {

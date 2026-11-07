@@ -305,12 +305,14 @@ export class StoredRegion implements OfflineRegion {
     this.currentStatus = fromFfiStatus(await runtime.getOfflineRegionStatus(this.regionId));
   }
 
+  // Deleting a region stops its download, with no event to say so.
   markDeleted(): void {
     this.isDeleted = true;
+    this.stopped();
     this.owner.forget(this);
   }
 
-  // Its runtime closed, which stops the download.
+  // Its runtime closed, or it was deleted, which stops the download.
   stopped(): void {
     if (this.currentStatus.downloading) {
       this.currentStatus = fromStatus(this.currentStatus, false);

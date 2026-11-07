@@ -67,8 +67,8 @@ let defaultOptions: MapRuntimeOptions = {};
 // The constructor makes the default runtime while this is set.
 let creatingDefault: boolean = false;
 
-function defaultCachePath(): string {
-  return defaultOptions.cachePath ?? `${application.getApplicationContext().filesDir}/maplibre-cache.db`;
+function defaultCachePath(options: MapRuntimeOptions = defaultOptions): string {
+  return options.cachePath ?? `${application.getApplicationContext().filesDir}/maplibre-cache.db`;
 }
 
 function checkOptions(options: MapRuntimeOptions): void {
@@ -386,8 +386,9 @@ export class MapRuntime {
       throw new Error('MapRuntime.configureDefault() must come before the first MapRuntime.getDefault()');
     }
     checkOptions(options);
-    if (options.cachePath !== undefined && cachePaths.has(options.cachePath)) {
-      throw new Error(`Another runtime uses the cache database ${options.cachePath}`);
+    const cachePath = defaultCachePath(options);
+    if (cachePaths.has(cachePath)) {
+      throw new Error(`Another runtime uses the cache database ${cachePath}`);
     }
     defaultOptions = options;
   }
