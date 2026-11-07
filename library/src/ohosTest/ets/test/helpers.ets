@@ -3,7 +3,7 @@
 
 import { expect } from '@ohos/hypium';
 import { CameraPosition, LatLng, ScreenPoint } from '@maplibre/arkui';
-import { readPixelMap } from '@maplibre/arkui/src/main/ets/StyleImage';
+import { readPixelMap } from '@maplibre/arkui/src/main/ets/content/internal/PixelMaps';
 import { Camera as FfiCamera, MapHandle, MapProjectionHandle, MapSnapshot } from '@maplibre/native-ffi';
 import image from '@ohos.multimedia.image';
 import { Driver, ON, Point, PointerMatrix, Rect as Bounds } from '@ohos.UiTest';

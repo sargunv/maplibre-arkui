@@ -183,14 +183,14 @@ if [[ ! -f build/ffi/native-ffi.har ]]; then
 fi
 rm -rf build/docs docs/public/api
 mkdir -p build/docs/ffi
-# FFI's types, as a package that TypeDoc links to FFI's reference.
+# FFI's types, as a package that TypeDoc links to FFI's reference: the escape
+# hatch's MapHandle and RenderSessionHandle.
 tar -xzf build/ffi/native-ffi.har -C build/docs/ffi --strip-components 1 package/index.d.ts
 echo '{ "name": "@maplibre/native-ffi", "types": "index.d.ts" }' > build/docs/ffi/package.json
 node docs/scripts/emit-declarations.mjs "$(dirname "$OHOS_SDK_NATIVE")/ets" library/Index.ets \
   build/docs/ffi/index.d.ts build/docs/declarations
-node docs/scripts/ffi-reference.mjs build/docs/declarations/Index.d.ts build/docs
 (cd docs && pnpm exec typedoc)
-node docs/scripts/api-index.mjs docs/public/api build/docs/ffi-reference.json docs/src/generated/api-index.json
+node docs/scripts/api-index.mjs docs/public/api docs/src/generated/api-index.json
 '''
 
 [tasks."docs:build"]

@@ -67,7 +67,7 @@ code.
   it; a name missing from it fails the build as an unknown resource.
 - ArkUI's `@Consumer` doesn't reach content in another component's trailing
   closure, which the closure's author owns. The overlay's controls find their
-  map by walking up the frame nodes (`scope.ets`).
+  map by walking up the frame nodes (`map/internal/MapScope.ets`).
 - A custom component can't declare a member that ArkUI's universal attributes
   name, such as `size`, `key`, `overlay`, or `onClick`.
 

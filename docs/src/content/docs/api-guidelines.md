@@ -7,8 +7,9 @@ Rules for the public API of the published library.
 
 ## 1. About this guide
 
-This guide covers every declaration that `library/Index.ets` exports. It doesn't
-cover internal code, the demo app, or the tests.
+This guide covers every declaration that `library/Index.ets` exports, and how
+the library's sources are organized. It doesn't cover the design of internal
+code, the demo app, or the tests.
 
 The API is designed for apps written in strict ArkTS with ArkUI's state
 management V2. It should read like ArkUI's own components and options, so that
@@ -50,8 +51,7 @@ from this guide.
   and `onMapLongClick`, because of the universal `onClick`.
 - Name an event's type after its handler, without `on`, and add `Event`:
   `onCameraIdle` takes a `CameraIdleEvent`. Handlers whose payloads are the same
-  may share one type, as `onMapClick` and `onMapLongClick` share
-  `MapClickEvent`.
+  may share one type.
 - Don't give booleans an `is` prefix or a negative name.
   [[2]](https://gitee.com/openharmony/docs/blob/master/en/contribute/OpenHarmony-ArkTS-coding-style-guide.md)
 - In the expression DSL, write operators that take no arguments as functions,
@@ -131,9 +131,9 @@ isDisabled?: boolean;
 - Don't keep state in global variables or stateful top-level functions. Let
   callers pass the object in.
   [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#3-general-api-design)
-- Make settings that MapLibre Native keeps once per process static members of
-  `MapRuntime`, as ArkUI's `PersistenceV2` and `AppStorageV2` are: the default
-  runtime and its configuration, the connectivity mode, and the log handler.
+- Make a setting that MapLibre Native keeps once per process a static member of
+  the class it belongs to, as ArkUI's `AppStorageV2` is, not a top-level
+  function: `MapRuntime.setLogHandler()`.
 
 ```ets
 // Do
@@ -164,12 +164,11 @@ breaking change.
 - State the kind in the doc comment: "Closed." or "Values may be added in later
   releases; give a `switch` over it a `default` branch."
   [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#4-types-that-may-grow)
-- An input enum that a getter only echoes back, such as `FollowBearing` from
-  `followedBearing`, stays open input.
-- An enum that callers pass in and the library also reports, such as
-  `MapResourceErrorReason`, or that callers compare against named values, such
-  as `MapLogLevel`, stays an enum, as ArkUI's `TouchType` does. Its doc asks for
-  a `default` branch.
+- An input enum stays open input when a getter echoes back only the values that
+  callers passed in.
+- A set of values that the library reports stays an `enum`, as ArkUI's
+  `TouchType` does, when callers also pass the values in or compare against them
+  by name. Its doc comment asks for a `default` branch.
   [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#4-types-that-may-grow)
 - When a value means "no answer", use `undefined` instead of a named catch-all
   such as `UNKNOWN`.
@@ -239,8 +238,8 @@ controller.fitCameraToBounds(bounds, {
 - Take values for data, not observed objects. Compare a new value with the last
   one, so that a literal that `build()` writes anew changes nothing that stayed
   the same.
-- A component meant for the map's overlay finds its map itself, and takes no
-  controller.
+- A component that works only inside another component's content finds that
+  component itself, instead of taking its controller as a parameter.
 
 ### State
 
@@ -327,8 +326,8 @@ FFI is an implementation detail.
   FFI has a type for the same thing. Don't re-export or alias FFI's
   declarations.
 - Don't expose FFI's objects as properties, parameters, or return values. For
-  what the library doesn't cover yet, lend FFI's map only for the length of a
-  callback, and document that FFI's types may change in any release.
+  what the library doesn't cover yet, lend FFI's objects only for the length of
+  a callback, and document that FFI's types may change in any release.
 - When callers commonly need the escape hatch for something, add it to the
   library's API.
 
@@ -407,7 +406,25 @@ color: string; // Don't
  */
 ```
 
-## 12. Stability and compatibility
+## 12. Organization
+
+- Put each feature's sources in one lowercase, singular directory under
+  `library/src/main/ets`, such as `camera/`, and library-only code in its
+  `internal/` directory. Any feature may import another feature's `internal/`.
+  Don't add catch-all directories, such as `util/` or `common/`.
+- Name each file in UpperCamelCase, after its main declaration or its topic.
+- Group `library/Index.ets` by feature, in the order of the guides.
+- Support imports from the package root only. Apps that import a path under
+  `src/` may break in any release.
+
+```text
+camera/
+  CameraPosition.ets
+  internal/
+    Insets.ets
+```
+
+## 13. Stability and compatibility
 
 Until 1.0, any release may break the API. The PR that breaks it says how to
 migrate.

@@ -122,7 +122,7 @@ done
 
 # Rewrite the module's imports of each source HAR to relative imports of its
 # copy under ets/. The library's tests also import its internal files by path,
-# such as @maplibre/arkui/src/main/ets/gestures.
+# such as @maplibre/arkui/src/main/ets/interaction/internal/MapGestures.
 while IFS= read -r -d '' file; do
   directory=$(dirname "${file#"$src/ets/"}")
   up=$(sed -E 's#[^/]+#..#g' <<<"$directory")

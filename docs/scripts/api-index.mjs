@@ -1,18 +1,15 @@
 // Indexes the API reference for the site's <Api> links:
 //
-//   node api-index.mjs <TypeDoc out dir> <ffi-reference.json> <index.json>
+//   node api-index.mjs <TypeDoc out dir> <index.json>
 //
-// It maps each name that the package exports to its page: the library's own
-// symbols to TypeDoc's pages, with their members' anchors, and FFI's
-// re-exports, under the names the package gives them, to FFI's reference.
+// It maps each name that the package exports to its page in TypeDoc's
+// output, with its members' anchors.
 import fs from "node:fs";
 import path from "node:path";
 
-const [reference, ffi, out] = process.argv.slice(2);
+const [reference, out] = process.argv.slice(2);
 if (out === undefined) {
-  console.error(
-    "usage: api-index.mjs <TypeDoc out dir> <ffi-reference.json> <index.json>",
-  );
+  console.error("usage: api-index.mjs <TypeDoc out dir> <index.json>");
   process.exit(2);
 }
 
@@ -37,21 +34,12 @@ for (const kind of [
     );
     index[path.basename(file, ".html")] = {
       url: `api/${kind}/${file}`,
-      external: false,
       anchors: [...new Set(anchors)],
     };
   }
 }
 if (Object.keys(index).length === 0) {
   throw new Error(`${reference} has no TypeDoc pages`);
-}
-
-const { reexports, links } = JSON.parse(fs.readFileSync(ffi, "utf8"));
-for (const { name, alias } of reexports) {
-  if (index[alias] !== undefined) {
-    throw new Error(`${alias} is both the library's and FFI's`);
-  }
-  index[alias] = { url: links[name], external: true };
 }
 
 fs.mkdirSync(path.dirname(out), { recursive: true });

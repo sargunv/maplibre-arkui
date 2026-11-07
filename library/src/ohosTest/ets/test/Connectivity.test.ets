@@ -4,7 +4,11 @@
 
 import { afterEach, describe, expect, it } from '@ohos/hypium';
 import { ConnectivityMode, MapRuntime } from '@maplibre/arkui';
-import { followConnectivity, networkAvailable, networkLost } from '@maplibre/arkui/src/main/ets/connectivity';
+import {
+  followConnectivity,
+  networkAvailable,
+  networkLost,
+} from '@maplibre/arkui/src/main/ets/runtime/internal/Connectivity';
 import { getNetworkStatus, NetworkStatus } from '@maplibre/native-ffi';
 
 import connection from '@ohos.net.connection';

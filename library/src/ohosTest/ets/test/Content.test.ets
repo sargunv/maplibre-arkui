@@ -13,7 +13,7 @@ import {
   renderSnapshot,
   StyleLayer,
 } from '@maplibre/arkui';
-import { ContentReconciler } from '@maplibre/arkui/src/main/ets/Content';
+import { ContentReconciler } from '@maplibre/arkui/src/main/ets/content/internal/ContentReconciler';
 import { MapHandle, StyleLayerInfo, StyleLayerVisibility } from '@maplibre/native-ffi';
 import application from '@ohos.app.ability.application';
 import fs from '@ohos.file.fs';
