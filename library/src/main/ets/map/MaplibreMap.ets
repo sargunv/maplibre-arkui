@@ -145,9 +145,11 @@ export struct MaplibreMap {
   @Param userLocationIndicator: UserLocationIndicatorOptions = {};
   /**
    * The style has loaded, so its layers and sources exist, and the map has
-   * added `content` to it. Each style starts from its own document, without
-   * what the app added through `controller.withFfiMap()`. Called on the UI
-   * thread; the map logs what it throws.
+   * added `content` to it. From now until the next style, `controller.style`
+   * reads and changes it. Each style starts from its own document, without
+   * what the app changed through `controller.style` or
+   * `controller.withFfiMap()`. Called on the UI thread; the map logs what it
+   * throws.
    */
   @Event onStyleLoaded: () => void = () => {
   };

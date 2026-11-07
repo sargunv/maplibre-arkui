@@ -3,7 +3,7 @@
 // out by name, and the site build fails on a region that's missing. The
 // demo's "Guide examples" page shows them in tabs.
 
-import { MapHandle } from '@maplibre/native-ffi';
+import { MapDebugFlag, MapHandle } from '@maplibre/native-ffi';
 import abilityAccessCtrl, { Permissions } from '@ohos.abilityAccessCtrl';
 import AbilityConstant from '@ohos.app.ability.AbilityConstant';
 import common from '@ohos.app.ability.common';
@@ -33,10 +33,13 @@ import {
   FullControls,
   GeoJsonFeature,
   GeoJsonFeatureCollection,
+  GeoJsonSourceHandle,
   get,
   geometryType,
+  globalState,
   interpolate,
   LatLngBounds,
+  LayerHandle,
   LayerSummary,
   linear,
   literal,
@@ -799,16 +802,80 @@ const PLACE_CIRCLES: StyleLayer = {
 // #endregion expressions
 
 // #region ffi-map
-async function styleWithExpressions(controller: MapController): Promise<void> {
-  const radius = interpolate(linear(), zoom(), [[0, 2], [12, get('size')]]);
-  const color = match(get('kind'), [['park', '#8c8'], [['lake', 'river'], '#88c']], '#ccc');
-  // The commands go to the map in the block, and run after it.
-  await controller.withFfiMap((map: MapHandle) => Promise.all([
-    map.setStyleLayerProperty('places', 'circle-radius', radius),
-    map.setStyleLayerProperty('places', 'circle-color', color),
-  ]));
+// Tile borders, which the library doesn't cover. The command goes to the map
+// in the block, and runs after it.
+async function showTileBorders(controller: MapController): Promise<void> {
+  await controller.withFfiMap((map: MapHandle) => map.setDebugFlags(MapDebugFlag.tileBorders));
 }
 // #endregion ffi-map
+
+// #region style-source-data
+// The base style's own `incidents` source, which the style's layers draw,
+// loads today's file instead of the one that the style names.
+async function showTodaysIncidents(controller: MapController): Promise<void> {
+  const incidents: GeoJsonSourceHandle | undefined = await controller.style.getGeoJsonSource('incidents');
+  await incidents?.setData('https://example.com/incidents/today.geojson');
+}
+// #endregion style-source-data
+
+@ComponentV2
+struct StyleExample {
+  @Local kind: string = 'museum';
+  private controller: MapController = new MapController({
+    camera: { center: { latitude: 48.858, longitude: 2.315 }, zoom: 12 },
+  });
+
+  // A layer that the content declares shows the places of the kind that the
+  // global state names.
+  @Computed
+  get content(): MapContent {
+    return {
+      sources: [{ id: 'places', json: { 'type': 'geojson', 'data': PARIS } }],
+      layers: [
+        {
+          id: 'places', type: 'circle', source: 'places', filter: eq(get('kind'), globalState('kind')),
+          paint: { 'circle-radius': 8, 'circle-color': '#fb8c00' },
+        },
+      ],
+    };
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.Bottom }) {
+      MaplibreMap({
+        style: STYLE,
+        controller: this.controller,
+        content: this.content,
+        // Each style starts without what the app changed in the last.
+        onStyleLoaded: () => {
+          this.styleLoaded().catch((error: Error) => console.error(error.message));
+        },
+      })
+      Row({ space: 8 }) {
+        Button('Museums').onClick(() => this.showKind('museum'))
+        Button('Monuments').onClick(() => this.showKind('monument'))
+      }
+      .margin({ bottom: 64 })
+    }
+  }
+
+  private async styleLoaded(): Promise<void> {
+    // #region style-layer
+    // The base style's water, in another color.
+    const water: LayerHandle | undefined = await this.controller.style.getLayer('water');
+    await water?.setProperty('fill-color', '#1565c0');
+    // #endregion style-layer
+    await this.showKind(this.kind);
+  }
+
+  // #region style-global-state
+  // The places layer's filter reads the global state `kind`.
+  private async showKind(kind: string): Promise<void> {
+    this.kind = kind;
+    await this.controller.style.setGlobalStateProperty('kind', kind);
+  }
+  // #endregion style-global-state
+}
 
 // Errors
 
@@ -956,6 +1023,9 @@ export struct DocExamples {
           QueryExample()
         }.tabBar('Query')
         TabContent() {
+          StyleExample()
+        }.tabBar('Style API')
+        TabContent() {
           PresetExample()
         }.tabBar('Preset')
         TabContent() {
@@ -1008,5 +1078,5 @@ export struct DocExamples {
 }
 
 // Keeps the functions that no tab calls from being unused.
-export const COMPILED_EXAMPLES: Object[] = [styleWithExpressions, reportMapError, configureMaps, TOKEN_TILES,
-  setMapsUseNetwork, takeLogs];
+export const COMPILED_EXAMPLES: Object[] = [showTileBorders, showTodaysIncidents, reportMapError, configureMaps,
+  TOKEN_TILES, setMapsUseNetwork, takeLogs];

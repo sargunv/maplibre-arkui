@@ -20,6 +20,7 @@ import { FrameViewport } from '../../camera/internal/FrameViewport';
 import { ScreenPoint } from '../../geometry/Geometry';
 import { FollowBearing, FollowUserLocationOptions } from '../../location/FollowUserLocationOptions';
 import { course } from '../../location/internal/UserLocationLayer';
+import { LoadedStyle } from '../../style/internal/LoadedStyle';
 import {
   MapController,
   RenderedFeature,
@@ -44,6 +45,9 @@ export class ControllerState {
   // where the last frame or the last map left it.
   @Trace lastCamera: CameraPosition;
   @Trace styleLoaded: boolean = false;
+  // The style that the style API acts on: the loaded style of the map that
+  // shows the controller, while `styleLoaded` is true.
+  loadedStyle: LoadedStyle | undefined = undefined;
   @Trace attributions: string[] = [];
   @Trace followingUserLocation: boolean = false;
   @Trace followedBearing: FollowBearing | undefined = undefined;
@@ -89,6 +93,7 @@ export class ControllerState {
     this.settles++;
     this.settling = false;
     this.styleLoaded = false;
+    this.loadedStyle = undefined;
     this.attributions = [];
     this.showFrame(undefined);
   }
@@ -103,6 +108,7 @@ export class ControllerState {
     this.settles++;
     this.settling = false;
     this.styleLoaded = false;
+    this.loadedStyle = undefined;
     this.attributions = [];
     this.showFrame(undefined);
     if (camera !== undefined) {

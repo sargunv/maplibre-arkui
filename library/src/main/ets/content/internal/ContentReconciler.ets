@@ -68,7 +68,7 @@ export class ContentReconciler {
   private readonly map: MapHandle;
   private readonly onError: (error: Error) => void;
   // The pixel ratio of an image that doesn't give one.
-  private readonly pixelRatio: number;
+  readonly pixelRatio: number;
   private content: MapContent | undefined = undefined;
   // Counts the styles, so a pass stops once its style is gone.
   private generation: number = 0;
@@ -86,6 +86,15 @@ export class ContentReconciler {
   // The invalid hitPadding of each layer that has one, as text, which a pass
   // reports once.
   private invalidPaddings: Map<string, string> = new Map<string, string>();
+  // Counts the adds and removals of each source and layer ID in the current
+  // style, so the style API's handles know whether theirs is still there.
+  private sourceVersions: Map<string, number> = new Map<string, number>();
+  private layerVersions: Map<string, number> = new Map<string, number>();
+  // The sources that the app added through the style API, and those of them
+  // that the content has declared since, which a pass removes before it adds
+  // the content's.
+  private appSources: Set<string> = new Set<string>();
+  private displaced: Set<string> = new Set<string>();
   private passes: Promise<void> = Promise.resolve();
   private queued: boolean = false;
   // The font scale that fp() reads, and the one the current style has.
@@ -101,6 +110,14 @@ export class ContentReconciler {
   /** Applies `content` to the loaded style, and to each style from now on. */
   setContent(content: MapContent | undefined): void {
     this.content = content;
+    // A source of the app's that the content declares is the content's from
+    // now on, and the app's handles to it expire.
+    for (const source of content?.sources ?? []) {
+      if (this.appSources.delete(source.id)) {
+        this.displaced.add(source.id);
+        bump(this.sourceVersions, source.id);
+      }
+    }
     this.schedule();
   }
 
@@ -122,6 +139,53 @@ export class ContentReconciler {
    */
   hasLayer(id: string): boolean {
     return this.stack.includes(id);
+  }
+
+  /** Whether the latest content has a source with this ID. */
+  ownsSource(id: string): boolean {
+    return (this.content?.sources ?? []).some((source: StyleSource) => source.id === id);
+  }
+
+  /** Whether the latest content has a layer with this ID. */
+  ownsLayer(id: string): boolean {
+    return (this.content?.layers ?? []).some((layer: StyleLayer) => layer.id === id);
+  }
+
+  /** Whether the latest content has an image with this ID. */
+  ownsImage(id: string): boolean {
+    return (this.content?.images ?? []).some((item: StyleImage) => item.id === id);
+  }
+
+  /** Counts the adds and removals of the source with this ID in the current style. */
+  sourceVersion(id: string): number {
+    return this.sourceVersions.get(id) ?? 0;
+  }
+
+  /** Counts the adds and removals of the layer with this ID in the current style. */
+  layerVersion(id: string): number {
+    return this.layerVersions.get(id) ?? 0;
+  }
+
+  /**
+   * The app added a source through the style API. A content layer that waits
+   * for a source with its ID tries again, on the pass that this settles after.
+   * A source that the content declared while the app added it is the
+   * content's.
+   */
+  appSourceAdded(id: string): Promise<void> {
+    if (this.ownsSource(id)) {
+      this.displaced.add(id);
+    } else {
+      this.appSources.add(id);
+    }
+    bump(this.sourceVersions, id);
+    return this.schedule();
+  }
+
+  /** The app removed a source through the style API. */
+  sourceRemoved(id: string): void {
+    this.appSources.delete(id);
+    bump(this.sourceVersions, id);
   }
 
   /** A style has loaded, without any content. */
@@ -174,6 +238,10 @@ export class ContentReconciler {
     this.rejectedSources.clear();
     this.rejectedImages.clear();
     this.rejectedLayers.clear();
+    this.sourceVersions.clear();
+    this.layerVersions.clear();
+    this.appSources.clear();
+    this.displaced.clear();
   }
 
   // Runs a pass after the one in progress, or joins the one that waits.
@@ -272,8 +340,8 @@ export class ContentReconciler {
     }
 
     // Sources that go or that change more than their data take their layers
-    // with them.
-    const replaced = new Set<string>();
+    // with them, as do the app's sources that the content now declares.
+    const replaced = new Set<string>(this.displaced);
     for (const id of Array.from(this.sources.keys())) {
       const desired = sources.get(id);
       if (desired === undefined || shapeOf(desired) !== this.sources.get(id)?.shape) {
@@ -286,7 +354,9 @@ export class ContentReconciler {
         replaced.has(desired.source ?? '')) {
         this.layers.delete(id);
         this.stack = this.stack.filter((other: string) => other !== id);
-        await this.run(generation, id, `removing layer ${id}`, map.removeStyleLayer(id));
+        if (await this.run(generation, id, `removing layer ${id}`, map.removeStyleLayer(id))) {
+          bump(this.layerVersions, id);
+        }
       }
     }
     // A source that the map won't remove, such as one that a layer the app
@@ -294,6 +364,12 @@ export class ContentReconciler {
     for (const id of Array.from(replaced)) {
       if (await this.run(generation, id, `removing source ${id}`, map.removeStyleSource(id))) {
         this.sources.delete(id);
+        // The content's source, which the map may have rejected while the
+        // app's held the ID, goes in next.
+        if (this.displaced.delete(id)) {
+          this.rejectedSources.delete(id);
+        }
+        bump(this.sourceVersions, id);
       }
     }
 
@@ -383,6 +459,7 @@ export class ContentReconciler {
         map.addStyleSourceJson(source.id, source.json))) {
         this.sources.set(source.id, { shape: shape, value: value, data: data });
         this.rejectedSources.delete(source.id);
+        bump(this.sourceVersions, source.id);
       } else {
         this.rejectedSources.set(source.id, key);
       }
@@ -450,9 +527,12 @@ export class ContentReconciler {
         return false;
       }
       // The key changes when the map might take the layer: when it changes,
-      // goes elsewhere, or its source comes, goes, or changes.
+      // goes elsewhere, or its source comes, goes, or changes, such as when
+      // the app adds a source that the layer draws.
       const json = layerJson(layer);
-      const key = `${JSON.stringify(json)}@${above}@${this.sources.get(layer.source ?? '')?.shape ?? ''}`;
+      const source = layer.source ?? '';
+      const key = `${JSON.stringify(json)}@${above}@${this.sources.get(source)?.shape ?? ''}#` +
+        `${this.sourceVersion(source)}`;
       if (this.rejectedLayers.get(layer.id) === key) {
         return false;
       }
@@ -463,6 +543,7 @@ export class ContentReconciler {
         return false;
       }
       this.rejectedLayers.delete(layer.id);
+      bump(this.layerVersions, layer.id);
       const texts = new Map<string, string>();
       properties.forEach((value: Object | null, name: string) => texts.set(name, textOf(value)));
       this.layers.set(layer.id, { shape: layerShape(layer), properties: texts });
@@ -545,7 +626,11 @@ export class ContentReconciler {
   }
 }
 
-function summaryOf(info: StyleLayerInfo): LayerSummary {
+function bump(versions: Map<string, number>, id: string): void {
+  versions.set(id, (versions.get(id) ?? 0) + 1);
+}
+
+export function summaryOf(info: StyleLayerInfo): LayerSummary {
   return {
     id: info.id,
     type: info.type,

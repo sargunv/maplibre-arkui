@@ -11,6 +11,7 @@ export const categories = [
   { directory: "interaction", title: "Gestures" },
   { directory: "overlay", title: "Controls and ArkUI content" },
   { directory: "content", title: "Map content" },
+  { directory: "style", title: "The style API" },
   { directory: "location", title: "The user's location" },
   { directory: "snapshot", title: "Snapshots" },
   { directory: "runtime", title: "Requests, offline regions, and logs" },
