@@ -26,7 +26,8 @@ export interface SnapshotOptions {
   style: string;
   /**
    * Sources, layers, and images to draw over the style, as `MaplibreMap`
-   * takes them. A source or layer that the map rejects is left out.
+   * takes them. A source, layer, or image that the map rejects is left out.
+   * Its images' `pixelRatio` defaults to `scaleFactor`.
    */
   content?: MapContent;
   /** The image's width in vp. */
@@ -100,7 +101,7 @@ export async function snapshot(options: SnapshotOptions): Promise<image.PixelMap
       const style = options.style.trim();
       await loadStyle(map, style.startsWith('{') ? JSON.parse(style) as Record<string, Object> : style);
       const reconciler = new ContentReconciler(map,
-        (error: Error) => logError(`a snapshot left out content: ${error.message}`));
+        (error: Error) => logError(`a snapshot left out content: ${error.message}`), scaleFactor);
       reconciler.setContent(options.content);
       reconciler.setFontScale(fontScale);
       await reconciler.styleLoaded();

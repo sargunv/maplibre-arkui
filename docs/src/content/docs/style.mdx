@@ -38,7 +38,7 @@ The callback runs at once. Send the map's commands in it, and await their
 promises after it returns: the map and the session are only lent until then.
 The map runs the commands in order:
 
-<Code code={region(examples, "expressions")} lang="ts" />
+<Code code={region(examples, "ffi-map")} lang="ts" />
 
 The library owns the style, the camera padding, the camera bounds, the
 runtime's event handler, and the map's event mask, so don't change them through

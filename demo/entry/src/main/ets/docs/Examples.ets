@@ -22,14 +22,17 @@ import {
   ConnectivityMode,
   ContentError,
   eq,
+  FeatureClickEvent,
   FollowBearing,
   fp,
   GeoJsonFeature,
   GeoJsonFeatureCollection,
   get,
+  geometryType,
   getDefaultRuntime,
   interpolate,
   LatLngBounds,
+  LayerSummary,
   linear,
   literal,
   LogEvent,
@@ -52,8 +55,6 @@ import {
   match,
   OfflineRegionDefinition,
   OfflineRegionDownloadState,
-  PremultipliedRgba8Image,
-  readPixelMap,
   RenderedFeature,
   RuntimeEvent,
   RuntimeEventFlag,
@@ -62,11 +63,15 @@ import {
   setConnectivityMode,
   setLogCallback,
   snapshot,
-  StyleLayerInfo,
+  StyleLayer,
   UrlMatchFlag,
   WheelAction,
   zoom,
 } from '@maplibre/arkui';
+// #region content-image-import
+// The DSL's image() under another name, since PixelMap's module is `image`.
+import { image as imageExpression } from '@maplibre/arkui';
+// #endregion content-image-import
 
 const STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 const API_KEY = 'not-a-real-key';
@@ -95,17 +100,18 @@ const LOUVRE: GeoJsonFeature = {
 };
 // #endregion geojson
 
-// Decodes an image from the app's resources/rawfile into the pixels a style
-// takes.
-function readImage(context: UIContext, rawfile: string): PremultipliedRgba8Image {
+// #region content-image
+// Decodes an image from the app's resources/rawfile into a PixelMap.
+function decodeImage(context: UIContext, rawfile: string): image.PixelMap {
   const bytes = context.getHostContext()!.resourceManager.getRawFileContentSync(rawfile);
   const source = image.createImageSource(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
-  const pixelMap = source.createPixelMapSync();
-  const pixels = readPixelMap(pixelMap);
-  pixelMap.release();
-  source.release();
-  return pixels;
+  try {
+    return source.createPixelMapSync();
+  } finally {
+    source.release();
+  }
 }
+// #endregion content-image
 
 @ComponentV2
 struct ContentExample {
@@ -115,10 +121,15 @@ struct ContentExample {
   private controller: MapController = new MapController({
     camera: { center: { latitude: 48.858, longitude: 2.315 }, zoom: 12 },
   });
-  // #region content-image
-  // Read once: the map compares images by reference.
-  private pin: PremultipliedRgba8Image = readImage(this.getUIContext(), 'pin.png');
-  // #endregion content-image
+  // #region content-image-keep
+  // Decoded once, since the map compares images by reference, and released
+  // only once the content no longer has it.
+  private pin: image.PixelMap = decodeImage(this.getUIContext(), 'pin.png');
+
+  aboutToDisappear(): void {
+    this.pin.release();
+  }
+  // #endregion content-image-keep
 
   // #region content
   @Computed
@@ -130,12 +141,13 @@ struct ContentExample {
           id: 'places', type: 'circle', source: 'places',
           paint: { 'circle-radius': 8, 'circle-color': match(get('kind'), [['museum', '#fb8c00']], this.color) },
           // Under the base style's labels.
-          below: (layer: StyleLayerInfo) => layer.type === 'symbol',
+          below: (layer: LayerSummary) => layer.type === 'symbol',
           // #region layer-click
           // A click up to 8 vp beside a circle counts.
           hitPadding: 8,
-          onClick: (features: RenderedFeature[], event: MapClickEvent): boolean => {
-            this.selected = `${features[0].feature.properties?.['name']}`;
+          onClick: (event: FeatureClickEvent): boolean => {
+            // The front one of the circles under the click.
+            this.selected = `${event.features[0].properties?.['name']}`;
             // Consumed: the layers under this one and onUnhandledClick don't get it.
             return true;
           },
@@ -143,7 +155,7 @@ struct ContentExample {
         },
         {
           id: 'monuments', type: 'symbol', source: 'places', filter: eq(get('kind'), 'monument'),
-          layout: { 'icon-image': 'pin', 'icon-anchor': 'bottom', 'icon-allow-overlap': true },
+          layout: { 'icon-image': imageExpression('pin'), 'icon-anchor': 'bottom', 'icon-allow-overlap': true },
         },
         {
           id: 'names', type: 'symbol', source: 'places',
@@ -157,7 +169,7 @@ struct ContentExample {
           below: 'monuments',
         },
       ],
-      images: [{ id: 'pin', image: this.pin, options: { pixelRatio: 3 } }],
+      images: [{ id: 'pin', image: this.pin }],
     };
   }
   // #endregion content
@@ -729,6 +741,16 @@ function snapshotOf(controller: MapController, content: MapContent): Promise<ima
 // Expressions and the style API
 
 // #region expressions
+const PLACE_CIRCLES: StyleLayer = {
+  id: 'place-circles', type: 'circle', source: 'places', filter: eq(geometryType(), 'Point'),
+  paint: {
+    'circle-radius': interpolate(linear(), zoom(), [[0, 2], [12, get('size')]]),
+    'circle-color': match(get('kind'), [['park', '#8c8'], [['lake', 'river'], '#88c']], '#ccc'),
+  },
+};
+// #endregion expressions
+
+// #region ffi-map
 async function styleWithExpressions(controller: MapController): Promise<void> {
   const radius = interpolate(linear(), zoom(), [[0, 2], [12, get('size')]]);
   const color = match(get('kind'), [['park', '#8c8'], [['lake', 'river'], '#88c']], '#ccc');
@@ -738,7 +760,7 @@ async function styleWithExpressions(controller: MapController): Promise<void> {
     map.setStyleLayerProperty('places', 'circle-color', color),
   ]));
 }
-// #endregion expressions
+// #endregion ffi-map
 
 // Errors
 

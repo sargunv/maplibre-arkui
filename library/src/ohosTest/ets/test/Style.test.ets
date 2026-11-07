@@ -3,10 +3,10 @@ import image from '@ohos.multimedia.image';
 import {
   GeoJsonFeatureCollection,
   MapController,
-  readPixelMap,
   RenderedFeature,
   ScreenPoint,
 } from '@maplibre/arkui';
+import { readPixelMap } from '@maplibre/arkui/src/main/ets/StyleImage';
 import { CommandCompletion, FeatureStateSelector, MapHandle } from '@maplibre/native-ffi';
 
 import { backgroundStyle, testMap } from '../testability/TestMaps';
@@ -90,8 +90,8 @@ export default function styleTest(): void {
         pixelFormat: image.PixelMapFormat.RGB_565,
       });
       expect(rgb565.getImageInfoSync().pixelFormat).assertEqual(image.PixelMapFormat.RGB_565);
-      expect(() => readPixelMap(rgb565)).assertThrowError('readPixelMap() reads RGBA_8888 and BGRA_8888 pixel maps, ' +
-        `not format ${image.PixelMapFormat.RGB_565}`);
+      expect(() => readPixelMap(rgb565)).assertThrowError(`Unsupported pixel format ${image.PixelMapFormat.RGB_565}: ` +
+        'a pixel map must be RGBA_8888 or BGRA_8888');
       rgb565.release();
 
       const released = image.createPixelMapSync(new Uint8Array([255, 0, 0, 255]).buffer, {

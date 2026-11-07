@@ -32,18 +32,15 @@ export type ExpressionInput = Expression | string | number | boolean | null;
  * Build one with the functions of this module, such as `get()`,
  * `interpolate()`, and `match()`. For an operator that they don't
  * cover, use `call()`, or construct an expression from its style-spec
- * JSON. MapLibre checks the expression's types when it parses the
- * expression, not this library.
+ * JSON. Use it in a `StyleLayer`'s `filter`, `paint`, and `layout`, and as
+ * the `filter` of a feature query.
  *
- * Pass an expression to FFI's style functions as is: they call
- * `JSON.stringify`, which writes its style-spec JSON through `toJSON()`.
- *
- * An expression is immutable. `equals()` compares two expressions by their
- * JSON.
+ * MapLibre checks the expression's types when the map applies it, not this
+ * library: an invalid expression in the content goes to
+ * `MaplibreMap.onError`. An expression is immutable.
  */
 export class Expression {
-  /** The expression's style-spec JSON. */
-  readonly json: JsonValue;
+  private readonly json: JsonValue;
   private readonly key: string;
 
   /**
@@ -56,24 +53,19 @@ export class Expression {
     this.json = JSON.parse(this.key) as JsonValue;
   }
 
-  /** Whether `other` has the same JSON. */
-  equals(other: Expression): boolean {
-    return this === other || this.toString() === other.toString();
-  }
-
   /** The style-spec JSON, which `JSON.stringify` writes for the expression. */
   toJSON(): JsonValue {
     return this.json;
   }
 
-  /** The expression's JSON text. */
+  /** The style-spec JSON as text, which two expressions share only when their JSON is the same. */
   toString(): string {
     return this.key;
   }
 }
 
 function jsonOf(input: ExpressionInput): JsonValue {
-  return input instanceof Expression ? input.json : input;
+  return input instanceof Expression ? input.toJSON() : input;
 }
 
 /**
@@ -114,7 +106,11 @@ export function featureState(name: ExpressionInput): Expression {
   return call('feature-state', name);
 }
 
-/** The global state property `name`, which `MapHandle.setGlobalStateProperty` sets. */
+/**
+ * The style's global state property `name`, which the app can set through
+ * `MapController.withFfiMap()`. The library reserves the names that start with
+ * `maplibre-arkui:`, such as the one that `fp()` reads.
+ */
 export function globalState(name: ExpressionInput): Expression {
   return call('global-state', name);
 }
@@ -159,11 +155,16 @@ export function lineProgress(): Expression {
  * with `linear()`, `exponential()`, or `cubicBezier()`.
  */
 export class Interpolation {
-  /** The interpolation's style-spec JSON, such as `['linear']`. */
-  readonly json: JsonValue[];
+  private readonly json: JsonValue[];
 
+  /** Creates an interpolation from its style-spec JSON, such as `['linear']`. */
   constructor(json: JsonValue[]) {
     this.json = json;
+  }
+
+  /** The style-spec JSON, which `JSON.stringify` writes for the interpolation. */
+  toJSON(): JsonValue[] {
+    return this.json;
   }
 }
 
@@ -208,19 +209,19 @@ function ramp(json: JsonValue[], stops: Stop[]): Expression {
  */
 export function interpolate(type: Interpolation, input: ExpressionInput,
   stops: Stop[]): Expression {
-  return ramp(['interpolate', type.json, jsonOf(input)], stops);
+  return ramp(['interpolate', type.toJSON(), jsonOf(input)], stops);
 }
 
 /** Interpolates colors like `interpolate()`, in the HCL color space. */
 export function interpolateHcl(type: Interpolation, input: ExpressionInput,
   stops: Stop[]): Expression {
-  return ramp(['interpolate-hcl', type.json, jsonOf(input)], stops);
+  return ramp(['interpolate-hcl', type.toJSON(), jsonOf(input)], stops);
 }
 
 /** Interpolates colors like `interpolate()`, in the CIELAB color space. */
 export function interpolateLab(type: Interpolation, input: ExpressionInput,
   stops: Stop[]): Expression {
-  return ramp(['interpolate-lab', type.json, jsonOf(input)], stops);
+  return ramp(['interpolate-lab', type.toJSON(), jsonOf(input)], stops);
 }
 
 /**
@@ -264,7 +265,7 @@ export function match(input: ExpressionInput, cases: MatchCase[],
 }
 
 /** A condition and the output of `cases()` when it's the first true one. */
-export type Condition = [ExpressionInput, ExpressionInput];
+export type Case = [ExpressionInput, ExpressionInput];
 
 /**
  * The output of the first true condition, or `fallback`: the style spec's
@@ -274,7 +275,7 @@ export type Condition = [ExpressionInput, ExpressionInput];
  * cases([[not(has('mag')), '#888'], [gt(get('mag'), 5), '#f00']], '#fa0')
  * ```
  */
-export function cases(conditions: Condition[], fallback: ExpressionInput): Expression {
+export function cases(conditions: Case[], fallback: ExpressionInput): Expression {
   const json: JsonValue[] = ['case'];
   for (const condition of conditions) {
     json.push(jsonOf(condition[0]));
@@ -505,7 +506,7 @@ export function format(...sections: FormatSection[]): Expression {
       options['font-scale'] = jsonOf(section.fontScale);
     }
     if (section.textFont !== undefined) {
-      options['text-font'] = section.textFont.json;
+      options['text-font'] = section.textFont.toJSON();
     }
     if (section.textColor !== undefined) {
       options['text-color'] = jsonOf(section.textColor);

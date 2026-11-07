@@ -6,6 +6,7 @@ import {
   all,
   cases,
   eq,
+  FeatureClickEvent,
   FeatureClickHandler,
   featureState,
   GeoJsonFeature,
@@ -13,18 +14,15 @@ import {
   geometryType,
   get,
   LatLng,
+  LayerSummary,
   MapClickEvent,
   MapContent,
   MapController,
   MapError,
-  MapLayer,
   MaplibreMap,
   match,
-  PremultipliedRgba8Image,
-  readPixelMap,
-  RenderedFeature,
   snapshot,
-  StyleLayerInfo,
+  StyleLayer,
   toBoolean,
 } from '@maplibre/arkui';
 
@@ -78,17 +76,17 @@ const SELECTED_STATE: Record<string, Object> = { 'selected': true };
 
 // Under the base style's labels, so they draw over it. Each layer's features
 // handle a click with `onClick`.
-function parkLayer(color: string, onClick: FeatureClickHandler): MapLayer {
+function parkLayer(color: string, onClick: FeatureClickHandler): StyleLayer {
   return {
     id: 'paris-park', type: 'fill', source: 'paris', filter: eq(geometryType(), 'Polygon'),
     paint: { 'fill-color': cases([[SELECTED, '#2e7d32']], color), 'fill-opacity': 0.6 },
-    below: (layer: StyleLayerInfo) => layer.type === 'symbol',
+    below: (layer: LayerSummary) => layer.type === 'symbol',
     onClick: onClick,
   };
 }
 
 // The line is thin, so a click 8 vp beside it counts.
-function walkLayer(onClick: FeatureClickHandler): MapLayer {
+function walkLayer(onClick: FeatureClickHandler): StyleLayer {
   return {
     id: 'paris-walk', type: 'line', source: 'paris', filter: eq(geometryType(), 'LineString'),
     layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -98,7 +96,7 @@ function walkLayer(onClick: FeatureClickHandler): MapLayer {
   };
 }
 
-function placesLayer(onClick: FeatureClickHandler): MapLayer {
+function placesLayer(onClick: FeatureClickHandler): StyleLayer {
   return {
     id: 'paris-places', type: 'circle', source: 'paris', filter: eq(geometryType(), 'Point'),
     paint: {
@@ -113,7 +111,7 @@ function placesLayer(onClick: FeatureClickHandler): MapLayer {
 }
 
 // A pin from the app's resources over each monument.
-function pinsLayer(onClick: FeatureClickHandler): MapLayer {
+function pinsLayer(onClick: FeatureClickHandler): StyleLayer {
   return {
     id: 'paris-pins', type: 'symbol', source: 'paris',
     filter: all(eq(geometryType(), 'Point'), eq(get('kind'), 'monument')),
@@ -136,18 +134,13 @@ function addedPoint(n: number, coordinate?: LatLng): GeoJsonFeature {
   };
 }
 
-// Decodes an image from the app's rawfile resources into the pixels the style
-// takes. (This repository's build can't compile `$r()` yet; see AGENTS.md.)
-function loadPin(context: UIContext): PremultipliedRgba8Image {
+// Decodes an image from the app's rawfile resources. (This repository's build
+// can't compile `$r()` yet; see AGENTS.md.)
+function loadPin(context: UIContext): image.PixelMap {
   const bytes = context.getHostContext()!.resourceManager.getRawFileContentSync('pin.png');
   const source = image.createImageSource(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
   try {
-    const pixelMap = source.createPixelMapSync();
-    try {
-      return readPixelMap(pixelMap);
-    } finally {
-      pixelMap.release();
-    }
+    return source.createPixelMapSync();
   } finally {
     source.release();
   }
@@ -169,12 +162,13 @@ export struct StyleDemo {
   private controller: MapController = new MapController({
     camera: { center: { latitude: 48.8570, longitude: 2.2965 }, zoom: 13.6 },
   });
-  private pin: PremultipliedRgba8Image = loadPin(this.getUIContext());
+  // Kept while the content has it, and released as the page goes.
+  private pin: image.PixelMap = loadPin(this.getUIContext());
   private selected: FeatureStateSelector | undefined = undefined;
   // The layers are on top of each other, so the topmost feature under a click
   // takes it, and the layers under it don't get it.
-  private onFeatureClick: FeatureClickHandler = (features: RenderedFeature[], event: MapClickEvent): boolean => {
-    this.select(features[0], event);
+  private onFeatureClick = (layer: string): FeatureClickHandler => (event: FeatureClickEvent): boolean => {
+    this.select(event, event.features[0], layer);
     return true;
   };
 
@@ -183,21 +177,22 @@ export struct StyleDemo {
   @Computed
   get content(): MapContent {
     const places: GeoJsonFeatureCollection = { type: 'FeatureCollection', features: PARIS.features.concat(this.added) };
-    const layers: MapLayer[] = [parkLayer(PARK_COLORS[this.parkColor], this.onFeatureClick),
-      walkLayer(this.onFeatureClick)];
+    const layers: StyleLayer[] = [parkLayer(PARK_COLORS[this.parkColor], this.onFeatureClick('paris-park')),
+      walkLayer(this.onFeatureClick('paris-walk'))];
     if (this.placesShown) {
-      layers.push(placesLayer(this.onFeatureClick));
+      layers.push(placesLayer(this.onFeatureClick('paris-places')));
     }
-    layers.push(pinsLayer(this.onFeatureClick));
+    layers.push(pinsLayer(this.onFeatureClick('paris-pins')));
     return {
       sources: [{ id: 'paris', json: { 'type': 'geojson', 'data': places } }],
       layers: layers,
-      images: [{ id: 'pin', image: this.pin, options: { pixelRatio: 3 } }],
+      images: [{ id: 'pin', image: this.pin }],
     };
   }
 
   aboutToDisappear(): void {
     this.preview?.release();
+    this.pin.release();
   }
 
   build() {
@@ -212,7 +207,7 @@ export struct StyleDemo {
           },
           // A click that no feature took clears the selection.
           onUnhandledClick: (event: MapClickEvent) => {
-            this.select(undefined, event);
+            this.select(event);
           },
           onMapLongClick: (event: MapClickEvent): boolean => {
             this.added = this.added.concat([addedPoint(this.added.length, event.coordinate)]);
@@ -281,16 +276,16 @@ export struct StyleDemo {
 
   // Selects the feature that a click hit, or nothing. The library has no
   // feature state yet, so this goes through FFI's map.
-  private async select(hit: RenderedFeature | undefined, event: MapClickEvent): Promise<void> {
+  private async select(event: MapClickEvent, feature?: GeoJsonFeature, layer?: string): Promise<void> {
     try {
       const where = `at ${event.point.x.toFixed(0)}, ${event.point.y.toFixed(0)} vp`;
-      const feature = hit?.feature;
-      this.message = hit === undefined ? `Nothing here ${where}` :
-        `${feature?.properties?.['name']} in ${hit.layerId} ${where}`;
+      this.message = feature === undefined ? `Nothing here ${where}` :
+        `${feature.properties?.['name']} in ${layer} ${where}`;
 
-      // The map compares feature IDs as text.
-      const next: FeatureStateSelector | undefined = hit === undefined || feature?.id === undefined ? undefined :
-        { sourceId: hit.sourceId, featureId: { kind: 'stringValue', value: `${feature.id}` } };
+      // The map compares feature IDs as text. Every layer draws the paris
+      // source.
+      const next: FeatureStateSelector | undefined = feature?.id === undefined ? undefined :
+        { sourceId: 'paris', featureId: { kind: 'stringValue', value: `${feature.id}` } };
       // Swap the selection before awaiting, so a later tap's swap follows this
       // one. The map runs the commands in order.
       const changes = this.controller.withFfiMap((map: MapHandle): Promise<CommandCompletion>[] => {

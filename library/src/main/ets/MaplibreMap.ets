@@ -197,8 +197,9 @@ export struct MaplibreMap {
   @Event onMapLongClick: (event: MapClickEvent) => boolean = (event: MapClickEvent) => false;
   /**
    * Neither `onMapClick` nor a layer consumed a click, such as one beside the
-   * app's features, which may clear a selection. Called on the UI thread; the
-   * map logs what it throws.
+   * app's features, which may clear a selection. It gets only clicks: a long
+   * click that nothing consumes ends there. Called on the UI thread; the map
+   * logs what it throws.
    */
   @Event onUnhandledClick: (event: MapClickEvent) => void = (event: MapClickEvent) => {
   };

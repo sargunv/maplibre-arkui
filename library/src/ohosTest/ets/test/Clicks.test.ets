@@ -3,11 +3,12 @@
 
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
 import {
+  FeatureClickEvent,
+  GeoJsonFeature,
   GeoJsonFeatureCollection,
-  MapClickEvent,
   MapContent,
-  MapLayer,
   RenderedFeature,
+  StyleLayer,
 } from '@maplibre/arkui';
 import { Driver, MouseButton } from '@ohos.UiTest';
 
@@ -32,39 +33,44 @@ const PLACES: GeoJsonFeatureCollection = {
 // Whether each layer's handlers consume the clicks they get, by layer ID.
 let consuming: Set<string> = new Set<string>();
 
-// Records a click on the features of layer `id` as `what`, or as 'wrong
-// features' unless they're the layer's.
-function record(id: string, what: string, features: RenderedFeature[], event: MapClickEvent): boolean {
-  const own = features.length > 0 && features.every((feature: RenderedFeature) => feature.layerId === id);
-  return testMap.click(own ? what : 'wrong features', event, consuming.has(id));
+function names(event: FeatureClickEvent): string {
+  return event.features.map((feature: GeoJsonFeature) => `${feature.properties?.['name']}`).join(',');
 }
 
-function fill(id: string): MapLayer {
+// Records a click on the features of layer `id` as `what`, or as 'wrong
+// features' unless each is the one named `name`. A feature across tiles comes
+// once from each tile that the click is in.
+function record(id: string, what: string, name: string, event: FeatureClickEvent): boolean {
+  const own = event.features.every((feature: GeoJsonFeature) => feature.properties?.['name'] === name);
+  return testMap.click(own ? what : `wrong features: ${names(event)}`, event, consuming.has(id));
+}
+
+function fill(id: string): StyleLayer {
   return {
     id: id, type: 'fill', source: 'places', paint: { 'fill-opacity': 0.2 },
-    onClick: (features: RenderedFeature[], event: MapClickEvent): boolean => record(id, id, features, event),
-    onLongClick: (features: RenderedFeature[], event: MapClickEvent): boolean =>
-      record(id, `${id} long`, features, event),
+    onClick: (event: FeatureClickEvent): boolean => record(id, id, 'square', event),
+    onLongClick: (event: FeatureClickEvent): boolean => record(id, `${id} long`, 'square', event),
   };
 }
 
 // A small circle at the origin, which a click within `hitPadding` vp of it
 // hits.
-function dot(hitPadding: number): MapLayer {
+function dot(hitPadding: number): StyleLayer {
   return {
     id: 'dot', type: 'circle', source: 'places', paint: { 'circle-radius': 3 }, hitPadding: hitPadding,
-    onClick: (features: RenderedFeature[], event: MapClickEvent): boolean => record('dot', 'dot', features, event),
+    onClick: (event: FeatureClickEvent): boolean => record('dot', 'dot', 'dot', event),
   };
 }
 
-// Shows `layers` over the places, and waits until a query finds them.
-async function show(layers: MapLayer[]): Promise<void> {
+// Shows `layers` over the places, or over `data`, and waits until a query
+// finds them.
+async function show(layers: StyleLayer[], data: GeoJsonFeatureCollection = PLACES): Promise<void> {
   const content: MapContent = {
-    sources: [{ id: 'places', json: { 'type': 'geojson', 'data': PLACES } }],
+    sources: [{ id: 'places', json: { 'type': 'geojson', 'data': data } }],
     layers: layers,
   };
   testMap.content = content;
-  const ids = layers.map((layer: MapLayer) => layer.id);
+  const ids = layers.map((layer: StyleLayer) => layer.id);
   await eventually('the layers draw', async () => {
     const c = testMap.controller.viewport?.project({ latitude: 0, longitude: 0 });
     const hits = c === undefined ? undefined : await testMap.controller.queryRenderedFeatures(c, { layers: ids });
@@ -117,6 +123,41 @@ export default function clicksTest(): void {
       await driver.click(c.x, c.y);
       await settle(1);
       expect(JSON.stringify(testMap.clicks)).assertEqual('["click"]');
+    });
+
+    it('passes the click on from a layer handler that throws', 0, async () => {
+      const throwing: StyleLayer = {
+        id: 'top', type: 'fill', source: 'places', paint: { 'fill-opacity': 0.2 },
+        onClick: (event: FeatureClickEvent): boolean => {
+          testMap.click('top', event, true);
+          throw new Error('the handler threw');
+        },
+      };
+      await show([fill('bottom'), throwing]);
+      const c = await mapCenter();
+      await driver.click(c.x, c.y);
+      await settle(4);
+      expect(JSON.stringify(testMap.clicks)).assertEqual('["click","top","bottom","unhandled"]');
+    });
+
+    it('gives a layer\'s features front first', 0, async () => {
+      // Two circles at the origin, where the later one draws over the first.
+      const stacked: GeoJsonFeatureCollection = {
+        type: 'FeatureCollection',
+        features: [
+          { type: 'Feature', id: 1, properties: { 'name': 'back' }, geometry: { type: 'Point', coordinates: [0, 0] } },
+          { type: 'Feature', id: 2, properties: { 'name': 'front' }, geometry: { type: 'Point', coordinates: [0, 0] } },
+        ],
+      };
+      const circles: StyleLayer = {
+        id: 'circles', type: 'circle', source: 'places', paint: { 'circle-radius': 10 },
+        onClick: (event: FeatureClickEvent): boolean => testMap.click(names(event), event, true),
+      };
+      await show([circles], stacked);
+      const c = await mapCenter();
+      await driver.click(c.x, c.y);
+      await settle(2);
+      expect(JSON.stringify(testMap.clicks)).assertEqual('["click","front,back"]');
     });
 
     it('hits features within a layer\'s hitPadding', 0, async () => {
