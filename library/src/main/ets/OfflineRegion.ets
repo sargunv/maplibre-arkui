@@ -73,8 +73,9 @@ export interface OfflineRegionStatus {
  * Members may be added in later releases.
  *
  * Its getters are observable, so a component that reads `status` updates as
- * the download goes. The methods reject with an `Error` once the region is
- * deleted or its runtime released, and when the cache database fails.
+ * the download goes. The methods reject with an `Error` once its runtime is
+ * released, and when the cache database fails. Once the region is deleted,
+ * they reject with an `Error` too, except `delete()`, which does nothing.
  */
 export interface OfflineRegion {
   /** The region's ID in the cache database. */
