@@ -830,6 +830,7 @@ struct StyleExample {
   private controller: MapController = new MapController({
     camera: { center: { latitude: 48.858, longitude: 2.315 }, zoom: 12 },
   });
+  private places: GeoJsonSourceHandle | undefined = undefined;
   private selected: string | undefined = undefined;
 
   // A layer that the content declares shows the places of the kind that the
@@ -880,6 +881,7 @@ struct StyleExample {
     await water?.setProperty('fill-color', '#1565c0');
     // #endregion style-layer
     await this.showKind(this.kind);
+    await this.findPlaces();
   }
 
   // #region style-global-state
@@ -892,15 +894,31 @@ struct StyleExample {
 
   // #region feature-state
   // Highlights the place under a click: the layer's paint reads its
-  // `selected` state. The map compares feature IDs as text.
+  // `selected` state. Each style gives a handle of its own, which selects the
+  // place again. The map compares feature IDs as text.
+  private async findPlaces(): Promise<void> {
+    this.places = await this.controller.style.getGeoJsonSource('places');
+    if (this.selected !== undefined) {
+      await this.places?.setFeatureState(this.selected, { 'selected': true });
+    }
+  }
+
+  // Swaps the selection, then sends both changes without awaiting between
+  // them, so that a later click's changes follow these: the map applies them
+  // in order.
   private async select(place: GeoJsonFeature): Promise<void> {
-    const places = await this.controller.style.getGeoJsonSource('places');
+    const places = this.places;
+    if (places === undefined || place.id === undefined) {
+      return;
+    }
     const previous = this.selected;
     this.selected = `${place.id}`;
+    const changes: Promise<boolean>[] = [];
     if (previous !== undefined) {
-      await places?.removeFeatureState(previous);
+      changes.push(places.removeFeatureState(previous));
     }
-    await places?.setFeatureState(this.selected, { 'selected': true });
+    changes.push(places.setFeatureState(this.selected, { 'selected': true }));
+    await Promise.all(changes);
   }
   // #endregion feature-state
 }
