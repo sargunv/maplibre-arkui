@@ -52,6 +52,11 @@ export type {
 } from './src/main/ets/content/StyleLayer';
 export type { StyleSource } from './src/main/ets/content/StyleSource';
 
+// Style API
+export type { LayerHandle } from './src/main/ets/style/LayerHandle';
+export type { MapStyle, StyleTransitionOptions } from './src/main/ets/style/MapStyle';
+export type { GeoJsonSourceHandle, ImageSourceHandle, SourceHandle } from './src/main/ets/style/SourceHandle';
+
 // User location
 export { FollowBearing } from './src/main/ets/location/FollowUserLocationOptions';
 export type { FollowUserLocationOptions } from './src/main/ets/location/FollowUserLocationOptions';

@@ -1,6 +1,6 @@
 ---
 title: The style API
-description: Query features, and reach MapLibre Native FFI's map for the rest of the style.
+description: Read and change the loaded style, query features, and reach MapLibre Native FFI's map for the rest.
 ---
 
 import { Code } from "@astrojs/starlight/components";
@@ -8,6 +8,87 @@ import Api from "../../components/Api.astro";
 import { region } from "../../snippets";
 
 import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
+
+## Change the style
+
+The controller's <Api of="MapController.style" display="style" />, a
+<Api of="MapStyle" />, reads and changes the style that the map has loaded: its
+sources, layers, images, global state, transition, and light. It works from the
+map's `onStyleLoaded` until the next style; before then, its reads resolve
+`undefined` and its writes `false`. What the app keeps in its state belongs in
+the map's [content](/maplibre-arkui/content/) instead, which the map adds to
+each style.
+
+### Layers
+
+<Api of="MapStyle.getLayer" display="getLayer()" /> and
+<Api of="MapStyle.getLayers" display="getLayers()" /> give a
+<Api of="LayerHandle" /> for each layer of the base style and the content, from
+bottom to top. A handle reads and sets the layer's layout and paint properties,
+their transitions, its filter, and its zoom range, and `null` restores a
+property's default. To change the base style's own layers, such as to recolor
+its water, do it in `onStyleLoaded`:
+
+<Code code={region(examples, "style-layer")} lang="ts" />
+
+### Sources and their data
+
+<Api of="MapStyle.addSource" display="addSource()" /> adds a source, as a
+<Api of="StyleSource" /> writes it, and the getters give a
+<Api of="SourceHandle" /> for each source of the style. A
+<Api of="GeoJsonSourceHandle" /> replaces its source's data, and an
+<Api of="ImageSourceHandle" /> its image and corners. A content layer can draw a
+source that the app adds: until the source is in, the map reports the layer to
+`onError` as a `ContentError`, and it draws once the source is added.
+
+<Code code={region(examples, "style-source-data")} lang="ts" />
+
+The source keeps its options, such as its clustering, as its data changes:
+
+<Code code={region(examples, "style-source-data-set")} lang="ts" />
+
+### Images
+
+<Api of="MapStyle.setImage" display="setImage()" /> adds a
+<Api of="StyleImage" /> to the style, or replaces the sprite's image with its
+ID, and <Api of="MapStyle.removeImage" display="removeImage()" /> removes one.
+It copies the pixels as it's called, so the app can release the pixel map
+after.
+
+### Global state
+
+Expressions read the style's global state with
+<Api of="globalState" display="globalState()" />, such as in a filter, so a
+change to a property changes what layers draw without a new content value.
+`null` restores the default of the style's `state`:
+
+<Code code={region(examples, "style-global-state")} lang="ts" />
+
+### Transition and light
+
+<Api of="MapStyle.setTransition" display="setTransition()" /> sets how long the
+style's properties take to change, and
+<Api of="MapStyle.setLight" display="setLight()" /> replaces the light, as the
+style spec writes it.
+
+## Who owns an ID
+
+The content owns the IDs of its sources, layers, and images. The style API
+reads them, but its writes throw for them: change the content instead. When the
+content declares the ID of a source that the app added, the content's source
+replaces it. The library reserves the IDs that start with `maplibre-arkui`,
+such as the user location indicator's, and the global state names that start
+with `maplibre-arkui:`, such as the one that <Api of="fp" display="fp()" />
+reads: reads leave them out, and writes throw.
+
+## What the next style keeps
+
+A new style starts from its own document. It doesn't keep what the app changed
+through the style API or the FFI map, such as a source it added, a property it
+set, or feature state, and the handles of the last style expire. A new `style`
+value, a map that appears again, and a map that starts again at a new display
+density each load a new style. Make the changes again in `onStyleLoaded`, or
+declare them as content.
 
 ## Query features
 
@@ -27,30 +108,19 @@ finds the features of a source in the tiles that it has loaded. Both resolve
 
 ## The FFI map
 
-For what the library doesn't cover yet, such as feature state, clusters, or the
-style's own sources and layers,
-<Api of="MapController.withFfiMap" display="withFfiMap()" /> lends a callback
-the FFI map, a `MapHandle`, and its render session, a `RenderSessionHandle`.
-Their API is MapLibre Native FFI's: see its [TypeScript reference]. Import their
-types from `@maplibre/native-ffi`, at the version that the library depends on.
-
-The callback runs at once. Send the map's commands in it, and await their
-promises after it returns: the map and the session are only lent until then.
-The map runs the commands in order:
+For what the library doesn't cover yet, such as feature state, clusters, or
+debug overlays, <Api of="MapController.withFfiMap" display="withFfiMap()" />
+lends a callback the FFI map, a `MapHandle`, and its render session, a
+`RenderSessionHandle`. Their API is MapLibre Native FFI's: see its [TypeScript
+reference]. Import their types from `@maplibre/native-ffi`, at the version that
+the library depends on. The callback runs at once, so send the map's commands
+in it, and await their promises after it returns:
 
 <Code code={region(examples, "ffi-map")} lang="ts" />
 
-The library owns the style, the camera padding, the camera bounds, the
-runtime's event handler, and the map's event mask, so don't change them through
-the FFI map. Change the style through the map's `style`, so the map adds its
-content again.
-
-## What the next style keeps
-
-A new style starts from its own document. It doesn't keep what the app added
-through the FFI map, such as sources, layers, images, or feature state, so add
-it again in `onStyleLoaded`, or declare it as
-[content](/maplibre-arkui/content/), which the map adds to each style.
+Don't change what the library owns through the FFI map: the style, the
+content's sources, layers, and images, the camera padding, the camera bounds,
+the runtime's event handler, and the map's event mask.
 
 On an idle map, a feature state change draws only from the frame after the one
 that applies it; until FFI fixes that, request one, as the demo's style page

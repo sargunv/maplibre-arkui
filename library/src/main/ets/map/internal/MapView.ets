@@ -70,6 +70,7 @@ import { FOLLOW_MS, UserLocationLayer } from '../../location/internal/UserLocati
 import { UserLocationIndicatorOptions } from '../../location/UserLocationIndicatorOptions';
 import { consumes, logError } from '../../runtime/internal/Log';
 import { RuntimeState, RuntimeUser } from '../../runtime/internal/RuntimeRegistry';
+import { LoadedStyle } from '../../style/internal/LoadedStyle';
 import { CameraBoundsOptions } from '../CameraBoundsOptions';
 import { MapClickEvent } from '../MapClickEvent';
 import { RenderedFeature } from '../MapController';
@@ -111,7 +112,7 @@ export interface MapViewEvents {
 }
 
 // A style's URL, or its document.
-export type MapStyle = string | Record<string, Object>;
+type StyleInput = string | Record<string, Object>;
 
 export class MapView extends XComponentController implements GestureTarget, RuntimeUser {
   // The runtime that the view's maps are on, and its FFI runtime once open.
@@ -163,7 +164,7 @@ export class MapView extends XComponentController implements GestureTarget, Runt
   // factor: the density it was created at.
   private created: MapHandle | undefined = undefined;
   private scaleFactor: number = 1;
-  private style: MapStyle = '';
+  private style: StyleInput = '';
   // The style as JSON, which a new value must change to load again.
   private styleJson: string = '""';
   private content: MapContent = {};
@@ -241,7 +242,7 @@ export class MapView extends XComponentController implements GestureTarget, Runt
     });
   }
 
-  start(state: ControllerState, runtime: RuntimeState, style: MapStyle, content: MapContent,
+  start(state: ControllerState, runtime: RuntimeState, style: StyleInput, content: MapContent,
     bounds: CameraBoundsOptions): void {
     this.state = state;
     this.style = style;
@@ -271,7 +272,7 @@ export class MapView extends XComponentController implements GestureTarget, Runt
 
   // A style document that an app writes in `build()` is a new value each
   // time, so only a change of its JSON loads it again.
-  setStyle(style: MapStyle): void {
+  setStyle(style: StyleInput): void {
     const json = JSON.stringify(style);
     if (json === this.styleJson) {
       return;
@@ -814,6 +815,7 @@ export class MapView extends XComponentController implements GestureTarget, Runt
     const state = this.state;
     if (state !== undefined && state.view === this) {
       state.styleLoaded = false;
+      state.loadedStyle = undefined;
       state.attributions = [];
     }
     this.locationLayer.styleChanging();
@@ -835,9 +837,11 @@ export class MapView extends XComponentController implements GestureTarget, Runt
       if (current()) {
         await this.reconciler?.styleLoaded();
       }
-      if (current()) {
+      const reconciler = this.reconciler;
+      if (current() && reconciler !== undefined) {
         if (state !== undefined && state.view === this) {
           state.styleLoaded = true;
+          state.loadedStyle = new LoadedStyle(map, reconciler);
           this.readAttributions(map, state);
         }
         this.events.onStyleLoaded();

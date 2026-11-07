@@ -107,9 +107,9 @@ export function featureState(name: ExpressionInput): Expression {
 }
 
 /**
- * The style's global state property `name`, which the app can set through
- * `MapController.withFfiMap()`. The library reserves the names that start with
- * `maplibre-arkui:`, such as the one that `fp()` reads.
+ * The style's global state property `name`, which the app can set with
+ * `MapStyle.setGlobalStateProperty()`. The library reserves the names that
+ * start with `maplibre-arkui:`, such as the one that `fp()` reads.
  */
 export function globalState(name: ExpressionInput): Expression {
   return call('global-state', name);

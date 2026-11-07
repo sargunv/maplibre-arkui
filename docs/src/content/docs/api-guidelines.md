@@ -97,8 +97,10 @@ isDisabled?: boolean;
 ## 3. General API design
 
 - Build on a small set of core operations, and add conveniences that combine
-  them. Give every declarative feature imperative operations that apps can also
-  call.
+  them. Declare what the app keeps in its state as a parameter, such as the
+  map's content. Add imperative operations where apps need them, such as camera
+  moves, queries, and changes to the loaded style, not to mirror every
+  declaration.
   [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#3-general-api-design)
 - Keep a type's members to its core concept.
   [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#3-general-api-design)
@@ -159,7 +161,7 @@ breaking change.
 | Closed         | The values can never change, because they describe math or a fixed protocol        | A string-literal type                         | GeoJSON's tags |
 | Open input     | Callers only pass values in                                                        | `enum`                                        | `WheelAction`  |
 | Open identity  | A raw name from the style spec or the engine, possibly one with no named value yet | `string`                                      | A layer's type |
-| Open structure | The library returns it                                                             | A union of classes, matched with `instanceof` | `MapEvent`     |
+| Open structure | The library returns it                                                             | A union of classes, matched with `instanceof` | `MapError`     |
 
 - State the kind in the doc comment: "Closed." or "Values may be added in later
   releases; give a `switch` over it a `default` branch."
@@ -306,7 +308,8 @@ by callers.
   in any release.
   [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#8-types-the-library-creates)
 - When state can change outside the caller's control, and the caller can't check
-  it first without a race, return `undefined` from reads instead of throwing.
+  it first without a race, return `undefined` from reads, and resolve `false`
+  from writes, instead of throwing.
   [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#3-general-api-design)
 
 ```ets

@@ -15,6 +15,7 @@ import {
   geometryType,
   get,
   LatLng,
+  LayerHandle,
   LayerSummary,
   MapClickEvent,
   MapContent,
@@ -150,13 +151,14 @@ function loadPin(context: UIContext): image.PixelMap {
 
 // A map whose content comes from the page's state: a GeoJSON source, layers
 // styled with expressions, and an icon from the app's resources. The buttons
-// change the state, and the map applies the change, in each base style. A tap
-// on a feature selects it with feature state, through FFI, and a long press
-// adds a point.
+// change the state, and the map applies the change, in each base style. The
+// style API hides the base style's 3D buildings. A tap on a feature selects it
+// with feature state, through FFI, and a long press adds a point.
 @ComponentV2
 export struct StyleDemo {
   @Local style: string = LIBERTY;
   @Local placesShown: boolean = true;
+  @Local buildingsShown: boolean = true;
   @Local parkColor: number = 0;
   @Local added: GeoJsonFeature[] = [];
   @Local preview: MapSnapshot | undefined = undefined;
@@ -209,6 +211,10 @@ export struct StyleDemo {
           onError: (error: MapError) => {
             this.message = error.message;
           },
+          // Each style starts with its buildings as its document has them.
+          onStyleLoaded: () => {
+            this.showBuildings();
+          },
           // A click that no feature took clears the selection.
           onUnhandledClick: (event: MapClickEvent) => {
             this.select(event);
@@ -243,6 +249,10 @@ export struct StyleDemo {
             Button(this.placesShown ? 'Hide circles' : 'Show circles').margin(4).onClick(() => {
               this.placesShown = !this.placesShown;
             })
+            Button(this.buildingsShown ? 'Hide buildings' : 'Show buildings').margin(4).onClick(() => {
+              this.buildingsShown = !this.buildingsShown;
+              this.showBuildings();
+            })
             Button('Park color').margin(4).onClick(() => {
               this.parkColor = (this.parkColor + 1) % PARK_COLORS.length;
             })
@@ -264,6 +274,19 @@ export struct StyleDemo {
       .height('100%')
     }
     .title('Style')
+  }
+
+  // Shows or hides each of the style's 3D building layers, as the page's state
+  // says.
+  private async showBuildings(): Promise<void> {
+    try {
+      const layers: LayerHandle[] = await this.controller.style.getLayers() ?? [];
+      const visibility = this.buildingsShown ? 'visible' : 'none';
+      await Promise.all(layers.filter((layer: LayerHandle) => layer.type === 'fill-extrusion')
+        .map((layer: LayerHandle) => layer.setProperty('visibility', visibility)));
+    } catch (error) {
+      this.message = (error as Error).message;
+    }
   }
 
   // A still image of the same style, content, and camera, without the camera

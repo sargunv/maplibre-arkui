@@ -15,7 +15,8 @@ images, in a <Api of="MapContent" /> that it passes to `MaplibreMap`. A
 changes, and the map compares it with what it applied, by ID, and changes only
 what differs: a property in place, a GeoJSON source's data, a layer's position.
 Each style the map loads gets the content again, so it lasts across style
-changes.
+changes. To change the style that the map has loaded, such as its own layers,
+use [the style API](/maplibre-arkui/style/#change-the-style).
 
 <Code code={region(examples, "content")} lang="ts" />
 

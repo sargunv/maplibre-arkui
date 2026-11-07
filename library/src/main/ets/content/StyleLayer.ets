@@ -3,10 +3,11 @@ import { GeoJsonFeature } from '../geometry/GeoJson';
 import { MapClickEvent } from '../map/MapClickEvent';
 
 /**
- * A layer of the base style: the style that the map loaded, without its
- * content. The map creates it; fields may be added in later releases. It's
- * never one of the layers that the library adds itself, such as the user
- * location indicator's.
+ * A layer of the style, by its ID, type, and source. A `LayerPredicate` gets
+ * those of the base style: the style that the map loaded, without its content.
+ * The map creates it; fields may be added in later releases. It's never one of
+ * the layers that the library adds itself, such as the user location
+ * indicator's.
  */
 export interface LayerSummary {
   /** The layer's ID. */

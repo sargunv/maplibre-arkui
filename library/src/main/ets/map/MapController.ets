@@ -11,6 +11,8 @@ import { GeoJsonFeature, GeoJsonGeometry } from '../geometry/GeoJson';
 import { LatLng, LatLngBounds, ScreenPoint } from '../geometry/Geometry';
 import { checkBounds, checkCoordinates, checkGeometry } from '../geometry/internal/FfiGeometry';
 import { FollowBearing, FollowUserLocationOptions } from '../location/FollowUserLocationOptions';
+import { StyleApi } from '../style/internal/StyleApi';
+import { MapStyle } from '../style/MapStyle';
 import { ControllerState, registerControllerState } from './internal/ControllerState';
 import { checkHitPadding } from './internal/Queries';
 
@@ -59,10 +61,13 @@ export interface MapControllerOptions {
 @ObservedV2
 export class MapController {
   private readonly state: ControllerState;
+  private readonly mapStyle: MapStyle;
 
   constructor(options?: MapControllerOptions) {
-    this.state = new ControllerState(startCamera(options?.camera));
-    registerControllerState(this, this.state);
+    const state = new ControllerState(startCamera(options?.camera));
+    this.state = state;
+    this.mapStyle = new StyleApi(() => state.loadedStyle);
+    registerControllerState(this, state);
   }
 
   /**
@@ -94,6 +99,14 @@ export class MapController {
    */
   get styleLoaded(): boolean {
     return this.state.styleLoaded;
+  }
+
+  /**
+   * Reads and changes the style that the map has loaded, from its
+   * `onStyleLoaded` until the next style, as `MapStyle` describes.
+   */
+  get style(): MapStyle {
+    return this.mapStyle;
   }
 
   /**
@@ -289,12 +302,12 @@ export class MapController {
   /**
    * Lends `block` the MapLibre Native FFI map that shows the controller, and
    * its render session while it has a surface, for what this library doesn't
-   * cover, such as feature state or a style's own sources and layers. It
-   * returns what `block` returns, or undefined without calling it when no map
-   * shows the controller. What `block` throws reaches the caller.
+   * cover, such as feature state or debug overlays. It returns what `block`
+   * returns, or undefined without calling it when no map shows the controller.
+   * What `block` throws reaches the caller.
    *
    * ```ets
-   * controller.withFfiMap((map: MapHandle) => map.discarding.requestRepaint());
+   * controller.withFfiMap((map: MapHandle) => map.discarding.setDebugFlags(MapDebugFlag.tileBorders));
    * ```
    *
    * `block` runs at once. Don't keep the map or the session, or use them after
@@ -302,10 +315,12 @@ export class MapController {
    * them at any time after. Don't release them either.
    *
    * The library owns some of the map's state, which `block` must not change:
-   * the style, which the map's `style` sets; the camera padding, which
-   * `updateCamera()` sets; the camera bounds, which the map's `cameraBounds`
-   * set; the runtime's event handler; and the map's event mask. What `block`
-   * adds to the style, such as a source, is gone in the next style.
+   * the style, which the map's `style` sets; the sources, layers, and images
+   * of the map's `content`, and those whose IDs start with `maplibre-arkui`;
+   * the camera padding, which `updateCamera()` sets; the camera bounds, which
+   * the map's `cameraBounds` set; the runtime's event handler; and the map's
+   * event mask. What `block` adds to the style, such as a source, is gone in
+   * the next style.
    *
    * The types are those of `@maplibre/native-ffi`. An app that imports it
    * must use the version that this library depends on, and FFI's types may

@@ -3,7 +3,7 @@
 // out by name, and the site build fails on a region that's missing. The
 // demo's "Guide examples" page shows them in tabs.
 
-import { MapHandle } from '@maplibre/native-ffi';
+import { MapDebugFlag, MapHandle } from '@maplibre/native-ffi';
 import abilityAccessCtrl, { Permissions } from '@ohos.abilityAccessCtrl';
 import AbilityConstant from '@ohos.app.ability.AbilityConstant';
 import common from '@ohos.app.ability.common';
@@ -33,10 +33,13 @@ import {
   FullControls,
   GeoJsonFeature,
   GeoJsonFeatureCollection,
+  GeoJsonSourceHandle,
   get,
   geometryType,
+  globalState,
   interpolate,
   LatLngBounds,
+  LayerHandle,
   LayerSummary,
   linear,
   literal,
@@ -799,16 +802,97 @@ const PLACE_CIRCLES: StyleLayer = {
 // #endregion expressions
 
 // #region ffi-map
-async function styleWithExpressions(controller: MapController): Promise<void> {
-  const radius = interpolate(linear(), zoom(), [[0, 2], [12, get('size')]]);
-  const color = match(get('kind'), [['park', '#8c8'], [['lake', 'river'], '#88c']], '#ccc');
-  // The commands go to the map in the block, and run after it.
-  await controller.withFfiMap((map: MapHandle) => Promise.all([
-    map.setStyleLayerProperty('places', 'circle-radius', radius),
-    map.setStyleLayerProperty('places', 'circle-color', color),
-  ]));
+// Tile borders, which the library doesn't cover. The command goes to the map
+// in the block, and runs after it.
+async function showTileBorders(controller: MapController): Promise<void> {
+  await controller.withFfiMap((map: MapHandle) => map.setDebugFlags(MapDebugFlag.tileBorders));
 }
 // #endregion ffi-map
+
+const NO_VEHICLES: GeoJsonFeatureCollection = { type: 'FeatureCollection', features: [] };
+
+@ComponentV2
+struct StyleExample {
+  @Local kind: string = 'museum';
+  private controller: MapController = new MapController({
+    camera: { center: { latitude: 48.858, longitude: 2.315 }, zoom: 12 },
+  });
+  private vehicles: GeoJsonSourceHandle | undefined = undefined;
+
+  // A layer that the content declares draws the app's source once it's in,
+  // and shows the places of the kind that the global state names.
+  @Computed
+  get content(): MapContent {
+    return {
+      sources: [{ id: 'places', json: { 'type': 'geojson', 'data': PARIS } }],
+      layers: [
+        {
+          id: 'places', type: 'circle', source: 'places', filter: eq(get('kind'), globalState('kind')),
+          paint: { 'circle-radius': 8, 'circle-color': '#fb8c00' },
+        },
+        {
+          id: 'vehicles', type: 'circle', source: 'vehicles',
+          paint: { 'circle-radius': 6, 'circle-color': '#1e88e5' },
+        },
+      ],
+    };
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.Bottom }) {
+      MaplibreMap({
+        style: STYLE,
+        controller: this.controller,
+        content: this.content,
+        // Each style starts without what the app changed in the last.
+        onStyleLoaded: () => {
+          this.styleLoaded().catch((error: Error) => console.error(error.message));
+        },
+      })
+      Row({ space: 8 }) {
+        Button('Museums').onClick(() => this.showKind('museum'))
+        Button('Monuments').onClick(() => this.showKind('monument'))
+        Button('Move').onClick(() => this.moveVehicle())
+      }
+      .margin({ bottom: 64 })
+    }
+  }
+
+  private async styleLoaded(): Promise<void> {
+    // #region style-layer
+    // The base style's water, in another color.
+    const water: LayerHandle | undefined = await this.controller.style.getLayer('water');
+    await water?.setProperty('fill-color', '#1565c0');
+    // #endregion style-layer
+    // #region style-source-data
+    // A source that the app adds, whose data it replaces as vehicles move.
+    await this.controller.style.addSource({ id: 'vehicles', json: { 'type': 'geojson', 'data': NO_VEHICLES } });
+    this.vehicles = await this.controller.style.getGeoJsonSource('vehicles');
+    // #endregion style-source-data
+    await this.showKind(this.kind);
+  }
+
+  private moveVehicle(): void {
+    // #region style-source-data-set
+    const moved: GeoJsonFeatureCollection = {
+      type: 'FeatureCollection',
+      features: [{
+        type: 'Feature', geometry: { type: 'Point', coordinates: [2.29 + Math.random() * 0.05, 48.85] },
+        properties: {},
+      }],
+    };
+    this.vehicles?.setData(moved).catch((error: Error) => console.error(error.message));
+    // #endregion style-source-data-set
+  }
+
+  // #region style-global-state
+  // The places layer's filter reads the global state `kind`.
+  private async showKind(kind: string): Promise<void> {
+    this.kind = kind;
+    await this.controller.style.setGlobalStateProperty('kind', kind);
+  }
+  // #endregion style-global-state
+}
 
 // Errors
 
@@ -956,6 +1040,9 @@ export struct DocExamples {
           QueryExample()
         }.tabBar('Query')
         TabContent() {
+          StyleExample()
+        }.tabBar('Style API')
+        TabContent() {
           PresetExample()
         }.tabBar('Preset')
         TabContent() {
@@ -1008,5 +1095,5 @@ export struct DocExamples {
 }
 
 // Keeps the functions that no tab calls from being unused.
-export const COMPILED_EXAMPLES: Object[] = [styleWithExpressions, reportMapError, configureMaps, TOKEN_TILES,
+export const COMPILED_EXAMPLES: Object[] = [showTileBorders, reportMapError, configureMaps, TOKEN_TILES,
   setMapsUseNetwork, takeLogs];
