@@ -37,13 +37,14 @@ export interface LayerSummary {
 }
 
 /**
- * Picks a layer of the base style, for `StyleLayer.below`.
+ * Picks a layer of the base style to place a layer under, for
+ * `StyleLayer.below` and `UserLocationIndicatorOptions.below`.
  *
- * It runs on the UI thread on each content pass, once for each base layer
- * from the bottom up until it returns `true`, so it must be fast and pure; the
- * map doesn't observe the state it reads. When it throws, the map reports the
- * exception to `MaplibreMap.onError` and the log, and the layer counts as
- * unmatched.
+ * It runs on the UI thread whenever the map places a layer that uses it, once
+ * for each base layer from the bottom up until it returns `true`, so it must
+ * be fast and pure; the map doesn't observe the state it reads. When it
+ * throws, the map reports the exception to `MaplibreMap.onError` and the log,
+ * and counts it as no match for that layer or the indicator.
  */
 export type LayerPredicate = (layer: LayerSummary) => boolean;
 
