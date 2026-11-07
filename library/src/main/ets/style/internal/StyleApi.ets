@@ -19,7 +19,17 @@ import { MapStyle, StyleTransitionOptions } from '../MapStyle';
 import { GeoJsonSourceHandle, ImageSourceHandle, SourceHandle } from '../SourceHandle';
 import { LayerKey, SourceKey } from './HandleKeys';
 import { LoadedStyle } from './LoadedStyle';
-import { checkId, checkOwned, failedWith, propertyValue, read, RESERVED, reservedId, reservedName, write } from './StyleCommands';
+import {
+  checkId,
+  checkOwned,
+  failedWith,
+  propertyValue,
+  read,
+  RESERVED,
+  reservedId,
+  reservedName,
+  write,
+} from './StyleCommands';
 
 // MapLibre Native's transition when the style sets none.
 const DEFAULT_TRANSITION_MS = 300;
@@ -194,7 +204,8 @@ export class StyleApi implements MapStyle {
       return Promise.resolve(undefined);
     }
     return read(() => this.current() === style, `reading ${name} of the light`,
-      () => style.map.getStyleLightProperty(name) as Promise<Object | undefined>, (value: Object | undefined): Object | undefined => value);
+      () => style.map.getStyleLightProperty(name) as Promise<Object | undefined>,
+      (value: Object | undefined): Object | undefined => value);
   }
 
   setLightProperty(name: string, value: Object | null): Promise<boolean> {

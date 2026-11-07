@@ -33,19 +33,22 @@ its water, do it in `onStyleLoaded`:
 
 ### Sources and their data
 
-<Api of="MapStyle.addSource" display="addSource()" /> adds a source, as a
-<Api of="StyleSource" /> writes it, and the getters give a
+<Api of="MapStyle.getSource" display="getSource()" /> and
+<Api of="MapStyle.getSources" display="getSources()" /> give a
 <Api of="SourceHandle" /> for each source of the style. A
-<Api of="GeoJsonSourceHandle" /> replaces its source's data, and an
-<Api of="ImageSourceHandle" /> its image and corners. A content layer can draw a
-source that the app adds: until the source is in, the map reports the layer to
-`onError` as a `ContentError`, and it draws once the source is added.
+<Api of="GeoJsonSourceHandle" /> replaces its source's data or URL, and keeps
+the source's options, such as its clustering. An
+<Api of="ImageSourceHandle" /> replaces its source's image, URL, or corners.
+Use them for the base style's own sources, which the content can't change:
 
 <Code code={region(examples, "style-source-data")} lang="ts" />
 
-The source keeps its options, such as its clustering, as its data changes:
-
-<Code code={region(examples, "style-source-data-set")} lang="ts" />
+Declare the sources that the app defines, and the data that it keeps in its
+state, as content, which the map adds to each style before the layers that
+draw them. <Api of="MapStyle.addSource" display="addSource()" /> adds a source
+to the loaded style alone, for one that depends on what that style has, which
+the app adds in `onStyleLoaded` after it reads the style. Until it's in, a
+content layer that draws it fails with a `ContentError`.
 
 ### Images
 

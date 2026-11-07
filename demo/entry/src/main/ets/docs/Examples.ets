@@ -809,7 +809,14 @@ async function showTileBorders(controller: MapController): Promise<void> {
 }
 // #endregion ffi-map
 
-const NO_VEHICLES: GeoJsonFeatureCollection = { type: 'FeatureCollection', features: [] };
+// #region style-source-data
+// The base style's own `incidents` source, which the style's layers draw,
+// loads today's file instead of the one that the style names.
+async function showTodaysIncidents(controller: MapController): Promise<void> {
+  const incidents: GeoJsonSourceHandle | undefined = await controller.style.getGeoJsonSource('incidents');
+  await incidents?.setData('https://example.com/incidents/today.geojson');
+}
+// #endregion style-source-data
 
 @ComponentV2
 struct StyleExample {
@@ -817,10 +824,9 @@ struct StyleExample {
   private controller: MapController = new MapController({
     camera: { center: { latitude: 48.858, longitude: 2.315 }, zoom: 12 },
   });
-  private vehicles: GeoJsonSourceHandle | undefined = undefined;
 
-  // A layer that the content declares draws the app's source once it's in,
-  // and shows the places of the kind that the global state names.
+  // A layer that the content declares shows the places of the kind that the
+  // global state names.
   @Computed
   get content(): MapContent {
     return {
@@ -829,10 +835,6 @@ struct StyleExample {
         {
           id: 'places', type: 'circle', source: 'places', filter: eq(get('kind'), globalState('kind')),
           paint: { 'circle-radius': 8, 'circle-color': '#fb8c00' },
-        },
-        {
-          id: 'vehicles', type: 'circle', source: 'vehicles',
-          paint: { 'circle-radius': 6, 'circle-color': '#1e88e5' },
         },
       ],
     };
@@ -852,7 +854,6 @@ struct StyleExample {
       Row({ space: 8 }) {
         Button('Museums').onClick(() => this.showKind('museum'))
         Button('Monuments').onClick(() => this.showKind('monument'))
-        Button('Move').onClick(() => this.moveVehicle())
       }
       .margin({ bottom: 64 })
     }
@@ -864,25 +865,7 @@ struct StyleExample {
     const water: LayerHandle | undefined = await this.controller.style.getLayer('water');
     await water?.setProperty('fill-color', '#1565c0');
     // #endregion style-layer
-    // #region style-source-data
-    // A source that the app adds, whose data it replaces as vehicles move.
-    await this.controller.style.addSource({ id: 'vehicles', json: { 'type': 'geojson', 'data': NO_VEHICLES } });
-    this.vehicles = await this.controller.style.getGeoJsonSource('vehicles');
-    // #endregion style-source-data
     await this.showKind(this.kind);
-  }
-
-  private moveVehicle(): void {
-    // #region style-source-data-set
-    const moved: GeoJsonFeatureCollection = {
-      type: 'FeatureCollection',
-      features: [{
-        type: 'Feature', geometry: { type: 'Point', coordinates: [2.29 + Math.random() * 0.05, 48.85] },
-        properties: {},
-      }],
-    };
-    this.vehicles?.setData(moved).catch((error: Error) => console.error(error.message));
-    // #endregion style-source-data-set
   }
 
   // #region style-global-state
@@ -1095,5 +1078,5 @@ export struct DocExamples {
 }
 
 // Keeps the functions that no tab calls from being unused.
-export const COMPILED_EXAMPLES: Object[] = [showTileBorders, reportMapError, configureMaps, TOKEN_TILES,
-  setMapsUseNetwork, takeLogs];
+export const COMPILED_EXAMPLES: Object[] = [showTileBorders, showTodaysIncidents, reportMapError, configureMaps,
+  TOKEN_TILES, setMapsUseNetwork, takeLogs];
