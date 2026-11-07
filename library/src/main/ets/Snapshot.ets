@@ -22,10 +22,10 @@ import { getDefaultRuntime } from './runtime';
 
 /** What `snapshot()` renders. */
 export interface SnapshotOptions {
-  /** The style's URL, or a style document as JSON, as `MapLibreMap` takes it. */
+  /** The style's URL, or a style document as JSON text: one that starts with `{`. */
   style: string;
   /**
-   * Sources, layers, and images to draw over the style, as `MapLibreMap`
+   * Sources, layers, and images to draw over the style, as `MaplibreMap`
    * takes them. A source or layer that the map rejects is left out.
    */
   content?: MapContent;
@@ -48,7 +48,7 @@ export interface SnapshotOptions {
   scaleFactor?: number;
   /**
    * The scale of the sizes that `fp()` gives, such as `fp2px(1) / vp2px(1)`
-   * of a UI context, to match a `MapLibreMap` in it. Defaults to 1.
+   * of a UI context, to match a `MaplibreMap` in it. Defaults to 1.
    */
   fontScale?: number;
   /**
@@ -72,9 +72,9 @@ export interface SnapshotOptions {
  *
  * It resolves once every resource the image needs has loaded, and rejects when
  * the style or one of those resources fails to load. To capture what a
- * `MapLibreMap` shows, pass its style, its content, and its controller's
- * `getCamera()`. The image holds only the map: show the style's attribution
- * with it.
+ * `MaplibreMap` shows, pass its style, its content, and its controller's
+ * `viewport?.camera ?? camera`. The image holds only the map: show the
+ * style's attribution with it.
  */
 export async function snapshot(options: SnapshotOptions): Promise<image.PixelMap> {
   followConnectivity();
@@ -97,7 +97,8 @@ export async function snapshot(options: SnapshotOptions): Promise<image.PixelMap
       { driver: RenderDriverKind.coreWorker });
     try {
       await session.ready;
-      await loadStyle(map, options.style);
+      const style = options.style.trim();
+      await loadStyle(map, style.startsWith('{') ? JSON.parse(style) as Record<string, Object> : style);
       const reconciler = new ContentReconciler(map,
         (error: Error) => logError(`a snapshot left out content: ${error.message}`));
       reconciler.setContent(options.content);

@@ -8,8 +8,9 @@ import {
   MapDefaultOverlay,
   MapDisappearingCompassButton,
   MapDisappearingScaleBar,
+  MapError,
   MapFullOverlay,
-  MapLibreMap,
+  MaplibreMap,
   MapPlacedAt,
   MapPlacedTowards,
   MapPointerPinButton,
@@ -224,18 +225,18 @@ struct Index {
   @Builder
   map() {
     if (testMap.overlay === 'omitted') {
-      MapLibreMap({
-        controller: testMap.controller,
+      MaplibreMap({
         style: testMap.style,
+        controller: testMap.controller,
         viewportInsets: testMap.viewportInsets,
         onStyleLoaded: () => {
           testMap.styleLoads++;
         },
       })
     } else {
-      MapLibreMap({
-        controller: testMap.controller,
+      MaplibreMap({
         style: testMap.style,
+        controller: testMap.controller,
         content: testMap.content,
         cameraBounds: testMap.cameraBounds,
         runtime: testMap.runtime,
@@ -249,9 +250,13 @@ struct Index {
         },
         onCameraIdle: (camera: CameraPosition) => {
           testMap.cameraIdles.push(camera);
+          if (testMap.throwOnCameraIdle) {
+            throw new Error('the app handler failed');
+          }
         },
-        onMapError: (error: Error) => {
+        onError: (error: MapError) => {
           testMap.errors.push(error.message);
+          testMap.failures.push(error);
           if (testMap.throwOnError) {
             throw new Error('the app handler failed');
           }
@@ -265,7 +270,7 @@ struct Index {
           testMap.onGestureEnd();
         },
         onMapClick: (event: MapClickEvent): boolean => testMap.click('click', event, testMap.consumeClicks),
-        onMapLongClick: (event: MapClickEvent): boolean => testMap.click('long click', event, testMap.consumeClicks),
+        onLongClick: (event: MapClickEvent): boolean => testMap.click('long click', event, testMap.consumeClicks),
         onUnhandledClick: (event: MapClickEvent) => {
           testMap.click('unhandled', event, false);
         },
@@ -278,7 +283,7 @@ struct Index {
   // The second map shows the same controller, without controls.
   @Builder
   secondMap() {
-    MapLibreMap({ controller: testMap.controller, style: STYLE }) {
+    MaplibreMap({ style: STYLE, controller: testMap.controller }) {
     }
   }
 }

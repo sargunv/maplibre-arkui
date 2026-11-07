@@ -4,7 +4,7 @@ import common from '@ohos.app.ability.common';
 import geoLocationManager from '@ohos.geoLocationManager';
 import sensor from '@ohos.sensor';
 
-import { FollowBearing, MapController, MapLibreMap, UserLocationIndicatorOptions } from '@maplibre/arkui';
+import { FollowBearing, MapController, MapError, MaplibreMap, UserLocationIndicatorOptions } from '@maplibre/arkui';
 
 import { LIBERTY, PANEL } from './common';
 
@@ -103,14 +103,14 @@ export struct LocationDemo {
   build() {
     NavDestination() {
       Stack({ alignContent: Alignment.Bottom }) {
-        MapLibreMap({
+        MaplibreMap({
           controller: this.map,
           style: LIBERTY,
           userLocation: this.location,
           userHeading: this.heading,
           userLocationIndicator: this.red ? RED_INDICATOR : {},
           interactions: { pan: { onStart: () => this.map.stopFollowingUserLocation() } },
-          onMapError: (error: Error) => {
+          onError: (error: MapError) => {
             this.message = error.message;
           },
         })

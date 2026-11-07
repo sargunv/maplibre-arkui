@@ -72,7 +72,7 @@ export default function gestureInputTest(): void {
       expectNear(moved().y, 0, 1);
       // The observable camera rests there too.
       await until('the controller\'s camera rests', () =>
-        testMap.controller.camera?.center.longitude === camera().center.longitude);
+        testMap.controller.camera.center.longitude === camera().center.longitude);
     });
 
     it('keeps one gesture when the app moves the camera as it starts', 0, async () => {

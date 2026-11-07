@@ -3,6 +3,7 @@
 // out by name, and the site build fails on a region that's missing. The
 // demo's "Guide examples" page shows them in tabs.
 
+import { MapHandle } from '@maplibre/native-ffi';
 import abilityAccessCtrl, { Permissions } from '@ohos.abilityAccessCtrl';
 import AbilityConstant from '@ohos.app.ability.AbilityConstant';
 import common from '@ohos.app.ability.common';
@@ -19,6 +20,7 @@ import {
   CameraPosition,
   CameraTransitionMode,
   ConnectivityMode,
+  ContentError,
   eq,
   FollowBearing,
   fp,
@@ -40,9 +42,9 @@ import {
   MapContent,
   MapController,
   MapDefaultOverlay,
+  MapError,
   MapFullOverlay,
-  MapHandle,
-  MapLibreMap,
+  MaplibreMap,
   MapPlacedAt,
   MapPointerPinButton,
   MapScaleBar,
@@ -133,8 +135,7 @@ struct ContentExample {
           // A click up to 8 vp beside a circle counts.
           hitPadding: 8,
           onClick: (features: RenderedFeature[], event: MapClickEvent): boolean => {
-            const feature = features[0].feature as GeoJsonFeature;
-            this.selected = `${feature.properties?.['name']}`;
+            this.selected = `${features[0].feature.properties?.['name']}`;
             // Consumed: the layers under this one and onUnhandledClick don't get it.
             return true;
           },
@@ -164,12 +165,12 @@ struct ContentExample {
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
       // #region map-click
-      MapLibreMap({
-        controller: this.controller,
+      MaplibreMap({
         style: STYLE,
+        controller: this.controller,
         content: this.content,
         // Before the layers: true keeps the long click from them.
-        onMapLongClick: (event: MapClickEvent): boolean => {
+        onLongClick: (event: MapClickEvent): boolean => {
           this.selected = `${event.coordinate.latitude.toFixed(4)}, ${event.coordinate.longitude.toFixed(4)}`;
           return true;
         },
@@ -208,11 +209,11 @@ struct QueryExample {
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
       // #region query-click
-      MapLibreMap({
-        controller: this.controller,
+      MaplibreMap({
         style: STYLE,
+        controller: this.controller,
         onMapClick: (event: MapClickEvent): boolean => {
-          this.query(event.x, event.y);
+          this.query(event).catch((error: Error) => console.error(error.message));
           return false;
         },
       })
@@ -224,13 +225,13 @@ struct QueryExample {
 
   // The base style's features within 20 vp of a click, in any layer.
   // #region query
-  private async query(x: number, y: number): Promise<void> {
-    const session = this.controller.renderSession;
-    if (session === undefined) {
+  private async query(event: MapClickEvent): Promise<void> {
+    const hits = await this.controller.queryRenderedFeatures(event.point, { hitPadding: 20 });
+    if (hits === undefined) {
+      // The map left before it answered.
       return;
     }
-    const hits = await session.queryRenderedFeatures(
-      { kind: 'box', value: { min: { x: x - 20, y: y - 20 }, max: { x: x + 20, y: y + 20 } } });
+    // Front first, as the map draws them.
     const layers = new Set<string>(hits.map((hit: RenderedFeature) => hit.layerId));
     this.found = `${hits.length} features in ${Array.from(layers).join(', ')}`;
   }
@@ -247,7 +248,7 @@ struct PresetExample {
 
   build() {
     // #region overlay-preset
-    MapLibreMap({ controller: this.controller, style: STYLE }) {
+    MaplibreMap({ style: STYLE, controller: this.controller }) {
       MapFullOverlay()
     }
     // #endregion overlay-preset
@@ -262,7 +263,7 @@ struct NoOverlayExample {
     // #region overlay-none
     Column() {
       Stack() {
-        MapLibreMap({ controller: this.controller, style: STYLE }) {
+        MaplibreMap({ style: STYLE, controller: this.controller }) {
         }
       }
       .layoutWeight(1)
@@ -282,7 +283,7 @@ struct CustomControlsExample {
 
   build() {
     // #region overlay-custom
-    MapLibreMap({ controller: this.controller, style: STYLE }) {
+    MaplibreMap({ style: STYLE, controller: this.controller }) {
       MapAttributionOnlyOverlay()
       Column({ space: 8 }) {
         MapCompassButton()
@@ -304,7 +305,7 @@ struct PlacedAtExample {
 
   build() {
     // #region placed-at
-    MapLibreMap({ controller: this.controller, style: STYLE }) {
+    MaplibreMap({ style: STYLE, controller: this.controller }) {
       MapDefaultOverlay()
       MapPlacedAt({ coordinate: PARIS_CENTER, alignment: Alignment.Bottom }) {
         Text('Paris')
@@ -326,7 +327,7 @@ struct PlacedTowardsExample {
 
   build() {
     // #region placed-towards
-    MapLibreMap({ controller: this.controller, style: STYLE }) {
+    MaplibreMap({ style: STYLE, controller: this.controller }) {
       MapDefaultOverlay()
       // The pin moves along an oval 48 vp in from the map's edges.
       Stack() {
@@ -364,9 +365,9 @@ struct CameraExample {
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
       // #region gestures
-      MapLibreMap({
-        controller: this.controller,
+      MaplibreMap({
         style: STYLE,
+        controller: this.controller,
         interactions: { rotate: { enabled: false }, pitch: { enabled: false } },
         onGestureStart: () => {
           this.moving = true;
@@ -377,9 +378,11 @@ struct CameraExample {
       })
       // #endregion gestures
       Column({ space: 8 }) {
-        // `camera` is observable, so this text changes as the camera comes to rest.
         // #region camera-observable
-        Text(this.moving ? 'Moving' : `Zoom ${this.controller.camera?.zoom.toFixed(1) ?? '…'}`)
+        // `viewport` changes with each frame that the map draws, and `camera`
+        // as the camera comes to rest.
+        Text(`Zoom ${this.controller.viewport?.camera.zoom.toFixed(1) ?? '…'}`)
+        Text(this.moving ? 'Moving' : `Rests at zoom ${this.controller.camera.zoom.toFixed(1)}`)
         // #endregion camera-observable
         Text(this.message)
         Row({ space: 8 }) {
@@ -410,7 +413,7 @@ struct CameraExample {
       // A gesture or a later move can stop it first.
       this.message = completed ? 'Fitted' : 'Stopped';
     }).catch((error: Error) => {
-      // No map is on screen, or the map rejected the move.
+      // The map rejected the move.
       this.message = error.message;
     });
     // #endregion camera-fit
@@ -439,9 +442,9 @@ struct InsetsExample {
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
       // The controls stay above the panel, and the camera centers there too.
-      MapLibreMap({
-        controller: this.controller,
+      MaplibreMap({
         style: STYLE,
+        controller: this.controller,
         viewportInsets: { bottom: this.panelHeight },
       }) {
         MapFullOverlay()
@@ -478,7 +481,7 @@ export class CameraSavingAbility extends UIAbility {
   }
 
   onSaveState(reason: AbilityConstant.StateType, wantParam: Record<string, Object>): AbilityConstant.OnSaveResult {
-    const camera = AppStorageV2.connect(MapController)?.getCamera();
+    const camera = AppStorageV2.connect(MapController)?.camera;
     if (camera !== undefined) {
       wantParam[SAVED_CAMERA] = JSON.stringify(camera);
     }
@@ -495,7 +498,7 @@ struct SavedCameraExample {
   }))!;
 
   build() {
-    MapLibreMap({ controller: this.controller, style: STYLE })
+    MaplibreMap({ style: STYLE, controller: this.controller })
   }
 }
 // #endregion save-camera
@@ -507,9 +510,9 @@ struct InteractionExample {
 
   build() {
     // #region interactions
-    MapLibreMap({
-      controller: this.controller,
+    MaplibreMap({
       style: STYLE,
+      controller: this.controller,
       interactions: {
         // The user takes over from the app's camera as they start to pan.
         pan: {
@@ -544,9 +547,9 @@ struct LocationExample {
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      MapLibreMap({
-        controller: this.controller,
+      MaplibreMap({
         style: STYLE,
+        controller: this.controller,
         userLocation: this.location,
         // The user takes the camera as they start to pan. Zooms and rotations
         // keep following.
@@ -634,9 +637,9 @@ struct HeadingExample {
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      MapLibreMap({
-        controller: this.controller,
+      MaplibreMap({
         style: STYLE,
+        controller: this.controller,
         userLocation: this.location,
         userHeading: this.heading,
       })
@@ -655,9 +658,9 @@ struct IndicatorExample {
 
   build() {
     // #region location-indicator
-    MapLibreMap({
-      controller: this.controller,
+    MaplibreMap({
       style: STYLE,
+      controller: this.controller,
       userLocation: this.location,
       userLocationIndicator: {
         color: '#e53935',
@@ -711,7 +714,7 @@ struct SnapshotExample {
   }
 }
 
-// An image of what a MapLibreMap shows: its style, its content, and its camera.
+// An image of what a MaplibreMap shows: its style, its content, and its camera.
 // #region snapshot-of
 function snapshotOf(controller: MapController, content: MapContent): Promise<image.PixelMap> {
   return snapshot({
@@ -719,7 +722,8 @@ function snapshotOf(controller: MapController, content: MapContent): Promise<ima
     content: content,
     width: 320,
     height: 200,
-    camera: controller.getCamera(),
+    // Where the camera is now, also during a move.
+    camera: controller.viewport?.camera ?? controller.camera,
   });
 }
 // #endregion snapshot-of
@@ -727,13 +731,29 @@ function snapshotOf(controller: MapController, content: MapContent): Promise<ima
 // Expressions and the style API
 
 // #region expressions
-async function styleWithExpressions(map: MapHandle): Promise<void> {
+async function styleWithExpressions(controller: MapController): Promise<void> {
   const radius = interpolate(linear(), zoom(), [[0, 2], [12, get('size')]]);
   const color = match(get('kind'), [['park', '#8c8'], [['lake', 'river'], '#88c']], '#ccc');
-  await map.setStyleLayerProperty('places', 'circle-radius', radius);
-  await map.setStyleLayerProperty('places', 'circle-color', color);
+  // The commands go to the map in the block, and run after it.
+  await controller.withFfiMap((map: MapHandle) => Promise.all([
+    map.setStyleLayerProperty('places', 'circle-radius', radius),
+    map.setStyleLayerProperty('places', 'circle-color', color),
+  ]));
 }
 // #endregion expressions
+
+// Errors
+
+// #region map-errors
+// For a map's onError.
+function reportMapError(error: MapError): void {
+  if (error instanceof ContentError) {
+    console.error(`The map left out ${error.id}: ${error.message}`);
+  } else {
+    console.error(error.message);
+  }
+}
+// #endregion map-errors
 
 // Requests, offline regions, and logs
 
@@ -863,5 +883,5 @@ export struct DocExamples {
 }
 
 // Keeps the functions that no tab calls from being unused.
-export const COMPILED_EXAMPLES: Object[] = [snapshotOf, styleWithExpressions, useApiKey, downloadParis, watchMissingImages,
-  takeLogs];
+export const COMPILED_EXAMPLES: Object[] = [snapshotOf, styleWithExpressions, reportMapError, useApiKey, downloadParis,
+  watchMissingImages, takeLogs];

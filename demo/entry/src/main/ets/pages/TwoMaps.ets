@@ -1,4 +1,4 @@
-import { MapController, MapLibreMap } from '@maplibre/arkui';
+import { MapController, MaplibreMap } from '@maplibre/arkui';
 
 import { DEMOTILES, LIBERTY } from './common';
 
@@ -15,9 +15,9 @@ export struct TwoMaps {
   build() {
     NavDestination() {
       Column({ space: 4 }) {
-        MapLibreMap({ controller: this.london, style: LIBERTY })
+        MaplibreMap({ style: LIBERTY, controller: this.london })
           .layoutWeight(1)
-        MapLibreMap({ controller: this.world, style: DEMOTILES })
+        MaplibreMap({ style: DEMOTILES, controller: this.world })
           .layoutWeight(1)
       }
       .width('100%')

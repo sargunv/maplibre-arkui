@@ -1,4 +1,4 @@
-// The overlay presets, the sets of controls that a MapLibreMap draws over
+// The overlay presets, the sets of controls that a MaplibreMap draws over
 // itself, as MapLibre Compose's `MapOverlay` presets.
 
 import {
@@ -95,7 +95,7 @@ export struct MapAttributionOnlyOverlay {
 }
 
 /**
- * What a `MapLibreMap` draws without an overlay of the app's own: a
+ * What a `MaplibreMap` draws without an overlay of the app's own: a
  * `MapDisappearingScaleBar` at the map's top start and a
  * `MapDisappearingCompassButton` at its top end, which show only while they
  * matter, and the controls of `MapAttributionOnlyOverlay` along the bottom.
@@ -161,7 +161,7 @@ export struct MapFullOverlay {
   }
 }
 
-// What a MapLibreMap draws when the app leaves out its trailing closure.
+// What a MaplibreMap draws when the app leaves out its trailing closure.
 @Builder
 export function defaultOverlay() {
   MapDefaultOverlay()

@@ -1,14 +1,13 @@
+import { CommandCompletion, FeatureStateSelector, MapHandle } from '@maplibre/native-ffi';
 import { FrameCallback } from '@ohos.arkui.UIContext';
 import image from '@ohos.multimedia.image';
 
 import {
   all,
   cases,
-  CommandCompletion,
   eq,
   FeatureClickHandler,
   featureState,
-  FeatureStateSelector,
   GeoJsonFeature,
   GeoJsonFeatureCollection,
   geometryType,
@@ -17,8 +16,9 @@ import {
   MapClickEvent,
   MapContent,
   MapController,
+  MapError,
   MapLayer,
-  MapLibreMap,
+  MaplibreMap,
   match,
   PremultipliedRgba8Image,
   readPixelMap,
@@ -203,18 +203,18 @@ export struct StyleDemo {
   build() {
     NavDestination() {
       Stack({ alignContent: Alignment.Bottom }) {
-        MapLibreMap({
-          controller: this.controller,
+        MaplibreMap({
           style: this.style,
+          controller: this.controller,
           content: this.content,
-          onMapError: (error: Error) => {
+          onError: (error: MapError) => {
             this.message = error.message;
           },
           // A click that no feature took clears the selection.
           onUnhandledClick: (event: MapClickEvent) => {
             this.select(undefined, event);
           },
-          onMapLongClick: (event: MapClickEvent): boolean => {
+          onLongClick: (event: MapClickEvent): boolean => {
             this.added = this.added.concat([addedPoint(this.added.length, event.coordinate)]);
             return true;
           },
@@ -268,7 +268,7 @@ export struct StyleDemo {
       const preview = await snapshot({
         style: this.style,
         content: this.content,
-        camera: this.controller.getCamera(),
+        camera: this.controller.viewport?.camera ?? this.controller.camera,
         width: 160,
         height: 120,
       });
@@ -279,15 +279,12 @@ export struct StyleDemo {
     }
   }
 
-  // Selects the feature that a click hit, or nothing.
+  // Selects the feature that a click hit, or nothing. The library has no
+  // feature state yet, so this goes through FFI's map.
   private async select(hit: RenderedFeature | undefined, event: MapClickEvent): Promise<void> {
-    const map = this.controller.map;
-    if (map === undefined) {
-      return;
-    }
     try {
-      const where = `at ${event.x.toFixed(0)}, ${event.y.toFixed(0)} vp`;
-      const feature = hit?.feature as GeoJsonFeature | undefined;
+      const where = `at ${event.point.x.toFixed(0)}, ${event.point.y.toFixed(0)} vp`;
+      const feature = hit?.feature;
       this.message = hit === undefined ? `Nothing here ${where}` :
         `${feature?.properties?.['name']} in ${hit.layerId} ${where}`;
 
@@ -296,14 +293,20 @@ export struct StyleDemo {
         { sourceId: hit.sourceId, featureId: { kind: 'stringValue', value: `${feature.id}` } };
       // Swap the selection before awaiting, so a later tap's swap follows this
       // one. The map runs the commands in order.
-      const previous = this.selected;
-      this.selected = next;
-      const changes: Promise<CommandCompletion>[] = [];
-      if (previous !== undefined) {
-        changes.push(map.removeFeatureState(previous));
-      }
-      if (next !== undefined) {
-        changes.push(map.setFeatureState(next, SELECTED_STATE));
+      const changes = this.controller.withFfiMap((map: MapHandle): Promise<CommandCompletion>[] => {
+        const previous = this.selected;
+        this.selected = next;
+        const sent: Promise<CommandCompletion>[] = [];
+        if (previous !== undefined) {
+          sent.push(map.removeFeatureState(previous));
+        }
+        if (next !== undefined) {
+          sent.push(map.setFeatureState(next, SELECTED_STATE));
+        }
+        return sent;
+      });
+      if (changes === undefined) {
+        return;
       }
       await Promise.all(changes);
       // FFI draws a feature state change only from the frame after the one
@@ -325,6 +328,6 @@ class Repaint extends FrameCallback {
   }
 
   onFrame(frameTimeInNano: number): void {
-    this.controller.map?.discarding.requestRepaint();
+    this.controller.withFfiMap((map: MapHandle) => map.discarding.requestRepaint());
   }
 }

@@ -1,7 +1,7 @@
-// The controls that a MapLibreMap's overlay presets draw, which apps can also
+// The controls that a MaplibreMap's overlay presets draw, which apps can also
 // place in the overlay themselves. Each finds its map through the overlay's
-// MapScope, and reads the frame on screen through the map's controller, so it
-// follows animations. They draw with the system's colors, so they follow dark
+// MapScope, and reads the frame on screen through the viewport of the map's
+// controller, so it follows animations. They draw with the system's colors, so they follow dark
 // mode, and label themselves with the library's localized strings.
 
 import common from '@ohos.app.ability.common';
@@ -34,7 +34,7 @@ export struct MapCompassButton {
 
   @Computed
   get bearing(): number {
-    return this.scope.controller.frameCamera?.bearing ?? 0;
+    return this.scope.controller.viewport?.camera.bearing ?? 0;
   }
 
   build() {
@@ -84,7 +84,7 @@ export struct MapDisappearingCompassButton {
 
   @Computed
   get turned(): boolean {
-    const camera = this.scope.controller.frameCamera;
+    const camera = this.scope.controller.viewport?.camera;
     return camera !== undefined && (turnFromNorth(camera.bearing) > 0.5 || camera.pitch > 0.5);
   }
 
@@ -173,7 +173,7 @@ export struct MapZoomButtons {
 
   private zoomBy(delta: number): void {
     const controller = this.scope.controller;
-    const camera = controller.getCamera();
+    const camera = controller.viewport?.camera;
     if (camera === undefined) {
       return;
     }
@@ -289,11 +289,9 @@ export struct MapScaleBar {
 
   @Computed
   get length(): ScaleBarLength | undefined {
-    const controller = this.scope.controller;
-    const camera = controller.frameCamera;
-    const metersPerPixel = camera === undefined ? undefined :
-      controller.metersPerPixelAtLatitude(camera.center.latitude);
-    return metersPerPixel === undefined ? undefined : scaleBarLength(metersPerPixel, this.maxWidth, this.units);
+    const viewport = this.scope.controller.viewport;
+    return viewport === undefined ? undefined :
+      scaleBarLength(viewport.metersPerVpAtLatitude(viewport.camera.center.latitude), this.maxWidth, this.units);
   }
 
   build() {
@@ -341,7 +339,7 @@ export struct MapDisappearingScaleBar {
 
   @Computed
   get zoom(): number | undefined {
-    return this.scope.controller.frameCamera?.zoom;
+    return this.scope.controller.viewport?.camera.zoom;
   }
 
   @Monitor('zoom')

@@ -1,8 +1,9 @@
-// What the suites share: waits, the test map's camera and handles, absolute
+// What the suites share: waits, the test map's camera and FFI map, absolute
 // comparisons, and where the map is on the display.
 
 import { expect } from '@ohos/hypium';
-import { CameraPosition, LatLng, MapHandle, MapProjectionHandle, readPixelMap, ScreenPoint } from '@maplibre/arkui';
+import { CameraPosition, LatLng, readPixelMap, ScreenPoint } from '@maplibre/arkui';
+import { Camera as FfiCamera, MapHandle, MapProjectionHandle, MapSnapshot } from '@maplibre/native-ffi';
 import image from '@ohos.multimedia.image';
 import { Driver, ON, Point, PointerMatrix, Rect as Bounds } from '@ohos.UiTest';
 
@@ -10,22 +11,53 @@ import { testMap, until } from '../testability/TestMaps';
 
 export { eventually, frames, nextFrame, until, WAIT_MS } from '../testability/TestMaps';
 
-// The test map's camera now.
-export function camera(): CameraPosition {
-  const current = testMap.controller.getCamera();
-  if (current === undefined) {
-    throw new Error('The test map has no camera');
-  }
-  return current;
-}
-
-// The test map's FFI map, once its style loads.
-export function requireMap(): MapHandle {
-  const map = testMap.controller.map;
-  if (map === undefined) {
+// Lends the test map's FFI map to `block`, and fails while no map shows the
+// controller.
+export function withMap<T>(block: (map: MapHandle) => T): T {
+  let lent = false;
+  let result: T | undefined = undefined;
+  testMap.controller.withFfiMap((map: MapHandle) => {
+    lent = true;
+    result = block(map);
+  });
+  if (!lent) {
     throw new Error('The test map is not ready');
   }
-  return map;
+  return result as T;
+}
+
+// The state of the test map's FFI map.
+export function mapSnapshot(): MapSnapshot {
+  return withMap((map: MapHandle) => map.getSnapshot());
+}
+
+// The ID of the FFI map that shows the controller, if any.
+export function mapId(): bigint | undefined {
+  return testMap.controller.withFfiMap((map: MapHandle) => map.id);
+}
+
+// The test map's camera now, as its FFI map has it: its padding includes the
+// viewport insets.
+export function camera(): FfiCamera {
+  return mapSnapshot().view.camera;
+}
+
+// Waits until the camera rests and the controller reports it, and returns
+// the controller's camera, whose padding is the app's.
+export async function restingCamera(): Promise<CameraPosition> {
+  const controller = testMap.controller;
+  await until('the controller reports the resting camera', () => {
+    const snapshot = controller.withFfiMap((map: MapHandle) => map.getSnapshot());
+    if (snapshot === undefined || snapshot.transitionInProgress) {
+      return false;
+    }
+    const now = snapshot.view.camera;
+    const rest = controller.camera;
+    return near(rest.zoom, now.zoom, 1e-6) && near(rest.bearing, now.bearing, 1e-6) &&
+      near(rest.pitch, now.pitch, 1e-6) && near(rest.center.latitude, now.center.latitude, 1e-9) &&
+      near(rest.center.longitude, now.center.longitude, 1e-9);
+  });
+  return controller.camera;
 }
 
 export function near(actual: number, expected: number, tolerance: number): boolean {
@@ -52,7 +84,7 @@ export async function settled<T>(what: string, promise: Promise<T>): Promise<T> 
 }
 
 // Sets the test map's style, and waits until it loads.
-export async function setStyle(style: string): Promise<void> {
+export async function setStyle(style: string | Record<string, Object>): Promise<void> {
   const loads = testMap.styleLoads;
   testMap.style = style;
   await until('the style loads', () => testMap.styleLoads > loads && testMap.controller.styleLoaded);
@@ -60,7 +92,7 @@ export async function setStyle(style: string): Promise<void> {
 
 // Where `coordinate` is on the test map now, in vp, by the map's view.
 export function pixelFor(coordinate: LatLng): ScreenPoint {
-  const projection = MapProjectionHandle.create(requireMap().getSnapshot().view);
+  const projection = MapProjectionHandle.create(mapSnapshot().view);
   try {
     return projection.pixelForLatLng(coordinate);
   } finally {
@@ -70,7 +102,7 @@ export function pixelFor(coordinate: LatLng): ScreenPoint {
 
 // The coordinate at `point` of the test map now, in vp, by the map's view.
 export function latLngAt(point: ScreenPoint): LatLng {
-  const projection = MapProjectionHandle.create(requireMap().getSnapshot().view);
+  const projection = MapProjectionHandle.create(mapSnapshot().view);
   try {
     return projection.latLngForPixel(point);
   } finally {
@@ -183,7 +215,7 @@ export async function gesture(act: () => Promise<void>): Promise<void> {
   await act();
   await until('a gesture starts', () => testMap.gestureStarts > starts);
   await until('the camera rests', () => {
-    const snapshot = testMap.controller.map?.getSnapshot();
+    const snapshot = testMap.controller.withFfiMap((map: MapHandle) => map.getSnapshot());
     return testMap.gestureEnds === testMap.gestureStarts && snapshot !== undefined &&
       !snapshot.transitionInProgress && !snapshot.gestureInProgress;
   });

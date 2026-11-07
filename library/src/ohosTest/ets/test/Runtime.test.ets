@@ -27,7 +27,7 @@ import display from '@ohos.display';
 import fs from '@ohos.file.fs';
 import util from '@ohos.util';
 
-import { STYLE } from '../testability/TestMaps';
+import { STYLE_JSON } from '../testability/TestMaps';
 import { expectNear, settled } from './helpers';
 
 // A style that the cases' resource provider serves.
@@ -57,7 +57,7 @@ function serveStyle(runtime: RuntimeHandle, served: string[]): void {
     callback: (request: ResourceRequestInfo, handle: ResourceRequestHandle) => {
       served.push(request.requestedUrl);
       if (request.requestedUrl === APP_STYLE) {
-        handle.complete({ status: ResourceResponseStatus.ok, bytes: new util.TextEncoder().encodeInto(STYLE) });
+        handle.complete({ status: ResourceResponseStatus.ok, bytes: new util.TextEncoder().encodeInto(STYLE_JSON) });
       } else {
         handle.complete({ status: ResourceResponseStatus.error, errorReason: ResourceErrorReason.notFound });
       }
@@ -80,7 +80,9 @@ const WORLD: OfflineRegionDefinition = {
 export default function runtimeTest(): void {
   describe('Runtime', () => {
     it('renders a snapshot of the requested size', 0, async () => {
-      const pixelMap = await snapshot({ style: STYLE, width: 64, height: 32, scaleFactor: 2, camera: { zoom: 0 } });
+      const pixelMap = await snapshot({
+        style: STYLE_JSON, width: 64, height: 32, scaleFactor: 2, camera: { zoom: 0 },
+      });
       const size = pixelMap.getImageInfoSync().size;
       expect(size.width).assertEqual(128);
       expect(size.height).assertEqual(64);
@@ -89,7 +91,7 @@ export default function runtimeTest(): void {
 
     it('renders a snapshot at the display\'s density by default', 0, async () => {
       const density = display.getDefaultDisplaySync().densityPixels;
-      const pixelMap = await snapshot({ style: STYLE, width: 64, height: 32, camera: { zoom: 0 } });
+      const pixelMap = await snapshot({ style: STYLE_JSON, width: 64, height: 32, camera: { zoom: 0 } });
       const size = pixelMap.getImageInfoSync().size;
       expectNear(size.width, 64 * density, 1);
       expectNear(size.height, 32 * density, 1);

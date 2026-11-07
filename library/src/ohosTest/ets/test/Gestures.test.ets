@@ -2,8 +2,8 @@
 // in GestureInput.test.ets.
 
 import { describe, expect, it } from '@ohos/hypium';
-import { CameraDelta, MapInteractionOptions, WheelAction } from '@maplibre/arkui';
-import { GesturePhase, ScreenPoint } from '@maplibre/native-ffi';
+import { MapInteractionOptions, WheelAction } from '@maplibre/arkui';
+import { CameraDelta, GesturePhase, ScreenPoint } from '@maplibre/native-ffi';
 import {
   GestureTarget,
   MapGestures,

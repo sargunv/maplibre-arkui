@@ -1,4 +1,4 @@
-// The user's location on a map: the indicator that a MapLibreMap draws as a
+// The user's location on a map: the indicator that a MaplibreMap draws as a
 // style layer, and how the camera follows it. The app gets the location from
 // Location Kit and the heading from the compass, or anywhere else, and passes
 // them to the map; this library requests no permission and starts no location
@@ -42,7 +42,7 @@ export interface FollowUserLocationOptions {
  * `location-indicator` layer in the map's `content`.
  *
  * ```ets
- * MapLibreMap({
+ * MaplibreMap({
  *   controller: this.map,
  *   style: STYLE,
  *   userLocation: this.location,
@@ -80,7 +80,7 @@ export interface UserLocationIndicatorOptions {
    * The ID of the layer, of the base style or of the map's `content`, that
    * the indicator goes under. Without it, or when neither has such a layer as
    * the indicator appears, the indicator goes above every layer. A layer that
-   * the app adds through `MapController.map` doesn't count.
+   * the app adds through `MapController.withFfiMap()` doesn't count.
    */
   below?: string;
 }

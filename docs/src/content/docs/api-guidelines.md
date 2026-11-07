@@ -288,8 +288,8 @@ export type FeatureClickHandler = (features: GeoJsonFeature[], x: number, y: num
 Events, query results, and frame state are created by the library and only read
 by callers.
 
-- Declare them as interfaces, or as classes with a private constructor. Add
-  fields in any release.
+- Declare them as interfaces. Errors are classes that extend `Error`. Add fields
+  in any release.
   [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#8-types-the-library-creates)
 - When state can change outside the caller's control, and the caller can't check
   it first without a race, return `undefined` from reads instead of throwing.
@@ -324,7 +324,7 @@ export interface LatLng {
   longitude: number;
 }
 
-withFfiMap<T>(block: (map: MapHandle) => T): T | undefined;
+withFfiMap<T>(block: (map: MapHandle, session: RenderSessionHandle | undefined) => T): T | undefined;
 
 // Don't
 export type { LatLng } from '@maplibre/native-ffi';

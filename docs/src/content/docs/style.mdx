@@ -1,6 +1,6 @@
 ---
 title: The style API
-description: Change the style and query features with MapLibre Native FFI's API.
+description: Query features, and reach MapLibre Native FFI's map for the rest of the style.
 ---
 
 import { Code } from "@astrojs/starlight/components";
@@ -9,23 +9,54 @@ import { region } from "../../snippets";
 
 import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
 
-For everything else, the style API is MapLibre Native FFI's: `controller.map`, a
-<Api of="MapHandle" />, adds and changes sources, layers, images, and feature
-state, and `controller.renderSession`, a <Api of="RenderSessionHandle" />,
-queries features, such as the base style's near a click. A click's point is in
-vp from the map's corner, as queries take it. The content's own layers take
-[clicks](/maplibre-arkui/gestures/#clicks) without a query.
+## Query features
+
+The controller's <Api of="MapController.queryRenderedFeatures" display="queryRenderedFeatures()" />
+finds the features that the map drew at a point, front first, such as the base
+style's features near a click. A click's `point` is on the map, as queries take
+it, and `hitPadding` widens the query to a square around it. The content's own
+layers take [clicks](/maplibre-arkui/gestures/#clicks) without a query.
 
 <Code code={region(examples, "query-click")} lang="ts" />
 
 <Code code={region(examples, "query")} lang="ts" />
 
-What an app adds through `controller.map` is gone in the next style, so add it
-in `onStyleLoaded`, or declare it as [content](/maplibre-arkui/content/). Change
-the style through the map's `style`, not the FFI map's style setters, so the map
-adds its content again. On an idle map, a feature state change draws only from
-the frame after the one that applies it; until FFI fixes that, request one, as
-the demo's style page does with `map.discarding.requestRepaint()` from a delayed
-frame callback ([maplibre-native-ffi#1706]).
+The controller's <Api of="MapController.querySourceFeatures" display="querySourceFeatures()" />
+finds the features of a source in the tiles that it has loaded. Both resolve
+`undefined` while no map shows a frame.
+
+## The FFI map
+
+For what the library doesn't cover yet, such as feature state, clusters, or the
+style's own sources and layers,
+<Api of="MapController.withFfiMap" display="withFfiMap()" /> lends a callback
+the FFI map, a `MapHandle`, and its render session, a `RenderSessionHandle`.
+Their API is MapLibre Native FFI's: see its [TypeScript reference]. Import their
+types from `@maplibre/native-ffi`, at the version that the library depends on.
+
+The callback runs at once. Send the map's commands in it, and await their
+promises after it returns: the map and the session are only lent until then.
+The map runs the commands in order:
+
+<Code code={region(examples, "expressions")} lang="ts" />
+
+The library owns the style, the camera padding, the camera bounds, the
+runtime's event handler, and the map's event mask, so don't change them through
+the FFI map. Change the style through the map's `style`, so the map adds its
+content again.
+
+## What the next style keeps
+
+A new style starts from its own document. It doesn't keep what the app added
+through the FFI map, such as sources, layers, images, or feature state, so add
+it again in `onStyleLoaded`, or declare it as
+[content](/maplibre-arkui/content/), which the map adds to each style.
+
+On an idle map, a feature state change draws only from the frame after the one
+that applies it; until FFI fixes that, request one, as the demo's style page
+does with `map.discarding.requestRepaint()` from a delayed frame callback
+([maplibre-native-ffi#1706]).
+
+[TypeScript reference]: https://maplibre.org/maplibre-native-ffi/reference/typescript/
 
 [maplibre-native-ffi#1706]: https://github.com/maplibre/maplibre-native-ffi/issues/1706

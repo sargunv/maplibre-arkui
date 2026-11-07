@@ -37,7 +37,7 @@ const listeners: Map<bigint, Registration[]> = new Map();
 const liveMaps: Map<bigint, LiveMap[]> = new Map();
 
 /**
- * The runtime that every `MapLibreMap` and `snapshot()` uses unless the app
+ * The runtime that every `MaplibreMap` and `snapshot()` uses unless the app
  * passes its own. The library creates it on first use and keeps it for the
  * app's life.
  *
@@ -82,7 +82,7 @@ async function createDefaultRuntime(): Promise<RuntimeHandle> {
  * }, RuntimeEventFlag.mapIdle);
  * ```
  *
- * The maps of `MapLibreMap` components on the runtime report the events that
+ * The maps of `MaplibreMap` components on the runtime report the events that
  * some listener asks for, so the library sets their FFI maps' event masks:
  * don't call `MapHandle.setEventMask()`. The listener gets only the map events
  * it asks for, and every event that comes from the runtime itself, which no

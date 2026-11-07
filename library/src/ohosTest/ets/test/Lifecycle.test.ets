@@ -7,19 +7,33 @@ import {
   addRuntimeEventListener,
   CameraPosition,
   CameraTransitionMode,
+  ContentError,
   getDefaultRuntime,
-  MapHandle,
   MapLayer,
   removeRuntimeEventListener,
   RuntimeEvent,
   RuntimeEventFlag,
   RuntimeEventType,
   RuntimeHandle,
+  StyleLoadError,
+  Viewport,
 } from '@maplibre/arkui';
-import { CameraUpdateMode } from '@maplibre/native-ffi';
+import { CameraUpdateMode, MapHandle, MapSnapshot } from '@maplibre/native-ffi';
 
-import { backgroundStyle, STYLE, testMap } from '../testability/TestMaps';
-import { camera, eventually, expectNear, frames, near, requireMap, setStyle, until, vp2px } from './helpers';
+import { backgroundStyle, showsMap, STYLE, testMap } from '../testability/TestMaps';
+import {
+  camera,
+  eventually,
+  expectNear,
+  frames,
+  mapId,
+  mapSnapshot,
+  near,
+  setStyle,
+  until,
+  vp2px,
+  withMap,
+} from './helpers';
 
 const map = testMap.controller;
 
@@ -37,7 +51,7 @@ async function getOwnRuntime(): Promise<RuntimeHandle> {
 
 async function hideMap(): Promise<void> {
   testMap.shown = false;
-  await until('the map leaves', () => map.map === undefined);
+  await until('the map leaves', () => !showsMap(map));
 }
 
 async function showMap(): Promise<void> {
@@ -45,9 +59,8 @@ async function showMap(): Promise<void> {
   await until('the map shows the style', () => map.styleLoaded);
 }
 
-// Whether the camera of `handle` rests at `zoom`.
-function restsAtZoom(handle: MapHandle, zoom: number): boolean {
-  const snapshot = handle.getSnapshot();
+// Whether the camera of the map that `snapshot` reads rests at `zoom`.
+function restsAtZoom(snapshot: MapSnapshot, zoom: number): boolean {
   return !snapshot.transitionInProgress && near(snapshot.view.camera.zoom, zoom, 0.001);
 }
 
@@ -63,7 +76,7 @@ export default function lifecycleTest(): void {
       await until('the map reports the jump', () => testMap.cameraIdles.length > idles);
       const jumped: CameraPosition = testMap.cameraIdles[testMap.cameraIdles.length - 1];
       expectNear(jumped.zoom, 3, 0.001);
-      expectNear(map.camera?.zoom ?? NaN, 3, 0.001);
+      expectNear(map.camera.zoom, 3, 0.001);
 
       // An animation reports only where it ends.
       idles = testMap.cameraIdles.length;
@@ -74,84 +87,92 @@ export default function lifecycleTest(): void {
       expect(reported.every((rest: CameraPosition) => near(rest.zoom, 5, 0.001))).assertTrue();
     });
 
-    it('rejects camera changes until the FFI map is ready, and then starts where the last map left', 0,
+    it('holds a camera move until the map shows a frame, after the camera where the last map left it', 0,
       async () => {
         await map.updateCamera({ zoom: 4 });
         await hideMap();
         testMap.shown = true;
         // The component is coming, but its FFI map isn't ready.
-        await expect(map.updateCamera({ zoom: 8 })).assertPromiseIsRejected();
-        expectNear(map.getCamera()?.zoom ?? NaN, 4, 0.001);
-        expect(map.frameCamera).assertUndefined();
+        const move = map.updateCamera({ zoom: 8 });
+        expectNear(map.camera.zoom, 4, 0.001);
+        expect(map.viewport).assertUndefined();
 
-        await until('the map shows the style', () => map.styleLoaded);
-        expectNear(camera().zoom, 4, 0.001);
-        await map.updateCamera({ zoom: 8 });
+        expect(await move).assertTrue();
+        expect(map.viewport !== undefined).assertTrue();
         expectNear(camera().zoom, 8, 0.001);
+        await until('the camera rests', () => near(map.camera.zoom, 8, 0.001));
+        expect(testMap.cameraIdles.some((rest: CameraPosition) => near(rest.zoom, 4, 0.001))).assertTrue();
       });
 
     it('shows one map at a time: the one that appeared last, until it leaves', 0, async () => {
-      const first = requireMap();
+      const first = mapId();
+      // The case keeps the first FFI map past the lend, which apps mustn't, to
+      // move it behind the controller's back while it still shows.
+      const firstMap = withMap((ffi: MapHandle) => ffi);
       testMap.secondMap = true;
       await until('the second map shows the controller', () =>
-        map.map !== undefined && map.map !== first && map.styleLoaded);
-      const second = requireMap();
+        mapId() !== undefined && mapId() !== first && map.styleLoaded);
+      const second = mapId();
 
       // The camera methods move the second map, and the first map's camera no
       // longer reaches the controller.
       await map.updateCamera({ zoom: 4 });
-      expect(restsAtZoom(second, 4)).assertTrue();
-      expect(restsAtZoom(first, 1)).assertTrue();
-      await until('the controller rests at the second map\'s camera', () => near(map.camera?.zoom ?? 0, 4, 0.001));
-      await first.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 2 } });
+      expect(restsAtZoom(mapSnapshot(), 4)).assertTrue();
+      expect(restsAtZoom(firstMap.getSnapshot(), 1)).assertTrue();
+      await until('the controller rests at the second map\'s camera', () => near(map.camera.zoom, 4, 0.001));
+      await firstMap.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 2 } });
       await frames(10);
-      expectNear(map.camera?.zoom ?? NaN, 4, 0.001);
-      expectNear(map.frameCamera?.zoom ?? NaN, 4, 0.001);
+      expectNear(map.camera.zoom, 4, 0.001);
+      expectNear(map.viewport?.camera.zoom ?? NaN, 4, 0.001);
 
       // The first map leaving leaves the controller with the second.
       testMap.firstMap = false;
       await frames(10);
-      expect(map.map === second).assertTrue();
+      expect(mapId() === second).assertTrue();
       expect(map.styleLoaded).assertTrue();
 
       testMap.secondMap = false;
-      await until('the second map leaves', () => map.map === undefined);
+      await until('the second map leaves', () => !showsMap(map));
       expect(map.styleLoaded).assertFalse();
-      expectNear(map.camera?.zoom ?? NaN, 4, 0.001);
+      expectNear(map.camera.zoom, 4, 0.001);
     });
 
-    it('forgets the frame and its projection once the map leaves', 0, async () => {
-      await until('the map shows a frame', () => map.frameCamera !== undefined);
-      expect(map.pixelForLatLng({ latitude: 0, longitude: 0 }) !== undefined).assertTrue();
+    it('forgets the viewport once the map leaves, and an old viewport still answers for its frame', 0,
+      async () => {
+        await until('the map shows a frame', () => map.viewport !== undefined);
+        const old: Viewport = map.viewport!;
+        const origin = old.project({ latitude: 0, longitude: 0 });
 
-      await hideMap();
-      // Frames that the session reports as it goes don't bring it back.
-      await frames(10);
-      expect(map.frameCamera).assertUndefined();
-      expect(map.pixelForLatLng({ latitude: 0, longitude: 0 })).assertUndefined();
-      expect(map.latLngForPixel({ x: 0, y: 0 })).assertUndefined();
-      expect(map.metersPerPixelAtLatitude(0)).assertUndefined();
+        await hideMap();
+        // Frames that the session reports as it goes don't bring it back.
+        await frames(10);
+        expect(map.viewport).assertUndefined();
+        const again = old.project({ latitude: 0, longitude: 0 });
+        expectNear(again.x, origin.x, 1e-6);
+        expectNear(again.y, origin.y, 1e-6);
+        expectNear(old.unproject(origin).longitude, 0, 1e-6);
 
-      await showMap();
-      await until('the new map shows a frame', () => map.frameCamera !== undefined);
-    });
+        await showMap();
+        await until('the new map shows a frame', () => map.viewport !== undefined);
+      });
 
     it('follows its surface as it resizes', 0, async () => {
-      await until('the map shows a frame', () => map.frameCamera !== undefined);
-      const full = requireMap().getSnapshot().view.extent;
+      await until('the map shows a frame', () => map.viewport !== undefined);
+      const full = mapSnapshot().view.extent;
       testMap.height = 200;
-      await until('the map takes the new size', () => requireMap().getSnapshot().view.extent.height === 200);
-      expect(requireMap().getSnapshot().view.extent.width).assertEqual(full.width);
+      await until('the map takes the new size', () => mapSnapshot().view.extent.height === 200);
+      expect(mapSnapshot().view.extent.width).assertEqual(full.width);
       // The frames on screen are of the new size, with the camera's center in
       // the middle of it.
-      await until('a frame of the new size shows', () => near(map.pixelForLatLng(camera().center)?.y ?? 0, 100, 0.5));
-      expectNear(map.pixelForLatLng(camera().center)?.x ?? NaN, full.width / 2, 0.5);
+      await until('a frame of the new size shows', () => near(map.viewport?.project(camera().center).y ?? 0, 100, 0.5));
+      expectNear(map.viewport?.project(camera().center).x ?? NaN, full.width / 2, 0.5);
+      expect(map.viewport?.size.height).assertEqual(200);
 
       testMap.height = '100%';
       await until('the map takes its full size back', () =>
-        requireMap().getSnapshot().view.extent.height === full.height);
+        mapSnapshot().view.extent.height === full.height);
       await until('a frame of the full size shows', () =>
-        near(map.pixelForLatLng(camera().center)?.y ?? 0, full.height / 2, 0.5));
+        near(map.viewport?.project(camera().center).y ?? 0, full.height / 2, 0.5));
     });
 
     it('makes a new map at a new density, which keeps the camera and the content', 0, async () => {
@@ -161,27 +182,27 @@ export default function lifecycleTest(): void {
       }
       const dots: MapLayer = { id: 'dots', type: 'background' };
       testMap.content = { layers: [dots] };
-      await eventually('the content applies', () => requireMap().getStyleLayer('dots'));
+      await eventually('the content applies', () => withMap((ffi: MapHandle) => ffi.getStyleLayer('dots')));
       await map.updateCamera({ center: { latitude: 10, longitude: 20 }, zoom: 4 });
       const density = vp2px(1);
       // A custom density is at most 4.
       const changed = density > 2 ? density - 1 : density + 1;
-      const old = requireMap();
+      const old = mapId();
       stage.setCustomDensity(changed);
       try {
-        await until('a new map shows the style', () => map.map !== undefined && map.map !== old && map.styleLoaded);
+        await until('a new map shows the style', () => mapId() !== undefined && mapId() !== old && map.styleLoaded);
         expectNear(vp2px(1), changed, 0.001);
-        const view = requireMap().getSnapshot().view;
+        const view = mapSnapshot().view;
         expectNear(view.extent.scaleFactor, changed, 0.001);
         expectNear(view.camera.center.latitude, 10, 0.001);
         expectNear(view.camera.center.longitude, 20, 0.001);
         expectNear(view.camera.zoom, 4, 0.001);
-        await eventually('the content applies again', () => requireMap().getStyleLayer('dots'));
-        await until('the new map shows a frame', () => map.frameCamera !== undefined);
+        await eventually('the content applies again', () => withMap((ffi: MapHandle) => ffi.getStyleLayer('dots')));
+        await until('the new map shows a frame', () => map.viewport !== undefined);
       } finally {
         stage.setCustomDensity(density);
-        await until('the map takes the density back', () => map.map !== undefined && map.styleLoaded &&
-          near(requireMap().getSnapshot().view.extent.scaleFactor, density, 0.001));
+        await until('the map takes the density back', () => showsMap(map) && map.styleLoaded &&
+          near(mapSnapshot().view.extent.scaleFactor, density, 0.001));
       }
     });
 
@@ -190,13 +211,11 @@ export default function lifecycleTest(): void {
       await hideMap();
       testMap.runtime = runtime;
       await showMap();
-      expect(map.runtime?.id).assertEqual(runtime.id);
-      expect(map.runtime?.id === (await getDefaultRuntime()).id).assertFalse();
 
       // Its map reports to that runtime's listeners.
       let idles = 0;
       const listener = (event: RuntimeEvent) => {
-        if (event.type === RuntimeEventType.mapIdle && event.source === map.map?.id) {
+        if (event.type === RuntimeEventType.mapIdle && event.source === mapId()) {
           idles++;
         }
       };
@@ -215,7 +234,7 @@ export default function lifecycleTest(): void {
       let once = 0;
       let counted = 0;
       const idle = (event: RuntimeEvent): boolean =>
-        event.type === RuntimeEventType.mapIdle && event.source === map.map?.id;
+        event.type === RuntimeEventType.mapIdle && event.source === mapId();
       const throwing = (event: RuntimeEvent) => {
         if (idle(event)) {
           thrown++;
@@ -252,20 +271,19 @@ export default function lifecycleTest(): void {
       }
     });
 
-    it('reports a style document that is not JSON, and loads the next style', 0, async () => {
-      testMap.style = '{"version": 8, "sources": ';
-      await until('the map reports the error', () => testMap.errors.length > 0);
+    it('reports a style that fails to load, and loads the next style', 0, async () => {
+      testMap.style = 'file:///nonexistent/style.json';
+      await until('the map reports the error', () => testMap.failures.length > 0);
+      expect(testMap.failures[0] instanceof StyleLoadError).assertTrue();
       expect(map.styleLoaded).assertFalse();
       await setStyle(backgroundStyle('#d94a4a'));
-      expect(JSON.stringify(await requireMap().getLoadedStyleJson())).assertContain('#d94a4a');
+      expect(JSON.stringify(await withMap((ffi: MapHandle) => ffi.getLoadedStyleJson()))).assertContain('#d94a4a');
     });
 
-    it('keeps working after onMapError throws', 0, async () => {
+    it('keeps working after onError throws', 0, async () => {
       testMap.throwOnError = true;
-      testMap.style = '{"version": 8, "sources": ';
-      await until('the map reports the document', () => testMap.errors.length > 0);
       testMap.style = 'file:///nonexistent/style.json';
-      await until('the map reports the URL', () => testMap.errors.length > 1);
+      await until('the map reports the URL', () => testMap.errors.length > 0);
       await setStyle(STYLE);
 
       const lost: MapLayer = { id: 'lost', type: 'circle', source: 'missing' };
@@ -273,7 +291,18 @@ export default function lifecycleTest(): void {
       testMap.content = { layers: [lost, dots] };
       await until('the map reports the layer', () =>
         testMap.errors.some((error: string) => error.includes('adding layer lost')));
-      await eventually('the rest of the content applies', () => requireMap().getStyleLayer('dots'));
+      const failure = testMap.failures.find((error: Error) => error.message.includes('adding layer lost'));
+      expect(failure instanceof ContentError && failure.id === 'lost').assertTrue();
+      await eventually('the rest of the content applies', () => withMap((ffi: MapHandle) => ffi.getStyleLayer('dots')));
+    });
+
+    it('calls onStyleLoaded after onCameraIdle throws', 0, async () => {
+      testMap.throwOnCameraIdle = true;
+      const idles = testMap.cameraIdles.length;
+      await map.updateCamera({ zoom: 3 });
+      await until('the map reports the rest', () => testMap.cameraIdles.length > idles);
+      await setStyle(backgroundStyle('#d94a4a'));
+      expect(map.styleLoaded).assertTrue();
     });
   });
 }

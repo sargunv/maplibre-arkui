@@ -10,7 +10,7 @@ import { region } from "../../snippets";
 import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
 
 An app declares what it draws over the style as data: sources, layers, and
-images, in a <Api of="MapContent" /> that it passes to `MapLibreMap`. A
+images, in a <Api of="MapContent" /> that it passes to `MaplibreMap`. A
 `@Computed` getter that reads the app's state makes a new value when the state
 changes, and the map compares it with what it applied, by ID, and changes only
 what differs: a property in place, a GeoJSON source's data, a layer's position.
@@ -44,8 +44,8 @@ base-style layer or another content layer, and a predicate picks a base-style
 layer. Text sizes in <Api of="fp" display="fp()" /> follow the user's font size
 setting as ArkUI's `fp` sizes do, once the app opts in with
 `"fontSizeScale": "followSystem"` in its [configuration profile]; the base
-style's labels don't. A source or layer that the map rejects goes to
-`onMapError` and stays out until it changes. An image replaces any image that
+style's labels don't. A source, layer, or image that the map rejects goes to
+`onError` as a `ContentError` and stays out until it changes. An image replaces any image that
 the style has with its ID, such as one from the base style's sprite, and leaving
 the content removes that ID from the style. <Api of="readPixelMap" display="readPixelMap()" />
 turns a decoded `PixelMap` into a style image; the demo's [`readImage()`] reads

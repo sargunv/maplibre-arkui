@@ -2,7 +2,7 @@
 // as they write it. The demo's "Quick start" button opens it.
 
 // #region quick-start
-import { CameraTransitionMode, MapController, MapLibreMap } from '@maplibre/arkui';
+import { CameraTransitionMode, MapController, MapError, MaplibreMap } from '@maplibre/arkui';
 
 @Entry
 @ComponentV2
@@ -13,10 +13,10 @@ struct MapPage {
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      MapLibreMap({
-        controller: this.controller,
+      MaplibreMap({
         style: 'https://tiles.openfreemap.org/styles/liberty',
-        onMapError: (error: Error) => console.error(error.message),
+        controller: this.controller,
+        onError: (error: MapError) => console.error(error.message),
       })
       Button('Fly to New York')
         .margin(64)

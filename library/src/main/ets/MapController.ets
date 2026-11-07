@@ -1,61 +1,69 @@
-import {
-  AnimationOptions,
-  CameraFitOptions,
-  CameraOptions,
-  CameraTransitionEnd,
-  CameraTransitionOutcome,
-  MapHandle,
-  MapProjectionHandle,
-  MapView as FrameView,
-  RenderSessionHandle,
-  RuntimeHandle,
-} from '@maplibre/native-ffi';
-import geoLocationManager from '@ohos.geoLocationManager';
+import { CameraFitOptions, CameraOptions, MapHandle, RenderSessionHandle } from '@maplibre/native-ffi';
+import display from '@ohos.display';
 
 import { CameraPosition, CameraTransitionOptions, CameraUpdate, FitCameraOptions } from './CameraPosition';
+import { ControllerState } from './ControllerState';
 import {
   checkBounds,
   checkCamera,
   checkCoordinates,
-  CheckedCamera,
-  CheckedFit,
-  CheckedTransition,
   checkFit,
   checkGeometry,
   checkTransition,
-  toLatLng,
-  toScreenPoint,
 } from './FfiValues';
 import { GeoJsonGeometry } from './GeoJson';
 import { LatLng, LatLngBounds, ScreenPoint } from './Geometry';
-import { FollowBearing, FollowUserLocationOptions, course } from './location';
-import { MapView } from './MapView';
+import { NO_INSETS, paddingInVp } from './Insets';
+import { FollowUserLocationOptions } from './location';
+import {
+  checkHitPadding,
+  RenderedFeature,
+  RenderedFeatureQueryOptions,
+  SourceFeature,
+  SourceFeatureQueryOptions,
+} from './Queries';
+import { Viewport } from './Viewport';
 
 /** Options for a new `MapController`. */
 export interface MapControllerOptions {
   /**
-   * Where the camera starts. Fields it leaves out keep the map's defaults. The
-   * constructor throws an `Error` for a camera that `updateCamera()` would
-   * throw for.
+   * Where the camera starts. Fields it leaves out take MapLibre's defaults:
+   * center 0, 0, zoom 0, bearing 0, pitch 0, and no padding. A saved
+   * `CameraPosition` restores the camera as it was.
+   *
+   * Its padding's lengths in px and fp convert to vp at the default display's
+   * density and font scale. The constructor throws an `Error` for a camera
+   * that `updateCamera()` would throw for, and for a padding side in lpx,
+   * which needs a UI context.
    */
   camera?: CameraUpdate;
 }
 
+// Each controller's state, which only the library reaches.
+const states: WeakMap<MapController, ControllerState> = new WeakMap<MapController, ControllerState>();
+
+// Internal: the state of `controller`, which the map that shows it changes.
+export function controllerState(controller: MapController): ControllerState {
+  return states.get(controller)!;
+}
+
 /**
- * Reads and moves the camera of a `MapLibreMap`, from inside or outside the
+ * Reads and moves the camera of a `MaplibreMap`, from inside or outside the
  * component, as a `Scroller` does for a list.
  *
- * Create one, pass it to a `MapLibreMap`, and keep it. It shows in one map at a
- * time. When the map leaves the screen and comes back, such as after a
- * navigation, the new map starts where the old one left the camera.
+ * Create one, pass it to a `MaplibreMap`, and keep it. It shows in one map at a
+ * time: the one that appeared last. When the map leaves the screen and comes
+ * back, such as after a navigation, the new map starts where the old one left
+ * the camera.
  *
- * Its `camera`, `styleLoaded`, `attributions`, and `followingUserLocation`
- * are observable, so a component that reads them updates when they change.
- * The map and the follow methods set them; apps only read them. `frameCamera` and the projection methods, such as
- * `pixelForLatLng()`, are observable too, and change with every frame the
- * camera moves. The camera methods check their arguments first, and throw an
- * `Error` for an invalid one; then they need a map on screen whose FFI map is
- * ready, and reject without one.
+ * Its getters are observable, so a component that reads them updates when
+ * they change; only the map and the controller's methods change them.
+ *
+ * The camera methods check their arguments first, and throw an `Error` for an
+ * invalid one. A move then waits until a map shows the controller at its
+ * size, and the moves go to the map in the order the app makes them. They
+ * keep waiting while no map shows the controller, until
+ * `cancelCameraTransitions()`.
  *
  * The camera's `padding` is the app's: the space, in vp, around the part of
  * the map that the camera centers in. It's what `updateCamera()` or a fit last
@@ -66,134 +74,60 @@ export interface MapControllerOptions {
  */
 @ObservedV2
 export class MapController {
+  private readonly state: ControllerState;
+
+  constructor(options?: MapControllerOptions) {
+    this.state = new ControllerState(startCamera(options?.camera));
+    states.set(this, this.state);
+  }
+
   /**
-   * Where the camera last came to rest: after a jump, once an animation ends,
-   * or where the map left it. Undefined until the map first shows. Read
-   * `getCamera()` for where the camera is right now, such as during an
-   * animation. Only the map sets it; assigning it doesn't move the camera.
+   * Where the camera last came to rest: after a jump, once an animation or a
+   * gesture ends, or where the last map left it. Before a map shows the
+   * controller, it's the start camera of `MapControllerOptions`, with
+   * MapLibre's defaults for the fields it leaves out. Observable.
    */
-  @Trace camera: CameraPosition | undefined = undefined;
-  /** Whether the map's style has loaded, so its layers and sources exist, with the map's content. */
-  @Trace styleLoaded: boolean = false;
+  get camera(): CameraPosition {
+    return this.state.camera;
+  }
+
+  /**
+   * The latest frame that the map drew, with its camera and projection.
+   * Undefined while no map shows a frame. Observable: it changes with every
+   * frame that the view changes in, so read it in `@Computed` getters of the
+   * components that follow the map. Read `viewport?.camera ?? camera` for
+   * where the camera is now; it can trail a move by a frame.
+   */
+  get viewport(): Viewport | undefined {
+    return this.state.viewport;
+  }
+
+  /**
+   * Whether the map's style has loaded, so its layers and sources exist, with
+   * the map's content. Observable.
+   */
+  get styleLoaded(): boolean {
+    return this.state.styleLoaded;
+  }
+
   /**
    * The attribution of the style's sources, as HTML, without repeats, in the
    * order the style lists them. Empty until the style loads. Show it, or a
    * `MapAttributionButton` in the map's overlay, as the sources' terms
-   * require.
+   * require. Observable.
    */
-  @Trace attributions: string[] = [];
+  get attributions(): string[] {
+    return this.state.attributions;
+  }
+
   /**
    * Whether the camera follows the map's `userLocation`. Only
    * `followUserLocation()` and `stopFollowingUserLocation()` set it; the
    * user's input doesn't, so an app stops following where it chooses, such as
-   * in the `onStart` of the map's `interactions.pan`.
+   * in the `onStart` of the map's `interactions.pan`. Observable.
    */
-  @Trace followingUserLocation: boolean = false;
-
-  // The camera and size of the frame on screen. The map sets it each time it
-  // shows a frame whose view changed, so reads of the frame's projection
-  // update with each frame.
-  @Trace private frame: FrameView | undefined = undefined;
-  // The projection of `frame`, made when first read.
-  private projection: MapProjectionHandle | undefined = undefined;
-  private view: MapView | undefined = undefined;
-  private readonly startCamera: CheckedCamera | undefined;
-  private followOptions: FollowUserLocationOptions = {};
-  // The zoom that the next move to follow the location takes.
-  private followZoom: number | undefined = undefined;
-  // How many times the app has moved the camera, so a fit that's still
-  // finding its camera gives way.
-  private moves: number = 0;
-
-  constructor(options?: MapControllerOptions) {
-    const camera = options?.camera;
-    this.startCamera = camera === undefined ? undefined : checkCamera(camera);
-  }
-
-  /**
-   * The FFI runtime of the map on screen. Maps share the library's default
-   * runtime unless the app passes `MapLibreMap` its own.
-   */
-  get runtime(): RuntimeHandle | undefined {
-    return this.view?.runtime;
-  }
-
-  /**
-   * The FFI map on screen, for its style API (sources, layers, images, and
-   * feature state) and what else this library doesn't wrap. A new style
-   * starts without the sources, layers, and images the app added, so add them
-   * in `onStyleLoaded`. When the display's density changes, the map replaces
-   * this handle and its render session with new ones at the new density,
-   * keeping the camera, and loads the style again. A feature state change draws only from the next frame,
-   * so request one on an idle map (see the style API guide). Don't release it; the
-   * `MapLibreMap` that created it does. Change the style through the map's
-   * `style` param, not this handle's style setters, so that the map adds its
-   * `content` and fires `onStyleLoaded`. Camera padding set through this
-   * handle bypasses the controller: the camera that it reports keeps the
-   * padding that `updateCamera()` or a fit last set, and the next viewport
-   * inset change puts that back on the map.
-   */
-  get map(): MapHandle | undefined {
-    return this.view?.map;
-  }
-
-  /**
-   * The FFI render session that draws the map, while the map has a surface,
-   * for feature queries. Its screen points are in vp from the map's top-left
-   * corner, as an ArkUI `ClickEvent`'s `x` and `y` are. Don't release it or
-   * change its target.
-   */
-  get renderSession(): RenderSessionHandle | undefined {
-    return this.view?.session;
-  }
-
-  /**
-   * Reads the camera where it is now. Without a map on screen, it's where the
-   * camera last came to rest.
-   */
-  getCamera(): CameraPosition | undefined {
-    const view = this.view;
-    const map = view?.map;
-    return view === undefined || map === undefined ? this.camera : view.appCamera(map.getSnapshot().view.camera);
-  }
-
-  /**
-   * The camera of the frame on screen, which changes with each frame of an
-   * animation or a gesture. Undefined until the map shows a frame. It's
-   * observable, so a component that reads it updates every frame the camera
-   * moves; read `camera` to update only when the camera comes to rest.
-   */
-  get frameCamera(): CameraPosition | undefined {
-    const camera = this.frame?.camera;
-    return camera === undefined || this.view === undefined ? undefined : this.view.appCamera(camera);
-  }
-
-  /**
-   * Where `coordinate` is in the frame on screen. The point can be outside the
-   * map. Undefined until the map shows a frame. Observable, as `frameCamera`
-   * is, so content placed with it follows the map.
-   */
-  pixelForLatLng(coordinate: LatLng): ScreenPoint | undefined {
-    const point = this.frameProjection()?.pixelForLatLng(coordinate);
-    return point === undefined ? undefined : toScreenPoint(point);
-  }
-
-  /**
-   * The coordinate at `point` in the frame on screen. Undefined until the map
-   * shows a frame. Observable, as `frameCamera` is.
-   */
-  latLngForPixel(point: ScreenPoint): LatLng | undefined {
-    const coordinate = this.frameProjection()?.latLngForPixel(point);
-    return coordinate === undefined ? undefined : toLatLng(coordinate);
-  }
-
-  /**
-   * How many meters one vp covers at `latitude`, at the zoom of the frame on
-   * screen, ignoring pitch. Undefined until the map shows a frame. Observable,
-   * as `frameCamera` is.
-   */
-  metersPerPixelAtLatitude(latitude: number): number | undefined {
-    return this.frameProjection()?.metersPerPixelAtLatitude(latitude);
+  get followingUserLocation(): boolean {
+    return this.state.followingUserLocation;
   }
 
   /**
@@ -208,18 +142,15 @@ export class MapController {
    *
    * It throws an `Error` for a field that isn't finite, a `center` latitude
    * outside -90 to 90, a padding side below 0 or in percent, or a `durationMs`
-   * below 0. Otherwise it resolves `true` once the camera gets there, or
-   * `false` when `cancelCameraTransitions()`, the user's input, a later camera
-   * change, or the map leaving the screen stopped it first. It rejects without
-   * a map on screen.
+   * below 0. Otherwise the move waits for a map, as the class describes, and
+   * the promise resolves when the move ends: `true` once the camera gets
+   * there, or `false` when `cancelCameraTransitions()`, the user's input, a
+   * later camera change, or the map leaving or starting again at a new
+   * density stopped it first. Once the camera stops, `camera` holds where it
+   * rests. It rejects when the map rejects the move.
    */
   updateCamera(update: CameraUpdate, options?: CameraTransitionOptions): Promise<boolean> {
-    const camera = checkCamera(update);
-    const transition = checkTransition(options);
-    return this.transition(transition, (map: MapHandle, animation: AnimationOptions) => {
-      const view = this.view!;
-      view.moveCamera(map, view.resolveCamera(camera), transition, animation);
-    });
+    return this.state.updateCamera(checkCamera(update), checkTransition(options));
   }
 
   /**
@@ -236,12 +167,12 @@ export class MapController {
    * It throws an `Error` for bounds with a value that isn't finite, a latitude
    * outside -90 to 90, or a southwest corner north or east of the northeast,
    * and for `options` that `updateCamera()` would throw for, or with a bearing
-   * or pitch that isn't finite. Otherwise it resolves as `updateCamera()`
-   * does, and also rejects when the padding leaves no room.
+   * or pitch that isn't finite. Otherwise it waits and resolves as
+   * `updateCamera()` does, and also rejects when the padding leaves no room.
    */
   fitCameraToBounds(bounds: LatLngBounds, options?: FitCameraOptions): Promise<boolean> {
     checkBounds(bounds);
-    return this.fit(checkFit(options),
+    return this.state.fit(checkFit(options),
       (map: MapHandle, fit: CameraFitOptions) => map.cameraForLatLngBounds(bounds, fit));
   }
 
@@ -252,7 +183,7 @@ export class MapController {
    */
   fitCameraToCoordinates(coordinates: LatLng[], options?: FitCameraOptions): Promise<boolean> {
     checkCoordinates(coordinates);
-    return this.fit(checkFit(options),
+    return this.state.fit(checkFit(options),
       (map: MapHandle, fit: CameraFitOptions) => map.cameraForLatLngs(coordinates, fit));
   }
 
@@ -263,26 +194,28 @@ export class MapController {
    */
   fitCameraToGeometry(geometry: GeoJsonGeometry, options?: FitCameraOptions): Promise<boolean> {
     checkGeometry(geometry);
-    return this.fit(checkFit(options),
-      (map: MapHandle, fit: CameraFitOptions) => map.cameraForGeometry(geometry, fit));
+    return this.state.fit(checkFit(options),
+      (map: MapHandle, fit: CameraFitOptions): Promise<CameraOptions> => map.cameraForGeometry(geometry, fit));
   }
 
-  /** Stops every camera animation where it is, and a gesture's momentum. */
-  async cancelCameraTransitions(): Promise<void> {
-    const map = this.requireMap();
-    this.takeOverCamera();
-    await map.cancelCameraTransitions();
+  /**
+   * Stops every camera move, those that wait for a map too, and a gesture's
+   * momentum. An animation stops where it is. Each move that it stops
+   * resolves `false`.
+   */
+  cancelCameraTransitions(): void {
+    this.state.cancelCameraTransitions();
   }
 
   /**
    * Moves the camera to the map's `userLocation`, and then to each new one,
    * and to each new `userHeading` too while `options` follows the heading,
    * until the app calls `stopFollowingUserLocation()`. Without a location yet,
-   * the camera moves once the map gets one. Each move eases the center, the
-   * first also the zoom that `options` names, and each the bearing if
-   * `options` asks; the rest of the camera stays as the app leaves it. A
-   * camera change that the app makes while following lasts until the next
-   * location or heading.
+   * the camera moves once the map gets one, after the camera moves that wait
+   * for the map. Each move eases the center, the first also the zoom that
+   * `options` names, and each the bearing if `options` asks; the rest of the
+   * camera stays as the app leaves it. A camera change that the app makes
+   * while following lasts until the next location or heading.
    *
    * While it follows, the user's zoom and rotation keep the location at the
    * center, and two fingers don't pan. The camera waits for the user's input
@@ -293,9 +226,9 @@ export class MapController {
    * ```ets
    * this.controller.followUserLocation({ zoom: 16, bearing: FollowBearing.heading });
    *
-   * MapLibreMap({
-   *   controller: this.controller,
+   * MaplibreMap({
    *   style: STYLE,
+   *   controller: this.controller,
    *   userLocation: this.location,
    *   interactions: {
    *     pan: { onStart: () => this.controller.stopFollowingUserLocation() },
@@ -305,136 +238,88 @@ export class MapController {
    * ```
    */
   followUserLocation(options?: FollowUserLocationOptions): void {
-    this.followOptions = options ?? {};
-    this.followZoom = options?.zoom;
-    this.followingUserLocation = true;
-    this.takeOverCamera();
-    this.view?.followUserLocation();
+    this.state.followUserLocation(options);
   }
 
   /** Leaves the camera where it is when the map's `userLocation` changes. */
   stopFollowingUserLocation(): void {
-    this.followingUserLocation = false;
+    this.state.followingUserLocation = false;
   }
 
   /**
-   * Internal: where the map moves the camera for `location` and `heading`, or
-   * undefined while the camera doesn't follow them. A new heading alone, which
-   * `headingChanged` says, moves the camera only while it turns with the
-   * heading.
+   * Finds the features that the map drew at `point` of its latest frame, or
+   * within `options.hitPadding` of it, front first, as the map draws them: a
+   * feature that several layers draw comes once for each. Resolves undefined
+   * while no map shows a frame, and when the map leaves before it answers.
+   *
+   * It throws an `Error` for a `hitPadding` below 0 or that isn't finite. It
+   * rejects when the map rejects the query, such as for a `filter` that isn't
+   * a valid filter expression.
    */
-  followCamera(location: geoLocationManager.Location, heading: number | undefined,
-    headingChanged: boolean): CameraOptions | undefined {
-    const follow = this.followOptions.bearing;
-    if (!this.followingUserLocation || (headingChanged && follow !== FollowBearing.heading)) {
-      return undefined;
-    }
-    const zoom = this.followZoom;
-    this.followZoom = undefined;
-    return {
-      center: { latitude: location.latitude, longitude: location.longitude },
-      zoom: zoom,
-      bearing: follow === FollowBearing.course ? course(location) :
-        follow === FollowBearing.heading ? heading : undefined,
-    };
+  queryRenderedFeatures(point: ScreenPoint,
+    options?: RenderedFeatureQueryOptions): Promise<RenderedFeature[] | undefined> {
+    const hitPadding = checkHitPadding(options?.hitPadding);
+    return this.state.queryRenderedFeatures(point, hitPadding, options);
   }
 
   /**
-   * Internal: the MapLibreMap that shows this controller calls it. Returns
-   * where its map's camera starts.
+   * Finds the features of the source with `sourceId` in the tiles that it has
+   * loaded for the map's view, which a source loads only while a visible
+   * layer draws it. Resolves undefined while no map shows a frame, and when
+   * the map leaves before it answers. It rejects when the map rejects the
+   * query.
    */
-  attach(view: MapView): CheckedCamera | undefined {
-    this.view = view;
-    return this.camera !== undefined ? checkCamera(this.camera) : this.startCamera;
+  querySourceFeatures(sourceId: string, options?: SourceFeatureQueryOptions): Promise<SourceFeature[] | undefined> {
+    return this.state.querySourceFeatures(sourceId, options);
   }
 
   /**
-   * Internal: that MapLibreMap calls it as it leaves, so the camera rests where
-   * that map left it, and the next map starts there.
+   * Lends `block` the MapLibre Native FFI map that shows the controller, and
+   * its render session while it has a surface, for what this library doesn't
+   * cover, such as feature state or a style's own sources and layers. It
+   * returns what `block` returns, or undefined without calling it when no map
+   * shows the controller. What `block` throws reaches the caller.
+   *
+   * ```ets
+   * controller.withFfiMap((map: MapHandle) => map.discarding.requestRepaint());
+   * ```
+   *
+   * `block` runs at once. Don't keep the map or the session, or use them after
+   * `block` returns, including after an `await` in it: the map can release
+   * them at any time after. Don't release them either.
+   *
+   * The library owns some of the map's state, which `block` must not change:
+   * the style, which the map's `style` sets; the camera padding, which
+   * `updateCamera()` sets; the camera bounds, which the map's `cameraBounds`
+   * set; the runtime's event handler; and the map's event mask. What `block`
+   * adds to the style, such as a source, is gone in the next style.
+   *
+   * The types are those of `@maplibre/native-ffi`. An app that imports it
+   * must use the version that this library depends on, and FFI's types may
+   * change in any release.
    */
-  detach(view: MapView): void {
-    if (this.view !== view) {
-      return;
-    }
-    const map = view.map;
-    if (map !== undefined) {
-      this.camera = view.appCamera(map.getSnapshot().view.camera);
-    }
-    this.view = undefined;
-    this.styleLoaded = false;
-    this.attributions = [];
-    this.showFrame(undefined);
+  withFfiMap<T>(block: (map: MapHandle, session: RenderSessionHandle | undefined) => T): T | undefined {
+    return this.state.withFfiMap(block);
   }
+}
 
-  /**
-   * Internal: the MapLibreMap that shows this controller calls it with the
-   * view of each frame it shows, or undefined once it shows none.
-   */
-  showFrame(frame: FrameView | undefined): void {
-    this.projection?.release();
-    this.projection = undefined;
-    this.frame = frame;
-  }
-
-  private frameProjection(): MapProjectionHandle | undefined {
-    const frame = this.frame;
-    if (frame !== undefined && this.projection === undefined) {
-      this.projection = MapProjectionHandle.create(frame);
-    }
-    return this.projection;
-  }
-
-  // The app's camera change takes over from a gesture's momentum, and from a
-  // fit that's still finding its camera.
-  private takeOverCamera(): void {
-    this.view?.takeOverCamera();
-    this.moves++;
-  }
-
-  // Finds the camera for a fit, then moves it there, unless the map leaves, or
-  // the app or the user moves the camera first.
-  private async fit(options: CheckedFit,
-    query: (map: MapHandle, fit: CameraFitOptions) => Promise<CameraOptions>): Promise<boolean> {
-    this.requireMap();
-    const view = this.view!;
-    this.takeOverCamera();
-    const moves = this.moves;
-    const gestures = view.gestureStarts;
-    const camera = await view.fitCamera(options, query);
-    if (camera === undefined || this.view !== view || this.moves !== moves || view.gestureStarts !== gestures) {
-      return false;
-    }
-    return this.transition(options.transition, (map: MapHandle, animation: AnimationOptions) =>
-      view.moveCamera(map, camera, options.transition, animation));
-  }
-
-  // Starts a camera change whose animation ends with FFI's end handler, and
-  // resolves whether it completed. A jump runs the handler as soon as the
-  // camera moves.
-  private async transition(transition: CheckedTransition,
-    start: (map: MapHandle, animation: AnimationOptions) => void): Promise<boolean> {
-    const map = this.requireMap();
-    this.takeOverCamera();
-    return new Promise<boolean>((resolve, reject) => {
-      const animation: AnimationOptions = {
-        durationMs: transition.durationMs,
-        endHandler: {
-          callback: (end: CameraTransitionEnd) => resolve(end.outcome === CameraTransitionOutcome.completed),
-        },
-      };
-      try {
-        start(map, animation);
-      } catch (error) {
-        reject(error as Error);
-      }
-    });
-  }
-
-  private requireMap(): MapHandle {
-    const map = this.view?.map;
-    if (map === undefined) {
-      throw new Error('No MapLibreMap shows this MapController');
-    }
-    return map;
-  }
+// The start camera, with MapLibre's defaults for the fields that `update`
+// leaves out, and its padding in vp. Without a UI context, the default
+// display converts it.
+function startCamera(update: CameraUpdate | undefined): CameraPosition {
+  const camera = checkCamera(update ?? {});
+  const padding = camera.padding === undefined ? NO_INSETS : paddingInVp(camera.padding, {
+    px: (px: number) => px / display.getDefaultDisplaySync().densityPixels,
+    fp: (fp: number) => {
+      const screen = display.getDefaultDisplaySync();
+      return fp * screen.scaledDensity / screen.densityPixels;
+    },
+  });
+  return {
+    center: camera.center ?? { latitude: 0, longitude: 0 },
+    zoom: camera.zoom ?? 0,
+    bearing: camera.bearing ?? 0,
+    pitch: camera.pitch ?? 0,
+    padding: { top: padding.top, left: padding.left, bottom: padding.bottom, right: padding.right },
+  };
 }
