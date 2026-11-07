@@ -65,7 +65,7 @@ import {
 } from '../../camera/internal/Insets';
 import { ContentReconciler, featureClickEvent, hitPaddingOf } from '../../content/internal/ContentReconciler';
 import { MapContent } from '../../content/MapContent';
-import { StyleImage } from '../../content/StyleImage';
+import { ResolvedStyleImage } from '../../content/StyleImage';
 import { LayerPredicate, StyleLayer } from '../../content/StyleLayer';
 import { fontScaleOf } from '../../expression/internal/FontScale';
 import { toLatLng } from '../../geometry/internal/FfiGeometry';
@@ -113,7 +113,7 @@ const HANDLED_EVENTS: RuntimeEventFlag = RuntimeEventFlag.mapLoadingFailed |
 // for onStyleImageMissing, which the view guards.
 export interface MapViewEvents {
   onStyleLoaded: () => void;
-  onStyleImageMissing: (event: StyleImageMissingEvent) => Promise<StyleImage | undefined>;
+  onStyleImageMissing: (event: StyleImageMissingEvent) => Promise<ResolvedStyleImage | undefined>;
   onMapIdle: () => void;
   onCameraMoveStart: (event: CameraMoveEvent) => void;
   onCameraIdle: (event: CameraIdleEvent) => void;

@@ -15,8 +15,8 @@ import {
   InteractionOptions,
   MapRuntime,
   UserLocationIndicatorOptions,
+  ResolvedStyleImage,
   ScaleBarUnits,
-  StyleImage,
   StyleImageMissingEvent,
 } from '@maplibre/arkui';
 import { FrameCallback } from '@ohos.arkui.UIContext';
@@ -56,7 +56,7 @@ export const NO_INSETS: Padding = { top: 0, left: 0, bottom: 0, right: 0 };
 function noop(): void {
 }
 
-function noImage(event: StyleImageMissingEvent): Promise<StyleImage | undefined> {
+function noImage(event: StyleImageMissingEvent): Promise<ResolvedStyleImage | undefined> {
   return Promise.resolve(undefined);
 }
 
@@ -139,7 +139,7 @@ export class TestMap {
   frameCounts: number[] = [];
   // The IDs that onStyleImageMissing got, in order, and what it gives.
   missingImages: string[] = [];
-  resolveImage: (event: StyleImageMissingEvent) => Promise<StyleImage | undefined> = noImage;
+  resolveImage: (event: StyleImageMissingEvent) => Promise<ResolvedStyleImage | undefined> = noImage;
   // What a case does as a gesture starts or ends, as an app would.
   onGestureStart: () => void = noop;
   onGestureEnd: () => void = noop;
@@ -256,7 +256,7 @@ export class TestMap {
   }
 
   /** Logs the image ID, and asks the case for the image. */
-  imageMissing(event: StyleImageMissingEvent): Promise<StyleImage | undefined> {
+  imageMissing(event: StyleImageMissingEvent): Promise<ResolvedStyleImage | undefined> {
     this.missingImages.push(event.id);
     return this.resolveImage(event);
   }

@@ -18,9 +18,9 @@ import {
   OffscreenMarker,
   OffscreenMarkerAngleEvent,
   PointerPinButton,
+  ResolvedStyleImage,
   ScaleBar,
   ScaleBarUnits,
-  StyleImage,
   StyleImageMissingEvent,
   ZoomButtons,
 } from '@maplibre/arkui';
@@ -277,7 +277,7 @@ struct Index {
           testMap.styleLoads++;
           testMap.events.push('style loaded');
         },
-        onStyleImageMissing: (event: StyleImageMissingEvent): Promise<StyleImage | undefined> =>
+        onStyleImageMissing: (event: StyleImageMissingEvent): Promise<ResolvedStyleImage | undefined> =>
           testMap.imageMissing(event),
         onMapIdle: () => testMap.mapIdled(),
         onFrameRendered: (event: FrameRenderedEvent) => testMap.frameRendered(event),

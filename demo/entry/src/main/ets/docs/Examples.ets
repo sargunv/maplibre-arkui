@@ -72,8 +72,8 @@ import {
   PointerPinButton,
   RenderedFeature,
   renderSnapshot,
+  ResolvedStyleImage,
   ScaleBar,
-  StyleImage,
   StyleImageMissingEvent,
   StyleLayer,
   toBoolean,
@@ -967,11 +967,11 @@ struct MissingImageExample {
   build() {
     MaplibreMap({
       style: STYLE,
-      onStyleImageMissing: async (event: StyleImageMissingEvent): Promise<StyleImage | undefined> => {
+      onStyleImageMissing: async (event: StyleImageMissingEvent): Promise<ResolvedStyleImage | undefined> => {
         if (!event.id.startsWith('pin-')) {
           return undefined;
         }
-        const pin: StyleImage = { id: event.id, image: this.pin };
+        const pin: ResolvedStyleImage = { image: this.pin };
         return pin;
       },
     })

@@ -1,12 +1,11 @@
 // The images that a map's style uses but lacks, which the map asks the app
 // for: once for each ID in each style, from the time the style loads.
 
-import { StyleImage } from '../../content/StyleImage';
+import { ResolvedStyleImage, StyleImage } from '../../content/StyleImage';
 import { logError } from '../../runtime/internal/Log';
 import { LoadedStyle } from '../../style/internal/LoadedStyle';
 import { StyleApi } from '../../style/internal/StyleApi';
 import { reservedId } from '../../style/internal/StyleCommands';
-import { MapError } from '../MapError';
 import { StyleImageMissingEvent } from '../StyleImageMissingEvent';
 
 // An image that the style lacked as it loaded, with the map's generation when
@@ -17,7 +16,7 @@ interface WaitingImage {
 }
 
 export class MissingImages {
-  private readonly ask: (event: StyleImageMissingEvent) => Promise<StyleImage | undefined>;
+  private readonly ask: (event: StyleImageMissingEvent) => Promise<ResolvedStyleImage | undefined>;
   private readonly onError: (error: Error) => void;
   // The loaded style, which the app's images go to, as the style API adds
   // them, and the map's generation as it loaded: what the map says before
@@ -30,7 +29,7 @@ export class MissingImages {
   private asked: Set<string> = new Set<string>();
   private waiting: WaitingImage[] = [];
 
-  constructor(ask: (event: StyleImageMissingEvent) => Promise<StyleImage | undefined>,
+  constructor(ask: (event: StyleImageMissingEvent) => Promise<ResolvedStyleImage | undefined>,
     onError: (error: Error) => void) {
     this.ask = ask;
     this.onError = onError;
@@ -75,22 +74,19 @@ export class MissingImages {
     if (style.reconciler.ownsImage(id)) {
       return;
     }
-    let answer: Promise<StyleImage | undefined>;
+    let answer: Promise<ResolvedStyleImage | undefined>;
     try {
       answer = this.ask({ id: id });
     } catch (error) {
       logError(`onStyleImageMissing threw: ${(error as Error).message}`);
       return;
     }
-    answer.then((image: StyleImage | undefined) => {
-      if (image === undefined || this.style !== style) {
-        return;
-      }
-      if (image.id !== id) {
-        this.onError(new MapError(`onStyleImageMissing gave the image ${image.id} for the image ${id}`));
+    answer.then((resolved: ResolvedStyleImage | undefined) => {
+      if (resolved === undefined || this.style !== style) {
         return;
       }
       // The style API copies the pixels now.
+      const image: StyleImage = { id: id, image: resolved.image, pixelRatio: resolved.pixelRatio, sdf: resolved.sdf };
       this.api.setImage(image).catch((error: Error) => this.onError(error));
     }, (error: Error) => logError(`onStyleImageMissing rejected: ${error.message}`))
       .catch((error: Error) => this.onError(error));

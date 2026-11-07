@@ -21,6 +21,7 @@ import {
   MapRuntime,
   MapStyle,
   RenderedFeature,
+  ResolvedStyleImage,
   ScreenPoint,
   SourceHandle,
   StyleImage,
@@ -701,8 +702,8 @@ export default function styleTest(): void {
 
     it('asks onStyleImageMissing once for an image that the style lacks, and draws the image', 0, async () => {
       const pin = square(16);
-      testMap.resolveImage = (event: StyleImageMissingEvent): Promise<StyleImage | undefined> =>
-        Promise.resolve({ id: event.id, image: pin });
+      testMap.resolveImage = (event: StyleImageMissingEvent): Promise<ResolvedStyleImage | undefined> =>
+        Promise.resolve({ image: pin });
       testMap.content = icons(['pin']);
       await queryAt(pixelFor({ latitude: 10, longitude: 20 }), ['icons-pin']);
       pin.release();
@@ -728,7 +729,7 @@ export default function styleTest(): void {
         logs.push(record.message);
       });
       try {
-        testMap.resolveImage = (event: StyleImageMissingEvent): Promise<StyleImage | undefined> => {
+        testMap.resolveImage = (event: StyleImageMissingEvent): Promise<ResolvedStyleImage | undefined> => {
           throw new Error('no image here');
         };
         testMap.content = icons(['pin']);

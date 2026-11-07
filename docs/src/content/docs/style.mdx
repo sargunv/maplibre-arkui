@@ -92,9 +92,10 @@ after.
 A style can name images that neither its sprite nor the content has, such as
 icons that the app draws itself. The map's
 <Api of="MaplibreMap.onStyleImageMissing" display="onStyleImageMissing" /> gets
-the ID of each, once in each style, and resolves the image, or `undefined` to
-leave it out. The map adds the image to the style as `setImage()` does, and it
-shows a frame or more after the layer that names it first draws:
+the ID of each, once in each style, and resolves a
+<Api of="ResolvedStyleImage" /> for it, or `undefined` to leave it out. The map
+adds the image to the style with that ID, as `setImage()` does, and it shows a
+frame or more after the layer that names it first draws:
 
 <Code code={region(examples, "missing-image")} lang="ts" />
 
