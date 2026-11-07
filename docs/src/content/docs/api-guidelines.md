@@ -156,12 +156,12 @@ by what any later release might add, because changing the shape later is a
 breaking change.
 [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#4-types-that-may-grow)
 
-| Kind           | Use when                                                                           | Declare as                                    | Example        |
-| -------------- | ---------------------------------------------------------------------------------- | --------------------------------------------- | -------------- |
-| Closed         | The values can never change, because they describe math or a fixed protocol        | A string-literal type                         | GeoJSON's tags |
-| Open input     | Callers only pass values in                                                        | `enum`                                        | `WheelAction`  |
-| Open identity  | A raw name from the style spec or the engine, possibly one with no named value yet | `string`                                      | A layer's type |
-| Open structure | The library returns it                                                             | A union of classes, matched with `instanceof` | `MapError`     |
+| Kind           | Use when                                                                           | Declare as                         | Example                    |
+| -------------- | ---------------------------------------------------------------------------------- | ---------------------------------- | -------------------------- |
+| Closed         | The values can never change, because they describe math or a fixed protocol        | A string-literal type              | GeoJSON's tags             |
+| Open input     | Callers only pass values in                                                        | `enum`                             | `WheelAction`              |
+| Open identity  | A raw name from the style spec or the engine, possibly one with no named value yet | `string`                           | A layer's type             |
+| Open structure | The library returns one of a family of types, such as errors or handles            | Classes, matched with `instanceof` | `MapError`, `SourceHandle` |
 
 - State the kind in the doc comment: "Closed." or "Values may be added in later
   releases; give a `switch` over it a `default` branch."
@@ -301,12 +301,15 @@ export type FeatureClickHandler = (features: GeoJsonFeature[], x: number, y: num
 
 ## 8. Types the library creates
 
-Events, query results, and frame state are created by the library and only read
-by callers.
+Events, query results, frame state, and handles are created by the library and
+only read or called by callers.
 
-- Declare them as interfaces. Errors are classes that extend `Error`. Add fields
-  in any release.
+- Declare them as interfaces, except for errors and handles: they're families
+  whose members callers match with `instanceof`, so declare them as classes, as
+  §4's open structure says. Errors extend `Error`. Add fields in any release.
   [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#8-types-the-library-creates)
+- Give a class that only the library creates a constructor that takes a
+  parameter of an internal type, so apps can't construct it.
 - When state can change outside the caller's control, and the caller can't check
   it first without a race, return `undefined` from reads, and resolve `false`
   from writes, instead of throwing.

@@ -1,7 +1,10 @@
 import image from '@ohos.multimedia.image';
 
+import { readPixelMap } from '../content/internal/PixelMaps';
 import { GeoJsonObject } from '../geometry/GeoJson';
 import { LatLng } from '../geometry/Geometry';
+import { checkLatLng } from '../geometry/internal/FfiGeometry';
+import { registerSourceKey, SourceKey, sourceKeyOf } from './internal/HandleKeys';
 
 /**
  * A source of the style that `MapStyle` reads.
@@ -12,9 +15,12 @@ import { LatLng } from '../geometry/Geometry';
  * Get a new handle for the source of a new style. Its writes throw an `Error`
  * for a source of the content, as `MapStyle` describes.
  *
- * The map creates it; members may be added in later releases.
+ * A GeoJSON source's handle is a `GeoJsonSourceHandle`, and an image source's
+ * an `ImageSourceHandle`; match them with `instanceof`. Subclasses for other
+ * types and members may be added in later releases. The map creates handles;
+ * apps can't.
  */
-export interface SourceHandle {
+export class SourceHandle {
   /** The source's ID. */
   readonly id: string;
   /**
@@ -28,41 +34,75 @@ export interface SourceHandle {
    */
   readonly attribution: string;
 
+  /** @internal The map creates handles. */
+  constructor(key: SourceKey) {
+    this.id = key.id;
+    this.type = key.type;
+    this.attribution = key.attribution;
+    registerSourceKey(this, key);
+  }
+
   /**
    * Removes the source from the style, and resolves `true` once it's gone,
    * when the handle expires. It rejects when the map keeps the source, such as
    * while a layer draws it; then the handle holds.
    */
-  remove(): Promise<boolean>;
+  remove(): Promise<boolean> {
+    const key = sourceKeyOf(this);
+    return key.send(`removing source ${this.id}`, (map) => map.removeStyleSource(this.id))
+      .then((removed: boolean): boolean => {
+        if (removed && key.holds()) {
+          key.style.reconciler.sourceRemoved(this.id);
+        }
+        return removed;
+      });
+  }
 }
 
 /** A GeoJSON source of the style, as `SourceHandle` describes. */
-export interface GeoJsonSourceHandle extends SourceHandle {
+export class GeoJsonSourceHandle extends SourceHandle {
   /**
    * Replaces the source's data with a GeoJSON object, or with the GeoJSON at
    * the URL `data`, and keeps the source's options, such as its clustering. It
    * rejects for data that the map can't read.
    */
-  setData(data: GeoJsonObject | string): Promise<boolean>;
+  setData(data: GeoJsonObject | string): Promise<boolean> {
+    return sourceKeyOf(this).send(`setting the data of source ${this.id}`, (map) => typeof data === 'string' ?
+      map.setGeoJsonSourceUrl(this.id, data) : map.setGeoJsonSourceData(this.id, data));
+  }
 }
 
 /** An image source of the style, as `SourceHandle` describes. */
-export interface ImageSourceHandle extends SourceHandle {
+export class ImageSourceHandle extends SourceHandle {
   /**
-   * Replaces the source's image with the pixels of `image`, which it reads
+   * Replaces the source's image with the pixels of `pixelMap`, which it reads
    * during the call, so the app can release the pixel map once the call
    * returns. It throws an `Error` for a pixel map that isn't `RGBA_8888` or
    * `BGRA_8888`, or can't be read.
    */
-  setImage(image: image.PixelMap): Promise<boolean>;
+  setImage(pixelMap: image.PixelMap): Promise<boolean> {
+    const pixels = readPixelMap(pixelMap);
+    return sourceKeyOf(this).send(`setting the image of source ${this.id}`,
+      (map) => map.setImageSourceImage(this.id, pixels));
+  }
 
   /** Makes the source load its image from `url`. */
-  setUrl(url: string): Promise<boolean>;
+  setUrl(url: string): Promise<boolean> {
+    return sourceKeyOf(this).send(`setting the URL of source ${this.id}`,
+      (map) => map.setImageSourceUrl(this.id, url));
+  }
 
   /**
    * Moves the image to the four corners of `coordinates`, clockwise from the
    * top left. It throws an `Error` unless there are four, each with a finite
    * latitude from -90 to 90 and a finite longitude.
    */
-  setCoordinates(coordinates: LatLng[]): Promise<boolean>;
+  setCoordinates(coordinates: LatLng[]): Promise<boolean> {
+    if (coordinates.length !== 4) {
+      throw new Error(`An image source needs its four corners, not ${coordinates.length}`);
+    }
+    coordinates.forEach((coordinate: LatLng) => checkLatLng(coordinate, 'Each corner of an image source'));
+    return sourceKeyOf(this).send(`setting the coordinates of source ${this.id}`,
+      (map) => map.setImageSourceCoordinates(this.id, coordinates));
+  }
 }

@@ -1,4 +1,9 @@
 import { LayerSummary } from '../content/StyleLayer';
+import { LayerKey } from './internal/HandleKeys';
+import { checkOwned, read, write } from './internal/StyleCommands';
+
+// The properties that a layer keeps for its life.
+const FIXED_PROPERTIES = ['id', 'type', 'source', 'source-layer'];
 
 /**
  * A layer of the style that `MapStyle` reads, of the base style or the
@@ -9,16 +14,44 @@ import { LayerSummary } from '../content/StyleLayer';
  * Then its reads resolve undefined and its writes `false`. Get a new handle
  * for the layer of a new style.
  *
- * The map creates it; members may be added in later releases.
+ * The map creates handles; apps can't. Members may be added in later
+ * releases.
  */
-export interface LayerHandle extends LayerSummary {
+export class LayerHandle implements LayerSummary {
+  /** The layer's ID. */
+  readonly id: string;
+  /** The layer's style-spec type, such as `'fill'` or `'symbol'`. Open identity. */
+  readonly type: string;
+  /** The ID of the source that the layer draws, or undefined for a layer without one. */
+  readonly source?: string;
+  /** The layer of a vector source that the layer draws, or undefined for a source without layers. */
+  readonly sourceLayer?: string;
+  private readonly key: LayerKey;
+
+  /** @internal The map creates handles. */
+  constructor(key: LayerKey) {
+    this.id = key.summary.id;
+    this.type = key.summary.type;
+    this.source = key.summary.source;
+    this.sourceLayer = key.summary.sourceLayer;
+    this.key = key;
+  }
+
   /**
    * The value that the layer sets for the property `name`, as style-spec
    * JSON, or undefined when the layer doesn't set it. `name` is a layout or
    * paint property, its `-transition`, such as `'fill-color-transition'`,
    * `'filter'`, `'minzoom'`, or `'maxzoom'`.
    */
-  getProperty(name: string): Promise<Object | undefined>;
+  getProperty(name: string): Promise<Object | undefined> {
+    const key = this.key;
+    if (!key.holds()) {
+      return Promise.resolve(undefined);
+    }
+    return read(() => key.holds(), `reading ${name} of layer ${this.id}`,
+      () => key.style.map.getStyleLayerProperty(this.id, name) as Promise<Object | undefined>,
+      (value: Object | undefined): Object | undefined => value);
+  }
 
   /**
    * Sets the layer's property `name`, as `getProperty()` names them, to
@@ -30,5 +63,20 @@ export interface LayerHandle extends LayerSummary {
    * `MapStyle` describes. It rejects when the map rejects the value, such as
    * one of the wrong type, or a property that the layer's type doesn't have.
    */
-  setProperty(name: string, value: Object | null): Promise<boolean>;
+  setProperty(name: string, value: Object | null): Promise<boolean> {
+    if (FIXED_PROPERTIES.includes(name)) {
+      throw new Error(`A layer keeps its ${name}, which setProperty() can't change: ${name}`);
+    }
+    const key = this.key;
+    if (!key.holds()) {
+      return Promise.resolve(false);
+    }
+    checkOwned(key.style.reconciler.ownsLayer(this.id), 'layer', this.id);
+    // MapLibre Native takes no null for a transition, but an empty one is its
+    // default.
+    const empty: Record<string, Object> = {};
+    const sent: Object | null = value === null && name.endsWith('-transition') ? empty : value;
+    return write(() => key.holds(), `setting ${name} of layer ${this.id}`,
+      () => key.style.map.setStyleLayerProperty(this.id, name, sent));
+  }
 }

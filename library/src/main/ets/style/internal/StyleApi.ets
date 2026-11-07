@@ -8,102 +8,19 @@ import {
   StyleSourceType,
   StyleTransitionOptions as FfiTransitionOptions,
 } from '@maplibre/native-ffi';
-import image from '@ohos.multimedia.image';
 
-import { summaryOf } from '../../content/internal/ContentReconciler';
 import { readPixelMap } from '../../content/internal/PixelMaps';
 import { StyleImage } from '../../content/StyleImage';
 import { StyleSource } from '../../content/StyleSource';
-import { GeoJsonObject } from '../../geometry/GeoJson';
-import { LatLng } from '../../geometry/Geometry';
-import { checkLatLng } from '../../geometry/internal/FfiGeometry';
 import { LayerHandle } from '../LayerHandle';
 import { MapStyle, StyleTransitionOptions } from '../MapStyle';
 import { GeoJsonSourceHandle, ImageSourceHandle, SourceHandle } from '../SourceHandle';
+import { LayerKey, SourceKey } from './HandleKeys';
 import { LoadedStyle } from './LoadedStyle';
+import { checkId, checkOwned, read, RESERVED, reservedId, reservedName, write } from './StyleCommands';
 
-// The library's IDs start with this, and its global state names with it and a
-// colon.
-const RESERVED = 'maplibre-arkui';
-// The properties that a layer keeps for its life.
-const FIXED_PROPERTIES = ['id', 'type', 'source', 'source-layer'];
 // MapLibre Native's transition when the style sets none.
 const DEFAULT_TRANSITION_MS = 300;
-
-// The style spec's names of FFI's source types, and MapLibre Native's for the
-// types outside the spec.
-const SOURCE_TYPES: Map<number, string> = new Map<number, string>([
-  [StyleSourceType.vector, 'vector'],
-  [StyleSourceType.raster, 'raster'],
-  [StyleSourceType.rasterDem, 'raster-dem'],
-  [StyleSourceType.geoJson, 'geojson'],
-  [StyleSourceType.image, 'image'],
-  [StyleSourceType.video, 'video'],
-  [StyleSourceType.annotations, 'annotations'],
-  [StyleSourceType.customGeometry, 'custom-geometry'],
-  [StyleSourceType.customVector, 'custom-vector'],
-]);
-
-function reservedId(id: string): boolean {
-  return id.startsWith(RESERVED);
-}
-
-function reservedName(name: string): boolean {
-  return name.startsWith(`${RESERVED}:`);
-}
-
-function checkId(kind: string, id: string): void {
-  if (reservedId(id)) {
-    throw new Error(`The library owns the ${kind}s whose IDs start with ${RESERVED}: ${id}`);
-  }
-}
-
-function checkOwned(owned: boolean, kind: string, id: string): void {
-  if (owned) {
-    throw new Error(`The map's content has the ${kind} ${id}, so change it in the content instead`);
-  }
-}
-
-function failed(what: string, error: Error): Error {
-  return new Error(`Style: ${what} failed: ${error.message}`);
-}
-
-// Sends a write, which resolves true once the map applies it. A write that
-// fails once `holds` no longer does resolves false; another failure rejects
-// with what failed.
-function write(holds: () => boolean, what: string, send: () => Promise<CommandCompletion>): Promise<boolean> {
-  let sent: Promise<CommandCompletion>;
-  try {
-    sent = send();
-  } catch (error) {
-    return Promise.reject(failed(what, error as Error));
-  }
-  return sent.then((): boolean => true, (error: Error): boolean => {
-    if (!holds()) {
-      return false;
-    }
-    throw failed(what, error);
-  });
-}
-
-// Sends a read, which resolves what `then` makes of the answer, or undefined
-// once `holds` no longer does. A failure rejects as a write's does.
-function read<T, R>(holds: () => boolean, what: string, send: () => Promise<T>,
-  then: (value: T) => R | undefined): Promise<R | undefined> {
-  let sent: Promise<T>;
-  try {
-    sent = send();
-  } catch (error) {
-    return Promise.reject(failed(what, error as Error));
-  }
-  return sent.then((value: T): R | undefined => holds() ? then(value) : undefined,
-    (error: Error): R | undefined => {
-      if (!holds()) {
-        return undefined;
-      }
-      throw failed(what, error);
-    });
-}
 
 export class StyleApi implements MapStyle {
   // The style that the map showing the controller has loaded, if any.
@@ -118,13 +35,13 @@ export class StyleApi implements MapStyle {
   }
 
   getGeoJsonSource(id: string): Promise<GeoJsonSourceHandle | undefined> {
-    return this.findSource(id).then((source: SourceRef | undefined): GeoJsonSourceHandle | undefined =>
-      source instanceof GeoJsonSourceRef ? source as GeoJsonSourceRef : undefined);
+    return this.findSource(id).then((source: SourceHandle | undefined): GeoJsonSourceHandle | undefined =>
+      source instanceof GeoJsonSourceHandle ? source as GeoJsonSourceHandle : undefined);
   }
 
   getImageSource(id: string): Promise<ImageSourceHandle | undefined> {
-    return this.findSource(id).then((source: SourceRef | undefined): ImageSourceHandle | undefined =>
-      source instanceof ImageSourceRef ? source as ImageSourceRef : undefined);
+    return this.findSource(id).then((source: SourceHandle | undefined): ImageSourceHandle | undefined =>
+      source instanceof ImageSourceHandle ? source as ImageSourceHandle : undefined);
   }
 
   getSources(): Promise<SourceHandle[] | undefined> {
@@ -135,7 +52,7 @@ export class StyleApi implements MapStyle {
     return read(() => this.current() === style, 'listing the sources', () => style.map.listStyleSources(),
       (sources: readonly StyleSourceInfo[]): SourceHandle[] => sources
         .filter((info: StyleSourceInfo) => !reservedId(info.id))
-        .map((info: StyleSourceInfo): SourceHandle => this.sourceRef(style, info)));
+        .map((info: StyleSourceInfo): SourceHandle => this.sourceHandle(style, info)));
   }
 
   addSource(source: StyleSource): Promise<SourceHandle | undefined> {
@@ -174,7 +91,7 @@ export class StyleApi implements MapStyle {
     }
     return read(() => this.current() === style, `reading layer ${id}`, () => style.map.getStyleLayer(id),
       (info: StyleLayerInfo | undefined): LayerHandle | undefined =>
-        info === undefined ? undefined : new LayerRef(this, style, info));
+        info === undefined ? undefined : new LayerHandle(new LayerKey(this.current, style, info)));
   }
 
   getLayers(): Promise<LayerHandle[] | undefined> {
@@ -185,7 +102,7 @@ export class StyleApi implements MapStyle {
     return read(() => this.current() === style, 'listing the layers', () => style.map.listStyleLayers(),
       (layers: readonly StyleLayerInfo[]): LayerHandle[] => layers
         .filter((info: StyleLayerInfo) => !reservedId(info.id))
-        .map((info: StyleLayerInfo): LayerHandle => new LayerRef(this, style, info)));
+        .map((info: StyleLayerInfo): LayerHandle => new LayerHandle(new LayerKey(this.current, style, info))));
   }
 
   setImage(item: StyleImage): Promise<boolean> {
@@ -292,155 +209,29 @@ export class StyleApi implements MapStyle {
     return write(() => this.current() === style, 'setting the light', () => style.map.setStyleLightJson(light));
   }
 
-  private findSource(id: string, style: LoadedStyle | undefined = this.current()): Promise<SourceRef | undefined> {
+  private findSource(id: string, style: LoadedStyle | undefined = this.current()): Promise<SourceHandle | undefined> {
     if (style === undefined || reservedId(id)) {
       return Promise.resolve(undefined);
     }
     return read(() => this.current() === style, `reading source ${id}`, () => style.map.getStyleSource(id),
-      (info: StyleSourceInfo | undefined): SourceRef | undefined =>
-        info === undefined ? undefined : this.sourceRef(style, info));
+      (info: StyleSourceInfo | undefined): SourceHandle | undefined =>
+        info === undefined ? undefined : this.sourceHandle(style, info));
   }
 
-  private sourceRef(style: LoadedStyle, info: StyleSourceInfo): SourceRef {
+  private sourceHandle(style: LoadedStyle, info: StyleSourceInfo): SourceHandle {
+    const key = new SourceKey(this.current, style, info);
     if (info.type === StyleSourceType.geoJson) {
-      return new GeoJsonSourceRef(this, style, info);
+      return new GeoJsonSourceHandle(key);
     }
     if (info.type === StyleSourceType.image) {
-      return new ImageSourceRef(this, style, info);
+      return new ImageSourceHandle(key);
     }
-    return new SourceRef(this, style, info);
+    return new SourceHandle(key);
   }
 }
 
 function checkDuration(name: string, value: number | undefined): void {
   if (value !== undefined && !(Number.isFinite(value) && value >= 0)) {
     throw new Error(`A transition's ${name} must be finite and at least 0: ${value}`);
-  }
-}
-
-// A handle holds while its style is the controller's and its source is the
-// one it was made for: the add or removal that the map applied last.
-class SourceRef implements SourceHandle {
-  readonly id: string;
-  readonly type: string;
-  readonly attribution: string;
-  protected readonly api: StyleApi;
-  protected readonly style: LoadedStyle;
-  private readonly version: number;
-
-  constructor(api: StyleApi, style: LoadedStyle, info: StyleSourceInfo) {
-    this.id = info.id;
-    this.type = SOURCE_TYPES.get(info.type) ?? 'unknown';
-    this.attribution = info.attribution;
-    this.api = api;
-    this.style = style;
-    this.version = style.reconciler.sourceVersion(info.id);
-  }
-
-  // The source's version changes before a read sent after the removal makes
-  // a handle.
-  remove(): Promise<boolean> {
-    return this.send(`removing source ${this.id}`, () => this.style.map.removeStyleSource(this.id)
-      .then((done: CommandCompletion): CommandCompletion => {
-        if (this.holds()) {
-          this.style.reconciler.sourceRemoved(this.id);
-        }
-        return done;
-      }));
-  }
-
-  protected holds(): boolean {
-    return this.api.current() === this.style && this.style.reconciler.sourceVersion(this.id) === this.version;
-  }
-
-  // Sends a write to the source while the handle holds, and throws for a
-  // source of the content.
-  protected send(what: string, command: () => Promise<CommandCompletion>): Promise<boolean> {
-    if (!this.holds()) {
-      return Promise.resolve(false);
-    }
-    checkOwned(this.style.reconciler.ownsSource(this.id), 'source', this.id);
-    return write(() => this.holds(), what, command);
-  }
-}
-
-class GeoJsonSourceRef extends SourceRef implements GeoJsonSourceHandle {
-  setData(data: GeoJsonObject | string): Promise<boolean> {
-    const map = this.style.map;
-    return this.send(`setting the data of source ${this.id}`, () => typeof data === 'string' ?
-      map.setGeoJsonSourceUrl(this.id, data) : map.setGeoJsonSourceData(this.id, data));
-  }
-}
-
-class ImageSourceRef extends SourceRef implements ImageSourceHandle {
-  setImage(pixelMap: image.PixelMap): Promise<boolean> {
-    const pixels = readPixelMap(pixelMap);
-    return this.send(`setting the image of source ${this.id}`,
-      () => this.style.map.setImageSourceImage(this.id, pixels));
-  }
-
-  setUrl(url: string): Promise<boolean> {
-    return this.send(`setting the URL of source ${this.id}`, () => this.style.map.setImageSourceUrl(this.id, url));
-  }
-
-  setCoordinates(coordinates: LatLng[]): Promise<boolean> {
-    if (coordinates.length !== 4) {
-      throw new Error(`An image source needs its four corners, not ${coordinates.length}`);
-    }
-    coordinates.forEach((coordinate: LatLng) => checkLatLng(coordinate, 'Each corner of an image source'));
-    return this.send(`setting the coordinates of source ${this.id}`,
-      () => this.style.map.setImageSourceCoordinates(this.id, coordinates));
-  }
-}
-
-// A handle holds while its style is the controller's and its layer is the one
-// it was made for.
-class LayerRef implements LayerHandle {
-  id: string;
-  type: string;
-  source?: string;
-  sourceLayer?: string;
-  private readonly api: StyleApi;
-  private readonly style: LoadedStyle;
-  private readonly version: number;
-
-  constructor(api: StyleApi, style: LoadedStyle, info: StyleLayerInfo) {
-    const summary = summaryOf(info);
-    this.id = summary.id;
-    this.type = summary.type;
-    this.source = summary.source;
-    this.sourceLayer = summary.sourceLayer;
-    this.api = api;
-    this.style = style;
-    this.version = style.reconciler.layerVersion(info.id);
-  }
-
-  getProperty(name: string): Promise<Object | undefined> {
-    if (!this.holds()) {
-      return Promise.resolve(undefined);
-    }
-    return read(() => this.holds(), `reading ${name} of layer ${this.id}`,
-      () => this.style.map.getStyleLayerProperty(this.id, name) as Promise<Object | undefined>,
-      (value: Object | undefined): Object | undefined => value);
-  }
-
-  setProperty(name: string, value: Object | null): Promise<boolean> {
-    if (FIXED_PROPERTIES.includes(name)) {
-      throw new Error(`A layer keeps its ${name}, which setProperty() can't change: ${name}`);
-    }
-    if (!this.holds()) {
-      return Promise.resolve(false);
-    }
-    checkOwned(this.style.reconciler.ownsLayer(this.id), 'layer', this.id);
-    // MapLibre Native takes no null for a transition, but an empty one is its
-    // default.
-    const empty: Record<string, Object> = {};
-    const sent: Object | null = value === null && name.endsWith('-transition') ? empty : value;
-    return write(() => this.holds(), `setting ${name} of layer ${this.id}`,
-      () => this.style.map.setStyleLayerProperty(this.id, name, sent));
-  }
-
-  private holds(): boolean {
-    return this.api.current() === this.style && this.style.reconciler.layerVersion(this.id) === this.version;
   }
 }

@@ -7,6 +7,7 @@ import {
   ContentError,
   GeoJsonFeatureCollection,
   GeoJsonSourceHandle,
+  ImageSourceHandle,
   LayerHandle,
   MapContent,
   MapController,
@@ -275,6 +276,7 @@ export default function styleTest(): void {
       const sources = await mapStyle().getSources();
       expect(ids(sources).split(',').sort().join(',')).assertEqual('base,places');
       expect(sources?.[0].type).assertEqual('geojson');
+      expect(sources?.every((source: SourceHandle) => source instanceof GeoJsonSourceHandle)).assertTrue();
     });
 
     it('sets a base layer\'s property, and restores its default with null', 0, async () => {
@@ -414,8 +416,9 @@ export default function styleTest(): void {
         await testMap.controller.updateCamera({ zoom: 0 });
         testMap.content = { layers: [dots('app-places')] };
         const empty: GeoJsonFeatureCollection = { type: 'FeatureCollection', features: [] };
-        await mapStyle().addSource({ id: 'app-places', json: geoJson(empty) });
-        const source = await mapStyle().getGeoJsonSource('app-places') as GeoJsonSourceHandle;
+        const added = await mapStyle().addSource({ id: 'app-places', json: geoJson(empty) });
+        expect(added instanceof GeoJsonSourceHandle).assertTrue();
+        const source = added as GeoJsonSourceHandle;
         await layerNamed('dots');
         expect(await source.setData(PLACES)).assertTrue();
         await untilFeatures('app-places', 2);
@@ -459,6 +462,7 @@ export default function styleTest(): void {
       await mapStyle().addSource({ id: 'picture', json: json });
       const source = await mapStyle().getImageSource('picture');
       expect(source?.type).assertEqual('image');
+      expect((await mapStyle().getSource('picture')) instanceof ImageSourceHandle).assertTrue();
       expect(await mapStyle().getGeoJsonSource('picture')).assertUndefined();
       const pin = pixel();
       const set = source?.setImage(pin);
