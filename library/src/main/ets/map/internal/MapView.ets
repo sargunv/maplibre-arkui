@@ -21,13 +21,16 @@ import {
   MapHandle,
   MapMode,
   MapProjectionHandle,
+  MapSnapshot,
   MapView as FrameView,
   ohosFramePacerCreate,
   RenderDriverKind,
+  RenderMode,
   RenderResult,
   RenderSessionHandle,
   RuntimeEvent,
   RuntimeEventFlag,
+  RuntimeEventRenderFrame,
   RuntimeEventType,
   RuntimeHandle,
   ScreenPoint as FfiScreenPoint,
@@ -39,6 +42,8 @@ import EnvironmentCallback from '@ohos.app.ability.EnvironmentCallback';
 import observer from '@ohos.arkui.observer';
 
 import { CameraIdleEvent } from '../../camera/CameraIdleEvent';
+import { CameraMoveReason } from '../../camera/CameraMoveReason';
+import { CameraMoveStartEvent } from '../../camera/CameraMoveStartEvent';
 import { CameraPosition } from '../../camera/CameraPosition';
 import {
   checkCamera,
@@ -61,6 +66,7 @@ import {
 } from '../../camera/internal/Insets';
 import { ContentReconciler, featureClickEvent, hitPaddingOf } from '../../content/internal/ContentReconciler';
 import { MapContent } from '../../content/MapContent';
+import { ResolvedStyleImage } from '../../content/StyleImage';
 import { LayerPredicate, StyleLayer } from '../../content/StyleLayer';
 import { fontScaleOf } from '../../expression/internal/FontScale';
 import { toLatLng } from '../../geometry/internal/FfiGeometry';
@@ -72,11 +78,14 @@ import { consumes, logError } from '../../runtime/internal/Log';
 import { RuntimeState, RuntimeUser } from '../../runtime/internal/RuntimeRegistry';
 import { LoadedStyle } from '../../style/internal/LoadedStyle';
 import { CameraBoundsOptions } from '../CameraBoundsOptions';
+import { FrameRenderedEvent } from '../FrameRenderedEvent';
 import { MapClickEvent } from '../MapClickEvent';
 import { RenderedFeature } from '../MapController';
 import { MapError, StyleLoadError } from '../MapError';
+import { StyleImageMissingEvent } from '../StyleImageMissingEvent';
 import { styleAttributions } from './Attributions';
 import { ControllerState } from './ControllerState';
+import { MissingImages } from './MissingImages';
 import { queryRendered } from './Queries';
 import { loadStyle } from './StyleLoading';
 
@@ -91,16 +100,25 @@ function getFramePacer(): FramePacerHandle {
   return framePacer;
 }
 
-// The map events that the view handles, the only ones its map reports.
+// The map events that the view handles, the only ones its map reports, with
+// the frame events too while the component has a handler for them.
 const HANDLED_EVENTS: RuntimeEventFlag = RuntimeEventFlag.mapLoadingFailed |
   RuntimeEventFlag.mapRenderError |
+  RuntimeEventFlag.mapCameraWillChange |
   RuntimeEventFlag.mapCameraDidChange |
+  RuntimeEventFlag.mapIdle |
+  RuntimeEventFlag.mapStyleImageMissing |
   RuntimeEventFlag.mapSourceChanged;
 
-// What the view reports to its component, whose handlers don't throw.
+// What the view reports to its component, whose handlers don't throw, but
+// for onStyleImageMissing, which the view guards.
 export interface MapViewEvents {
   onStyleLoaded: () => void;
+  onStyleImageMissing: (event: StyleImageMissingEvent) => Promise<ResolvedStyleImage | undefined>;
+  onMapIdle: () => void;
+  onCameraMoveStart: (event: CameraMoveStartEvent) => void;
   onCameraIdle: (event: CameraIdleEvent) => void;
+  onFrameRendered: (event: FrameRenderedEvent) => void;
   onError: (error: MapError) => void;
   // The viewport insets in vp changed, as the view resolved them.
   onViewportInsets: (insets: Insets) => void;
@@ -123,6 +141,9 @@ export class MapView extends XComponentController implements GestureTarget, Runt
   session: RenderSessionHandle | undefined = undefined;
   // The input that moves the map, which the component binds.
   readonly gestures: MapGestures = new MapGestures(this);
+  // Whether the map reports each frame, which the component sets before the
+  // view starts.
+  frameEvents: boolean = false;
 
   private readonly context: UIContext;
   private readonly events: MapViewEvents;
@@ -158,6 +179,14 @@ export class MapView extends XComponentController implements GestureTarget, Runt
   private disposed: boolean = false;
   // How many times the app has moved the camera, which ends a gesture's say.
   private cameraTakeovers: number = 0;
+  // Whether the camera has left rest since the component last heard that it
+  // came to rest, and what moved it last. A new map at a new density carries
+  // on the move.
+  private cameraMoving: boolean = false;
+  private cameraMoveReason: CameraMoveReason | undefined = undefined;
+  // The map's generation where the camera last came to rest: a camera change
+  // that the map raised before then was part of the move that ended there.
+  private restGeneration: bigint = BigInt(0);
   // How many gestures the user has started, which end a fit's say.
   gestureStarts: number = 0;
   // The map from when it's created, which the view disposes, and its scale
@@ -171,6 +200,12 @@ export class MapView extends XComponentController implements GestureTarget, Runt
   private reconciler: ContentReconciler | undefined = undefined;
   // The style that the map loads, until another replaces it.
   private loading: Promise<CommandCompletion> | undefined = undefined;
+  // Whether the app has heard that the style loaded, and the map's generation
+  // then. The map's idle reports before then are about an earlier state.
+  private styleReady: boolean = false;
+  private styleGeneration: bigint = BigInt(0);
+  // The images that the style lacks, which the view asks the app for.
+  private readonly missingImages: MissingImages;
   // The last valid camera bounds, as FFI takes them, and as JSON.
   private bounds: BoundOptions = toBoundOptions({});
   private boundsJson: string = JSON.stringify(this.bounds);
@@ -210,6 +245,7 @@ export class MapView extends XComponentController implements GestureTarget, Runt
     this.context = context;
     this.events = events;
     this.locationLayer = this.newLocationLayer(context.vp2px(1));
+    this.missingImages = new MissingImages(events.onStyleImageMissing, (error: Error) => this.fail(error));
   }
 
   onSurfaceCreated(surfaceId: string): void {
@@ -329,10 +365,14 @@ export class MapView extends XComponentController implements GestureTarget, Runt
     }
     this.insets = insets;
     this.events.onViewportInsets(insets);
-    this.map?.discarding.updateCamera({
-      mode: CameraUpdateMode.jump,
-      camera: { padding: addInsets(insets, this.padding) },
-    });
+    const map = this.map;
+    if (map !== undefined) {
+      map.discarding.updateCamera({
+        mode: CameraUpdateMode.jump,
+        camera: { padding: addInsets(insets, this.padding) },
+      });
+      this.cameraMovedBy(CameraMoveReason.PROGRAMMATIC);
+    }
   }
 
   // The map's camera as the app sees it, with the app's padding.
@@ -360,6 +400,7 @@ export class MapView extends XComponentController implements GestureTarget, Runt
       // A copy, since FFI's camera can change later.
       this.padding = addInsets(NO_INSETS, padding);
     }
+    this.cameraMovedBy(CameraMoveReason.PROGRAMMATIC);
   }
 
   // The camera that fits what `query` finds, for `moveCamera()`. FFI's fit
@@ -460,6 +501,7 @@ export class MapView extends XComponentController implements GestureTarget, Runt
       camera: camera,
       animation: { durationMs: FOLLOW_MS },
     });
+    this.cameraMovedBy(CameraMoveReason.PROGRAMMATIC);
     return true;
   }
 
@@ -514,9 +556,16 @@ export class MapView extends XComponentController implements GestureTarget, Runt
     playTick();
   }
 
+  // The camera leaves rest as the gesture starts, after onGestureStart, or
+  // the gesture takes over the move under way, unless the app's move in
+  // onGestureStart ended the gesture. Before the FFI map exists, the input
+  // moves nothing (applyCameraDelta drops it), so no move starts.
   gestureStarted(): void {
     this.gestureStarts++;
     this.events.onGestureStart();
+    if (!this.disposed && !this.gestures.idle && this.map !== undefined) {
+      this.cameraMovedBy(CameraMoveReason.GESTURE);
+    }
   }
 
   // While the camera follows the location, which is at its center.
@@ -546,27 +595,27 @@ export class MapView extends XComponentController implements GestureTarget, Runt
 
   // FFI raises no event as a gesture ends, so the view reads where the camera
   // came to rest, after the gesture's changes. A camera that follows the
-  // location catches up with it, as it waited for the gesture. A map that
-  // leaves reports no end.
+  // location catches up with it, as it waited for the gesture, unless the app
+  // moved the camera since the gesture ended. A map that leaves reports no
+  // end.
   gestureEnded(): void {
     if (this.disposed) {
       return;
     }
-    // The app may move the camera as the gesture ends; then that move reports
-    // where the camera rests.
     const takeovers = this.cameraTakeovers;
     this.events.onGestureEnd();
     const map = this.map;
     if (map === undefined) {
       return;
     }
-    map.getCamera().then((result: CameraQueryResult) => {
-      if (this.map !== map || !this.gestures.idle || this.cameraTakeovers !== takeovers ||
-        map.getSnapshot().transitionInProgress) {
+    // The snapshot includes the commands before the query once it answers.
+    map.getCamera().then(() => {
+      const snapshot = map.getSnapshot();
+      if (this.map !== map || !this.gestures.idle || snapshot.transitionInProgress) {
         return;
       }
-      if (!this.followUserLocation()) {
-        this.cameraIdle(result.camera);
+      if (this.cameraTakeovers !== takeovers || !this.followUserLocation()) {
+        this.cameraIdle(snapshot.view.camera, snapshot);
       }
     }).catch((error: Error) => this.fail(error));
   }
@@ -696,12 +745,15 @@ export class MapView extends XComponentController implements GestureTarget, Runt
     this.state?.detach(this, current === undefined ? undefined : this.appCamera(current.getSnapshot().view.camera));
     this.reconciler?.styleUnloaded();
     this.locationLayer.styleChanging();
+    this.missingImages.styleUnloaded();
     this.reconciler = undefined;
     this.created = undefined;
     this.map = undefined;
     this.session = undefined;
     this.target = undefined;
     this.loading = undefined;
+    this.styleReady = false;
+    this.restGeneration = BigInt(0);
     this.frameView = '';
     // After any target change in flight, release the session, and only then
     // the map it renders. The runtime closes only after its maps.
@@ -731,7 +783,7 @@ export class MapView extends XComponentController implements GestureTarget, Runt
         scaleFactor: scaleFactor,
       },
       mapMode: MapMode.continuous,
-      eventMask: HANDLED_EVENTS,
+      eventMask: this.frameEvents ? HANDLED_EVENTS | RuntimeEventFlag.mapRenderFrameFinished : HANDLED_EVENTS,
     });
     runtime.addMap(map, this.listener);
     this.created = map;
@@ -754,6 +806,7 @@ export class MapView extends XComponentController implements GestureTarget, Runt
     // insets go around the start camera's padding.
     if (attach) {
       state.attach(this);
+      this.showCameraMoving();
     }
     const startCamera = this.resolveCamera(checkCamera(camera ?? state.camera));
     this.padding = addInsets(NO_INSETS, startCamera.padding ?? NO_INSETS);
@@ -774,12 +827,33 @@ export class MapView extends XComponentController implements GestureTarget, Runt
     }
     // The controller's state is this map's only while the controller shows it.
     const state = this.state?.view === this ? this.state : undefined;
-    if (event.type === RuntimeEventType.mapCameraDidChange) {
+    if (event.type === RuntimeEventType.mapCameraWillChange) {
+      // The camera changes at the start of each jump and animation, and of
+      // each step of a gesture, which started the move already.
+      if (event.generation > this.restGeneration) {
+        this.cameraLeftRest(this.gestures.idle ? CameraMoveReason.PROGRAMMATIC : CameraMoveReason.GESTURE);
+      }
+    } else if (event.type === RuntimeEventType.mapCameraDidChange) {
       // The camera changes at the end of each jump and animation. Report it
       // once nothing moves it any more.
       const snapshot = map.getSnapshot();
       if (!snapshot.transitionInProgress && !snapshot.gestureInProgress && this.gestures.idle) {
-        this.cameraIdle(snapshot.view.camera);
+        this.cameraIdle(snapshot.view.camera, snapshot);
+      }
+    } else if (event.type === RuntimeEventType.mapIdle) {
+      if (this.styleReady && event.generation >= this.styleGeneration) {
+        this.events.onMapIdle();
+      }
+    } else if (event.type === RuntimeEventType.mapRenderFrameFinished) {
+      const payload = event.payload;
+      if (payload.kind === 'renderFrame') {
+        this.events.onFrameRendered(frameRendered(payload.value));
+      }
+    } else if (event.type === RuntimeEventType.mapStyleImageMissing) {
+      const payload = event.payload;
+      if (payload.kind === 'styleImage') {
+        const id = payload.value.imageId;
+        this.missingImages.missing(id, event.generation, this.reconciler?.ownsImage(id) === true);
       }
     } else if (event.type === RuntimeEventType.mapSourceChanged) {
       // A source's attribution can arrive after the style, with its TileJSON.
@@ -803,8 +877,51 @@ export class MapView extends XComponentController implements GestureTarget, Runt
     }).catch((error: Error) => this.fail(error));
   }
 
-  private cameraIdle(mapCamera: FfiCamera): void {
-    this.events.onCameraIdle({ camera: this.appCamera(mapCamera) });
+  // The camera leaves rest, unless it's moving already.
+  private cameraLeftRest(reason: CameraMoveReason): void {
+    if (this.cameraMoving) {
+      return;
+    }
+    this.cameraMoving = true;
+    this.cameraMoveReason = reason;
+    this.showCameraMoving();
+    this.events.onCameraMoveStart({ reason: reason });
+  }
+
+  // `reason` moves the camera: it leaves rest, or takes over the move under
+  // way. A move by the app that starts at rest leaves it with the map's
+  // camera change, as one through the FFI map does.
+  private cameraMovedBy(reason: CameraMoveReason): void {
+    if (!this.cameraMoving) {
+      if (reason === CameraMoveReason.GESTURE) {
+        this.cameraLeftRest(reason);
+      }
+      return;
+    }
+    this.cameraMoveReason = reason;
+    this.showCameraMoving();
+  }
+
+  // The camera came to rest at `mapCamera`, as of `snapshot`, which ends the
+  // move. A camera that didn't move since its last rest was reported then.
+  private cameraIdle(mapCamera: FfiCamera, snapshot: MapSnapshot): void {
+    if (!this.cameraMoving) {
+      return;
+    }
+    const camera = this.appCamera(mapCamera);
+    this.cameraMoving = false;
+    this.restGeneration = snapshot.generation;
+    this.showCameraMoving();
+    this.events.onCameraIdle({ camera: camera });
+  }
+
+  // The controller shows the view's camera state while it shows the view.
+  private showCameraMoving(): void {
+    const state = this.shownState();
+    if (state !== undefined) {
+      state.cameraMoving = this.cameraMoving;
+      state.cameraMoveReason = this.cameraMoveReason;
+    }
   }
 
   private applyStyle(): void {
@@ -820,6 +937,8 @@ export class MapView extends XComponentController implements GestureTarget, Runt
     }
     this.locationLayer.styleChanging();
     this.reconciler?.styleUnloaded();
+    this.missingImages.styleUnloaded();
+    this.styleReady = false;
     // Before the new load, which can throw, so no earlier load still counts.
     this.loading = undefined;
     let loading: Promise<CommandCompletion>;
@@ -833,20 +952,24 @@ export class MapView extends XComponentController implements GestureTarget, Runt
     // The style is loaded once its document parses, unless another has
     // replaced it by then. The content goes on before the app hears of it.
     const current = (): boolean => this.loading === loading && this.map === map;
-    loading.then(async () => {
+    loading.then(async (completion: CommandCompletion) => {
       if (current()) {
         await this.reconciler?.styleLoaded();
       }
       const reconciler = this.reconciler;
       if (current() && reconciler !== undefined) {
+        const loaded = new LoadedStyle(map, reconciler, () => state?.frameSession());
         if (state !== undefined && state.view === this) {
           state.styleLoaded = true;
-          state.loadedStyle = new LoadedStyle(map, reconciler, () => state.frameSession());
+          state.loadedStyle = loaded;
           this.readAttributions(map, state);
         }
+        this.styleReady = true;
+        this.styleGeneration = map.getSnapshot().generation;
         this.events.onStyleLoaded();
         // Above what the content and the app added as the style loaded.
         this.locationLayer.styleLoaded(map, this.userLocation, this.userHeading);
+        this.missingImages.styleLoaded(loaded, completion.generation);
       }
     }, () => {
       // A style that fails to load reports mapLoadingFailed.
@@ -950,6 +1073,21 @@ export class MapView extends XComponentController implements GestureTarget, Runt
       this.events.onError(error instanceof MapError ? error : new MapError(error.message));
     }
   }
+}
+
+// FFI's report of a frame as the app gets it.
+function frameRendered(frame: RuntimeEventRenderFrame): FrameRenderedEvent {
+  const stats = frame.stats;
+  return {
+    complete: frame.mode === RenderMode.full,
+    needsRepaint: frame.needsRepaint,
+    placementChanged: frame.placementChanged,
+    encodingTimeMs: stats.encodingTimeMs,
+    renderingTimeMs: stats.renderingTimeMs,
+    frameCount: Number(stats.frameCount),
+    drawCallCount: Number(stats.drawCallCount),
+    totalDrawCallCount: Number(stats.totalDrawCallCount),
+  };
 }
 
 // `camera` with `padding`, and with `center` when it's given.

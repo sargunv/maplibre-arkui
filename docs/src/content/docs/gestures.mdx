@@ -31,7 +31,10 @@ stays north-up and flat, and tells the app while the user moves it:
 <Code code={region(examples, "gestures")} lang="ts" />
 
 `onGestureStart` and `onGestureEnd` bracket each gesture: any input that moves
-the camera, with its momentum and a rotation's snap. To react to one movement,
+the camera, with its momentum and a rotation's snap. The camera's move starts
+with the map's `onCameraMoveStart` after `onGestureStart`, unless the camera was
+moving already, and ends with its `onCameraIdle` after `onGestureEnd`. To react
+to one movement,
 give it an `onStart`, which runs each time a gesture starts to move the camera
 that way. A pan already stops the camera from
 [following the user's location](/maplibre-arkui/location/); an app that moves

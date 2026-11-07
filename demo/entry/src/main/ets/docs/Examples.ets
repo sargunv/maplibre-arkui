@@ -20,6 +20,7 @@ import util from '@ohos.util';
 import {
   AttributionControls,
   AttributionText,
+  CameraMoveReason,
   CameraPosition,
   CameraTransitionMode,
   cases,
@@ -71,7 +72,9 @@ import {
   PointerPinButton,
   RenderedFeature,
   renderSnapshot,
+  ResolvedStyleImage,
   ScaleBar,
+  StyleImageMissingEvent,
   StyleLayer,
   toBoolean,
   WheelAction,
@@ -453,6 +456,33 @@ struct CameraExample {
       });
     // #endregion camera-padding
   }
+}
+
+@ComponentV2
+struct CameraMovingExample {
+  private controller: MapController = new MapController({
+    camera: { center: { latitude: 46.8, longitude: 8.2 }, zoom: 5 },
+  });
+
+  // #region camera-moving
+  // The panel steps aside while the user moves the map, and stays while the
+  // app moves it.
+  @Computed
+  get panelHidden(): boolean {
+    return this.controller.cameraMoving && this.controller.cameraMoveReason === CameraMoveReason.GESTURE;
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.Bottom }) {
+      MaplibreMap({ style: STYLE, controller: this.controller })
+      Text('Places nearby')
+        .width('100%')
+        .padding(16)
+        .backgroundColor(Color.White)
+        .visibility(this.panelHidden ? Visibility.Hidden : Visibility.Visible)
+    }
+  }
+  // #endregion camera-moving
 }
 
 @ComponentV2
@@ -924,6 +954,32 @@ struct StyleExample {
 }
 
 @ComponentV2
+struct MissingImageExample {
+  // #region missing-image
+  // One pin, decoded once, for each image whose ID starts with `pin-` that
+  // the style names but lacks.
+  private pin: image.PixelMap = decodeImage(this.getUIContext(), 'pin.png');
+
+  aboutToDisappear(): void {
+    this.pin.release();
+  }
+
+  build() {
+    MaplibreMap({
+      style: STYLE,
+      onStyleImageMissing: async (event: StyleImageMissingEvent): Promise<ResolvedStyleImage | undefined> => {
+        if (!event.id.startsWith('pin-')) {
+          return undefined;
+        }
+        const pin: ResolvedStyleImage = { image: this.pin };
+        return pin;
+      },
+    })
+  }
+  // #endregion missing-image
+}
+
+@ComponentV2
 struct ClusterExample {
   private controller: MapController = new MapController({
     camera: { center: { latitude: 48.858, longitude: 2.315 }, zoom: 11 },
@@ -1114,6 +1170,9 @@ export struct DocExamples {
           StyleExample()
         }.tabBar('Style API')
         TabContent() {
+          MissingImageExample()
+        }.tabBar('Missing images')
+        TabContent() {
           ClusterExample()
         }.tabBar('Clusters')
         TabContent() {
@@ -1134,6 +1193,9 @@ export struct DocExamples {
         TabContent() {
           CameraExample()
         }.tabBar('Camera')
+        TabContent() {
+          CameraMovingExample()
+        }.tabBar('Camera moving')
         TabContent() {
           InsetsExample()
         }.tabBar('Insets')

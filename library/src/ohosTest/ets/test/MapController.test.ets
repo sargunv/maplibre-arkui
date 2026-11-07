@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
 import {
+  CameraMoveReason,
   CameraTransitionMode,
   GeoJsonGeometry,
   LatLng,
@@ -111,6 +112,11 @@ function expectNoPadding(actual: Padding): void {
 async function hideMap(): Promise<void> {
   testMap.shown = false;
   await until('the map leaves', () => !showsMap(testMap.controller));
+}
+
+// The camera's events, in order.
+function cameraEvents(): string {
+  return testMap.eventsOf(['start', 'idle']);
 }
 
 export default function mapControllerTest(): void {
@@ -496,6 +502,73 @@ export default function mapControllerTest(): void {
       testMap.shown = true;
       await until('the map comes back', () => map.styleLoaded);
       expectNear(camera().zoom, left, 0.001);
+    });
+
+    it('starts a move as the camera leaves rest, and ends it once the camera rests', 0, async () => {
+      await map.updateCamera({ zoom: 3 });
+      await until('the jump rests', () => testMap.events.includes('idle'));
+      expect(cameraEvents()).assertEqual('start programmatic,idle');
+      expect(map.cameraMoving).assertFalse();
+      expect(map.cameraMoveReason).assertEqual(CameraMoveReason.PROGRAMMATIC);
+
+      // An ease moves until it rests.
+      testMap.events = [];
+      const ease = map.updateCamera({ zoom: 5 }, { mode: CameraTransitionMode.EASE, durationMs: 500 });
+      await until('the ease starts', () => map.cameraMoving);
+      const moving: boolean[] = [];
+      await until('the ease rests', () => {
+        moving.push(map.cameraMoving);
+        return testMap.events.includes('idle');
+      });
+      expect(await ease).assertTrue();
+      expect(moving.slice(0, -1).every((value: boolean) => value)).assertTrue();
+      expect(moving[moving.length - 1]).assertFalse();
+      expect(cameraEvents()).assertEqual('start programmatic,idle');
+      expectNear(map.camera.zoom, 5, 0.001);
+    });
+
+    it('ends a move without onCameraIdle when the map leaves in the middle of it', 0, async () => {
+      const ease = map.updateCamera({ zoom: 8 }, { mode: CameraTransitionMode.EASE, durationMs: 10000 });
+      await until('the ease starts', () => map.cameraMoving);
+      await hideMap();
+      expect(await ease).assertFalse();
+      expect(map.cameraMoving).assertFalse();
+      expect(map.cameraMoveReason).assertUndefined();
+      expect(cameraEvents()).assertEqual('start programmatic');
+
+      // A new map's start camera is a move of its own, and so is each jump
+      // to its camera bounds.
+      testMap.events = [];
+      testMap.shown = true;
+      await until('the new map shows the style', () =>
+        map.styleLoaded && testMap.events.includes('idle') && !map.cameraMoving);
+      const events = cameraEvents();
+      expect(new RegExp('^start programmatic,idle(,start programmatic,idle)*$').test(events)).message(events)
+        .assertTrue();
+      expect(map.cameraMoveReason).assertEqual(CameraMoveReason.PROGRAMMATIC);
+    });
+
+    it('calls onMapIdle once a style loads, after onStyleLoaded, and after a move', 0, async () => {
+      testMap.style = backgroundStyle('#d94a4a');
+      await until('the map idles with the style', () => {
+        const loaded = testMap.events.indexOf('style loaded');
+        return loaded >= 0 && testMap.events.indexOf('map idle', loaded) > loaded;
+      });
+      expect(testMap.events.includes('map idle without a style')).assertFalse();
+
+      testMap.events = [];
+      await map.updateCamera({ zoom: 4 });
+      await until('the map idles after the move', () => {
+        const rest = testMap.events.indexOf('idle');
+        return rest >= 0 && testMap.events.indexOf('map idle', rest) > rest;
+      });
+    });
+
+    it('calls onFrameRendered for each frame that the map draws', 0, async () => {
+      await map.updateCamera({ zoom: 4 }, { mode: CameraTransitionMode.EASE, durationMs: 500 });
+      await until('the map draws frames', () => testMap.frameCounts.length >= 3);
+      const counts = testMap.frameCounts;
+      expect(counts.every((count: number, i: number) => i === 0 || count > counts[i - 1])).assertTrue();
     });
 
     it('loads the style it is given, as a document or a URL', 0, async () => {

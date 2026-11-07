@@ -14,6 +14,7 @@ import {
 } from '@maplibre/native-ffi';
 import geoLocationManager from '@ohos.geoLocationManager';
 
+import { CameraMoveReason } from '../../camera/CameraMoveReason';
 import { CameraPosition } from '../../camera/CameraPosition';
 import { CheckedCamera, CheckedFit, CheckedTransition } from '../../camera/internal/FfiCamera';
 import { FrameViewport } from '../../camera/internal/FrameViewport';
@@ -51,6 +52,10 @@ export class ControllerState {
   @Trace attributions: string[] = [];
   @Trace followingUserLocation: boolean = false;
   @Trace followedBearing: FollowBearing | undefined = undefined;
+  // The camera of the map that shows the controller: whether it has left
+  // rest, and what moved it last.
+  @Trace cameraMoving: boolean = false;
+  @Trace cameraMoveReason: CameraMoveReason | undefined = undefined;
   // The map that shows the controller, and whether it has shown a frame at its
   // size, from which camera moves go to it.
   view: MapView | undefined = undefined;
@@ -95,6 +100,8 @@ export class ControllerState {
     this.styleLoaded = false;
     this.loadedStyle = undefined;
     this.attributions = [];
+    this.cameraMoving = false;
+    this.cameraMoveReason = undefined;
     this.showFrame(undefined);
   }
 
@@ -110,6 +117,8 @@ export class ControllerState {
     this.styleLoaded = false;
     this.loadedStyle = undefined;
     this.attributions = [];
+    this.cameraMoving = false;
+    this.cameraMoveReason = undefined;
     this.showFrame(undefined);
     if (camera !== undefined) {
       this.lastCamera = camera;

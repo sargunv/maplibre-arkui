@@ -1,6 +1,7 @@
 import { CameraFitOptions, CameraOptions, MapHandle, RenderSessionHandle } from '@maplibre/native-ffi';
 import display from '@ohos.display';
 
+import { CameraMoveReason } from '../camera/CameraMoveReason';
 import { CameraPosition, CameraUpdate } from '../camera/CameraPosition';
 import { CameraTransitionOptions, FitCameraOptions } from '../camera/CameraTransitionOptions';
 import { checkCamera, checkFit, checkTransition } from '../camera/internal/FfiCamera';
@@ -91,6 +92,25 @@ export class MapController {
    */
   get viewport(): Viewport | undefined {
     return this.state.viewport;
+  }
+
+  /**
+   * Whether the camera is moving: from the map's `onCameraMoveStart` until
+   * its `onCameraIdle`, through a gesture's momentum and snap too. False while
+   * no map shows the controller. Observable.
+   */
+  get cameraMoving(): boolean {
+    return this.state.cameraMoving;
+  }
+
+  /**
+   * What moved the camera last: what started the move, or what took it over
+   * since, such as a gesture that stops an animation. It stays after the
+   * camera comes to rest. Undefined while no map shows the controller, and
+   * before the camera of the map that shows it first moves. Observable.
+   */
+  get cameraMoveReason(): CameraMoveReason | undefined {
+    return this.state.cameraMoveReason;
   }
 
   /**

@@ -3,7 +3,7 @@
 // cases aim in vp and convert, whatever the display's density.
 
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
-import { LatLng, ScreenPoint, WheelAction } from '@maplibre/arkui';
+import { CameraMoveReason, CameraTransitionMode, LatLng, ScreenPoint, WheelAction } from '@maplibre/arkui';
 
 import { Driver, Point } from '@ohos.UiTest';
 import { KeyCode } from '@ohos.multimodalInput.keyCode';
@@ -34,6 +34,8 @@ const ORIGIN: LatLng = { latitude: 0, longitude: 0 };
 async function start(inScroll: boolean = false): Promise<void> {
   await testMap.reset(STYLE, inScroll);
   await testMap.controller.updateCamera({ zoom: ZOOM });
+  await until('the camera rests', () => testMap.events.includes('idle') && !testMap.controller.cameraMoving);
+  testMap.events = [];
 }
 
 // How far the map has moved the origin from its center, in vp.
@@ -89,6 +91,42 @@ export default function gestureInputTest(): void {
       expect(testMap.gestureStarts - starts).assertEqual(1);
       expect(testMap.gestureEnds - ends).assertEqual(1);
       expect(moved().x).assertLess(-170);
+    });
+
+    it('moves the camera from onGestureStart through the momentum to onCameraIdle', 0, async () => {
+      const map = testMap.controller;
+      testMap.interactions = {
+        pan: {
+          onStart: () => {
+            testMap.events.push('pan');
+          },
+        },
+      };
+      let movingAtEnd = false;
+      testMap.onGestureEnd = () => {
+        movingAtEnd = map.cameraMoving;
+      };
+      const c = await mapCenter();
+      await gesture(() => driver.fling(offset(c, 100, 0), offset(c, -100, 0), speed(20), speed(2000)));
+      expect(moved().x).assertLess(-220);
+      expect(testMap.eventsOf(['gesture', 'start', 'pan', 'idle']))
+        .assertEqual('gesture start,start gesture,pan,gesture end,idle');
+      expect(movingAtEnd).assertTrue();
+      expect(map.cameraMoveReason).assertEqual(CameraMoveReason.GESTURE);
+    });
+
+    it('takes over an animation as a gesture, without another start', 0, async () => {
+      const map = testMap.controller;
+      const ease = map.updateCamera({ zoom: 6 }, { mode: CameraTransitionMode.EASE, durationMs: 10000 });
+      await until('the ease starts', () => map.cameraMoving);
+      const c = await mapCenter();
+      const from = offset(c, 100, 0);
+      const to = offset(c, -100, 0);
+      await gesture(() => driver.swipe(from.x, from.y, to.x, to.y, speed(200)));
+      expect(await ease).assertFalse();
+      expect(testMap.eventsOf(['gesture', 'start', 'idle']))
+        .assertEqual('start programmatic,gesture start,gesture end,idle');
+      expect(map.cameraMoveReason).assertEqual(CameraMoveReason.GESTURE);
     });
 
     it('coasts past the end of a fast drag', 0, async () => {

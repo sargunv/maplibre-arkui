@@ -1,8 +1,10 @@
 import geoLocationManager from '@ohos.geoLocationManager';
 
 import { CameraIdleEvent } from '../camera/CameraIdleEvent';
+import { CameraMoveStartEvent } from '../camera/CameraMoveStartEvent';
 import { Insets } from '../camera/internal/Insets';
 import { MapContent } from '../content/MapContent';
+import { ResolvedStyleImage } from '../content/StyleImage';
 import { InteractionOptions } from '../interaction/InteractionOptions';
 import { TAP_SLOP } from '../interaction/internal/MapGestures';
 import { UserLocationIndicatorOptions } from '../location/UserLocationIndicatorOptions';
@@ -11,12 +13,18 @@ import { callHandler, consumes } from '../runtime/internal/Log';
 import { runtimeState } from '../runtime/internal/RuntimeRegistry';
 import { MapRuntime } from '../runtime/MapRuntime';
 import { CameraBoundsOptions } from './CameraBoundsOptions';
+import { FrameRenderedEvent } from './FrameRenderedEvent';
 import { controllerState } from './internal/ControllerState';
 import { closeScope, MapScope, openScope } from './internal/MapScope';
 import { MapView } from './internal/MapView';
 import { MapClickEvent } from './MapClickEvent';
 import { MapController } from './MapController';
 import { MapError } from './MapError';
+import { StyleImageMissingEvent } from './StyleImageMissingEvent';
+
+// The default of onFrameRendered, with which the map doesn't report frames.
+const IGNORE_FRAMES = (event: FrameRenderedEvent) => {
+};
 
 /**
  * A MapLibre map, which fills the size that its parent gives it.
@@ -154,8 +162,55 @@ export struct MaplibreMap {
   @Event onStyleLoaded: () => void = () => {
   };
   /**
-   * The camera has come to rest, after a jump or once an animation or a
-   * gesture ends. Called on the UI thread; the map logs what it throws.
+   * The style uses an image that it doesn't have, such as an `icon-image`
+   * that names an image of neither its sprite nor `content`. Resolve the
+   * image for `event.id`, and the map adds it with that ID to the style that
+   * asked, as `controller.style.setImage()` does, copying the pixels as the
+   * promise resolves; resolve undefined to leave the image out.
+   *
+   * The map asks for each ID at most once in each style, after
+   * `onStyleLoaded`, and not again until the next style, whatever the
+   * handler gives: while the promise is pending, and after it resolves
+   * undefined, rejects, or throws, which the map logs. It never asks for an
+   * ID of `content`, or one that starts with `maplibre-arkui`. An image that
+   * comes once the style has changed is dropped. The image shows a frame or
+   * more after the layer that names it first draws without it.
+   *
+   * Called on the UI thread. None by default.
+   */
+  @Event onStyleImageMissing: (event: StyleImageMissingEvent) => Promise<ResolvedStyleImage | undefined> =
+    (event: StyleImageMissingEvent) => Promise.resolve(undefined);
+  /**
+   * The map has become idle: it drew a frame of everything that the view
+   * needs, and has nothing left to load, animate, or draw. It runs each time
+   * the map comes to that after some work, such as once a style and its tiles
+   * load, after the `onStyleLoaded` of that style, and after a camera move.
+   * Called on the UI thread; the map logs what it throws.
+   */
+  @Event onMapIdle: () => void = () => {
+  };
+  /**
+   * The map drew a frame, with MapLibre Native's measurements of it, once for
+   * each frame. Called on the UI thread; the map logs what it throws. A map
+   * without a handler doesn't measure its frames for it.
+   */
+  @Event onFrameRendered: (event: FrameRenderedEvent) => void = IGNORE_FRAMES;
+  /**
+   * The camera left rest, for the reason that `event` gives, which
+   * `controller.cameraMoveReason` shows too, and `controller.cameraMoving`
+   * is true. A jump is a move that starts and comes to rest at once, as is a
+   * map's start camera. A gesture's move starts after its `onGestureStart`,
+   * before the movement's `onStart`, unless the camera was moving already.
+   * Called on the UI thread; the map logs what it throws.
+   */
+  @Event onCameraMoveStart: (event: CameraMoveStartEvent) => void = (event: CameraMoveStartEvent) => {
+  };
+  /**
+   * The camera has come to rest at `event.camera`, after a jump, or once an
+   * animation or a gesture ends, and `controller.cameraMoving` is false. Each `onCameraMoveStart` is followed by
+   * exactly one `onCameraIdle`, before the next `onCameraMoveStart`, unless
+   * the map leaves in the middle of the move. Called on the UI thread; the map
+   * logs what it throws.
    */
   @Event onCameraIdle: (event: CameraIdleEvent) => void = (event: CameraIdleEvent) => {
   };
@@ -223,6 +278,12 @@ export struct MaplibreMap {
   // The app's handlers, which never throw into the view.
   private view: MapView = new MapView(this.getUIContext(), {
     onStyleLoaded: () => callHandler('onStyleLoaded', () => this.onStyleLoaded()),
+    onStyleImageMissing: (event: StyleImageMissingEvent): Promise<ResolvedStyleImage | undefined> =>
+      this.onStyleImageMissing(event),
+    onMapIdle: () => callHandler('onMapIdle', () => this.onMapIdle()),
+    onFrameRendered: (event: FrameRenderedEvent) => callHandler('onFrameRendered', () => this.onFrameRendered(event)),
+    onCameraMoveStart: (event: CameraMoveStartEvent) =>
+      callHandler('onCameraMoveStart', () => this.onCameraMoveStart(event)),
     onCameraIdle: (event: CameraIdleEvent) => callHandler('onCameraIdle', () => this.onCameraIdle(event)),
     onError: (error: MapError) => callHandler('onError', () => this.onError(error)),
     onViewportInsets: (insets: Insets) => {
@@ -248,6 +309,7 @@ export struct MaplibreMap {
     this.view.setUserLocation(this.userLocation);
     this.view.setUserHeading(this.userHeading);
     this.view.setViewportInsets(this.viewportInsets);
+    this.view.frameEvents = this.onFrameRendered !== IGNORE_FRAMES;
     this.view.start(controllerState(this.controller), runtimeState(this.runtime), this.style, this.content, this.cameraBounds);
   }
 

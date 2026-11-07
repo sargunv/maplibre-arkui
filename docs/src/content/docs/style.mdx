@@ -87,6 +87,20 @@ ID, and <Api of="MapStyle.removeImage" display="removeImage()" /> removes one.
 It copies the pixels as it's called, so the app can release the pixel map
 after.
 
+### Images the style lacks
+
+A style can name images that neither its sprite nor the content has, such as
+icons that the app draws itself. The map's
+<Api of="MaplibreMap.onStyleImageMissing" display="onStyleImageMissing" /> gets
+the ID of each, once in each style, and resolves a
+<Api of="ResolvedStyleImage" /> for it, or `undefined` to leave it out. The map
+adds the image to the style with that ID, as `setImage()` does, and it shows a
+frame or more after the layer that names it first draws:
+
+<Code code={region(examples, "missing-image")} lang="ts" />
+
+The map never asks for the images of the content, or the library's.
+
 ### Global state
 
 Expressions read the style's global state with

@@ -3,7 +3,10 @@
 
 import {
   CameraBoundsOptions,
+  CameraMoveStartEvent,
+  CameraMoveReason,
   CameraPosition,
+  FrameRenderedEvent,
   LatLng,
   MapClickEvent,
   MapContent,
@@ -12,7 +15,9 @@ import {
   InteractionOptions,
   MapRuntime,
   UserLocationIndicatorOptions,
+  ResolvedStyleImage,
   ScaleBarUnits,
+  StyleImageMissingEvent,
 } from '@maplibre/arkui';
 import { FrameCallback } from '@ohos.arkui.UIContext';
 import geoLocationManager from '@ohos.geoLocationManager';
@@ -49,6 +54,10 @@ export function showsMap(controller: MapController): boolean {
 export const NO_INSETS: Padding = { top: 0, left: 0, bottom: 0, right: 0 };
 
 function noop(): void {
+}
+
+function noImage(event: StyleImageMissingEvent): Promise<ResolvedStyleImage | undefined> {
+  return Promise.resolve(undefined);
 }
 
 // What the test map draws over itself: see TestMap.overlay.
@@ -123,6 +132,14 @@ export class TestMap {
   throwOnCameraIdle: boolean = false;
   gestureStarts: number = 0;
   gestureEnds: number = 0;
+  // The map's events in order, as the handlers below name them, with what
+  // the cases add, such as a movement's onStart.
+  events: string[] = [];
+  // The frameCount of each frame that the map reported.
+  frameCounts: number[] = [];
+  // The IDs that onStyleImageMissing got, in order, and what it gives.
+  missingImages: string[] = [];
+  resolveImage: (event: StyleImageMissingEvent) => Promise<ResolvedStyleImage | undefined> = noImage;
   // What a case does as a gesture starts or ends, as an app would.
   onGestureStart: () => void = noop;
   onGestureEnd: () => void = noop;
@@ -162,6 +179,7 @@ export class TestMap {
     }
     this.onGestureStart = noop;
     this.onGestureEnd = noop;
+    this.resolveImage = noImage;
     this.consumeClicks = false;
     this.throwOnError = false;
     this.throwOnCameraIdle = false;
@@ -213,6 +231,43 @@ export class TestMap {
       pitch: 0,
       padding: { top: 0, left: 0, bottom: 0, right: 0 },
     });
+    await until('the camera rests', () => this.cameraIdles.length > 0 && !controller.cameraMoving);
+    this.events = [];
+    this.frameCounts = [];
+    this.missingImages = [];
+  }
+
+  /** Logs the start of a camera move, and whether the controller showed it first. */
+  cameraMoveStarted(event: CameraMoveStartEvent): void {
+    const reason = event.reason === CameraMoveReason.GESTURE ? 'gesture' : 'programmatic';
+    const shown = this.controller.cameraMoving && this.controller.cameraMoveReason === event.reason;
+    this.events.push(shown ? `start ${reason}` : `start ${reason} before the controller`);
+  }
+
+  /** Logs a rest, and whether the controller showed it first. */
+  cameraIdled(camera: CameraPosition): void {
+    this.cameraIdles.push(camera);
+    this.events.push(this.controller.cameraMoving ? 'idle while moving' : 'idle');
+  }
+
+  /** Logs a map idle, and whether the controller had its style. */
+  mapIdled(): void {
+    this.events.push(this.controller.styleLoaded ? 'map idle' : 'map idle without a style');
+  }
+
+  /** Logs the image ID, and asks the case for the image. */
+  imageMissing(event: StyleImageMissingEvent): Promise<ResolvedStyleImage | undefined> {
+    this.missingImages.push(event.id);
+    return this.resolveImage(event);
+  }
+
+  frameRendered(event: FrameRenderedEvent): void {
+    this.frameCounts.push(event.frameCount);
+  }
+
+  /** The events of `kinds`, in order, joined by commas. */
+  eventsOf(kinds: string[]): string {
+    return this.events.filter((event: string) => kinds.some((kind: string) => event.startsWith(kind))).join(',');
   }
 
   /** Records a click that `what` got, and returns whether it consumes it. */
