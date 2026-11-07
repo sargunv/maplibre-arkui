@@ -265,7 +265,7 @@ export function match(input: ExpressionInput, cases: MatchCase[],
 }
 
 /** A condition and the output of `cases()` when it's the first true one. */
-export type Case = [ExpressionInput, ExpressionInput];
+export type Condition = [ExpressionInput, ExpressionInput];
 
 /**
  * The output of the first true condition, or `fallback`: the style spec's
@@ -275,7 +275,7 @@ export type Case = [ExpressionInput, ExpressionInput];
  * cases([[not(has('mag')), '#888'], [gt(get('mag'), 5), '#f00']], '#fa0')
  * ```
  */
-export function cases(conditions: Case[], fallback: ExpressionInput): Expression {
+export function cases(conditions: Condition[], fallback: ExpressionInput): Expression {
   const json: JsonValue[] = ['case'];
   for (const condition of conditions) {
     json.push(jsonOf(condition[0]));

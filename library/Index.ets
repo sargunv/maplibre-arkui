@@ -120,7 +120,7 @@ export {
   zoom,
 } from './src/main/ets/Expressions';
 export type {
-  Case,
+  Condition,
   ExpressionInput,
   FormatSection,
   JsonObject,
