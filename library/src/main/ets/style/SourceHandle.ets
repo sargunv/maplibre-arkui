@@ -33,8 +33,8 @@ import { replaced } from './internal/StyleCommands';
  * source layer's name, until the app removes it: a source that replaces this
  * one, or a source of a later style, with the same ID shows it. A change draws
  * on the next frame, even on a map that's idle. A feature state method takes
- * the feature's ID as text, `${feature.id}`, because the map compares IDs as
- * text, so 7 and '7' name one feature. It throws an `Error` for a state that
+ * the feature's `id`, a number or a string. The map compares IDs as text, so 7
+ * and '7' name one feature. It throws an `Error` for a state that
  * `JSON.stringify()` can't write.
  *
  * A GeoJSON source's handle is a `GeoJsonSourceHandle`, a vector tile
@@ -119,17 +119,17 @@ export class GeoJsonSourceHandle extends SourceHandle {
    * Merges `state` into the state of the feature with the ID `featureId`: its
    * values replace those with the same names, and the others stay.
    */
-  setFeatureState(featureId: string, state: Record<string, Object>): Promise<boolean> {
+  setFeatureState(featureId: number | string, state: Record<string, Object>): Promise<boolean> {
     return setState(sourceKeyOf(this), undefined, featureId, state);
   }
 
   /** The state of the feature with the ID `featureId`, which is empty when it has none. */
-  getFeatureState(featureId: string): Promise<Record<string, Object> | undefined> {
+  getFeatureState(featureId: number | string): Promise<Record<string, Object> | undefined> {
     return getState(sourceKeyOf(this), undefined, featureId);
   }
 
   /** Removes the value `key` from the state of the feature with the ID `featureId`, or its whole state without `key`. */
-  removeFeatureState(featureId: string, key?: string): Promise<boolean> {
+  removeFeatureState(featureId: number | string, key?: string): Promise<boolean> {
     return removeState(sourceKeyOf(this), undefined, featureId, key);
   }
 
@@ -176,7 +176,7 @@ export class VectorSourceHandle extends SourceHandle {
    * the source layer `sourceLayer`: its values replace those with the same
    * names, and the others stay.
    */
-  setFeatureState(sourceLayer: string, featureId: string, state: Record<string, Object>): Promise<boolean> {
+  setFeatureState(sourceLayer: string, featureId: number | string, state: Record<string, Object>): Promise<boolean> {
     return setState(sourceKeyOf(this), checkSourceLayer(sourceLayer), featureId, state);
   }
 
@@ -184,7 +184,7 @@ export class VectorSourceHandle extends SourceHandle {
    * The state of the feature with the ID `featureId` in the source layer
    * `sourceLayer`, which is empty when it has none.
    */
-  getFeatureState(sourceLayer: string, featureId: string): Promise<Record<string, Object> | undefined> {
+  getFeatureState(sourceLayer: string, featureId: number | string): Promise<Record<string, Object> | undefined> {
     return getState(sourceKeyOf(this), checkSourceLayer(sourceLayer), featureId);
   }
 
@@ -193,7 +193,7 @@ export class VectorSourceHandle extends SourceHandle {
    * `featureId` in the source layer `sourceLayer`, or its whole state without
    * `key`.
    */
-  removeFeatureState(sourceLayer: string, featureId: string, key?: string): Promise<boolean> {
+  removeFeatureState(sourceLayer: string, featureId: number | string, key?: string): Promise<boolean> {
     return removeState(sourceKeyOf(this), checkSourceLayer(sourceLayer), featureId, key);
   }
 

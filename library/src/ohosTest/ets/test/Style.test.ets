@@ -554,8 +554,9 @@ export default function styleTest(): void {
       testMap.content = selectableDots();
       const source = await geoJsonNamed('places');
       const one: Record<string, Object> = { 'selected': true, 'size': 2 };
-      // The map compares IDs as text: feature 1's ID is the number 1.
-      expect(await source.setFeatureState('1', one)).assertTrue();
+      expect(await source.setFeatureState(1, one)).assertTrue();
+      expect(state(await source.getFeatureState(1))).assertEqual('{"selected":true,"size":2}');
+      // The map compares IDs as text, so the string names the same feature.
       expect(state(await source.getFeatureState('1'))).assertEqual('{"selected":true,"size":2}');
       const hit = await eventually('the query finds the state', async () => {
         const hits = await queryAt(pixelFor({ latitude: 10, longitude: 20 }), ['dots']);
@@ -565,22 +566,22 @@ export default function styleTest(): void {
 
       // Merges, and removes one key.
       const size: Record<string, Object> = { 'size': 3 };
-      expect(await source.setFeatureState('1', size)).assertTrue();
-      expect(state(await source.getFeatureState('1'))).assertEqual('{"selected":true,"size":3}');
-      expect(await source.removeFeatureState('1', 'size')).assertTrue();
-      expect(state(await source.getFeatureState('1'))).assertEqual('{"selected":true}');
-      expect(await source.removeFeatureState('1')).assertTrue();
-      expect(state(await source.getFeatureState('1'))).assertEqual('{}');
+      expect(await source.setFeatureState(1, size)).assertTrue();
+      expect(state(await source.getFeatureState(1))).assertEqual('{"selected":true,"size":3}');
+      expect(await source.removeFeatureState(1, 'size')).assertTrue();
+      expect(state(await source.getFeatureState(1))).assertEqual('{"selected":true}');
+      expect(await source.removeFeatureState(1)).assertTrue();
+      expect(state(await source.getFeatureState(1))).assertEqual('{}');
 
-      expect(await source.setFeatureState('1', one)).assertTrue();
-      expect(await source.setFeatureState('2', one)).assertTrue();
+      expect(await source.setFeatureState(1, one)).assertTrue();
+      expect(await source.setFeatureState(2, one)).assertTrue();
       expect(await source.resetFeatureStates()).assertTrue();
-      expect(state(await source.getFeatureState('1'))).assertEqual('{}');
-      expect(state(await source.getFeatureState('2'))).assertEqual('{}');
+      expect(state(await source.getFeatureState(1))).assertEqual('{}');
+      expect(state(await source.getFeatureState(2))).assertEqual('{}');
 
       const cyclic: Record<string, Object> = {};
       cyclic['self'] = cyclic;
-      expectThrow('JSON', () => source.setFeatureState('1', cyclic));
+      expectThrow('JSON', () => source.setFeatureState(1, cyclic));
     });
 
     it('draws a feature state change on an idle map', 0, async () => {
@@ -590,11 +591,11 @@ export default function styleTest(): void {
       const two: LatLng = { latitude: -20, longitude: -40 };
       await untilRed(two, false);
       const selected: Record<string, Object> = { 'selected': true };
-      expect(await source.setFeatureState('1', selected)).assertTrue();
+      expect(await source.setFeatureState(1, selected)).assertTrue();
       await untilRed(one, true);
 
       // A selection that moves: the map applies both in one frame.
-      await Promise.all([source.removeFeatureState('1'), source.setFeatureState('2', selected)]);
+      await Promise.all([source.removeFeatureState(1), source.setFeatureState(2, selected)]);
       await untilRed(two, true);
       await untilRed(one, false);
     });
@@ -603,17 +604,17 @@ export default function styleTest(): void {
       testMap.content = selectableDots();
       const source = await geoJsonNamed('places');
       const selected: Record<string, Object> = { 'selected': true };
-      expect(await source.setFeatureState('1', selected)).assertTrue();
+      expect(await source.setFeatureState(1, selected)).assertTrue();
 
       await setStyle(backgroundStyle('#4ad94a'));
-      expect(await source.setFeatureState('1', selected)).assertFalse();
-      expect(await source.removeFeatureState('1')).assertFalse();
+      expect(await source.setFeatureState(1, selected)).assertFalse();
+      expect(await source.removeFeatureState(1)).assertFalse();
       expect(await source.resetFeatureStates()).assertFalse();
-      expect(await source.getFeatureState('1')).assertUndefined();
+      expect(await source.getFeatureState(1)).assertUndefined();
       const again = await geoJsonNamed('places');
-      expect(state(await again.getFeatureState('1'))).assertEqual('{"selected":true}');
+      expect(state(await again.getFeatureState(1))).assertEqual('{"selected":true}');
       expect(await again.resetFeatureStates()).assertTrue();
-      expect(state(await again.getFeatureState('1'))).assertEqual('{}');
+      expect(state(await again.getFeatureState(1))).assertEqual('{}');
     });
 
     it('reads a cluster\'s expansion zoom, children, and leaves', 0, async () => {

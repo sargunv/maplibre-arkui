@@ -11,18 +11,19 @@ const MAX_UINT32 = 4294967295;
 
 // `sourceLayer` is undefined for a source without layers, and `featureId` for
 // every feature of the source layer.
-function selector(key: SourceKey, sourceLayer: string | undefined, featureId: string | undefined,
+// The map compares feature IDs as text.
+function selector(key: SourceKey, sourceLayer: string | undefined, featureId: number | string | undefined,
   stateKey?: string): FeatureStateSelector {
   return {
     sourceId: key.id,
     sourceLayerId: sourceLayer,
-    featureId: featureId === undefined ? undefined : { kind: 'stringValue', value: featureId },
+    featureId: featureId === undefined ? undefined : { kind: 'stringValue', value: `${featureId}` },
     stateKey: stateKey,
   };
 }
 
 // Feature state works on the content's sources too.
-export function setState(key: SourceKey, sourceLayer: string | undefined, featureId: string,
+export function setState(key: SourceKey, sourceLayer: string | undefined, featureId: number | string,
   state: Record<string, Object>): Promise<boolean> {
   try {
     JSON.stringify(state);
@@ -34,7 +35,7 @@ export function setState(key: SourceKey, sourceLayer: string | undefined, featur
 }
 
 export function getState(key: SourceKey, sourceLayer: string | undefined,
-  featureId: string): Promise<Record<string, Object> | undefined> {
+  featureId: number | string): Promise<Record<string, Object> | undefined> {
   if (!key.holds()) {
     return Promise.resolve(undefined);
   }
@@ -45,7 +46,7 @@ export function getState(key: SourceKey, sourceLayer: string | undefined,
 
 // Without `featureId`, the state of every feature in the source layer.
 export function removeState(key: SourceKey, sourceLayer: string | undefined,
-  featureId: string | undefined, stateKey: string | undefined): Promise<boolean> {
+  featureId: number | string | undefined, stateKey: string | undefined): Promise<boolean> {
   const what = featureId === undefined ? 'resetting the feature states' :
     `removing the state of feature ${featureId}`;
   return key.change(`${what} of source ${key.id}`,

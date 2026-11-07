@@ -61,8 +61,8 @@ values into a feature's state, and its
 <Api of="GeoJsonSourceHandle.removeFeatureState" display="removeFeatureState()" /> removes
 them; a <Api of="VectorSourceHandle" />, from
 <Api of="MapStyle.getVectorSource" display="getVectorSource()" />, does the same
-in one of its source layers. A feature state method takes the feature's ID as
-text, and the change draws on the next frame. The map applies the changes in
+in one of its source layers. A feature state method takes the feature's `id`,
+and the change draws on the next frame. The map applies the changes in
 the order that the app sends them, so take the handle in `onStyleLoaded`, and
 send a click's changes without awaiting between them:
 

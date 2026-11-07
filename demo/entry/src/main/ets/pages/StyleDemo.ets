@@ -170,7 +170,7 @@ export struct StyleDemo {
   // The content's source in the current style, and the ID of the feature
   // that a tap selected in it.
   private places: GeoJsonSourceHandle | undefined = undefined;
-  private selected: string | undefined = undefined;
+  private selected: number | string | undefined = undefined;
   private gone: boolean = false;
   // The layers are on top of each other, so the topmost feature under a click
   // takes it, and the layers under it don't get it.
@@ -341,7 +341,7 @@ export struct StyleDemo {
         return;
       }
       const previous = this.selected;
-      const next = feature?.id === undefined ? undefined : `${feature.id}`;
+      const next = feature?.id;
       this.selected = next;
       const changes: Promise<boolean>[] = [];
       if (previous !== undefined) {
