@@ -117,6 +117,8 @@ export class MapView extends XComponentController implements GestureTarget {
   private readonly environmentCallback: EnvironmentCallback = {
     onConfigurationUpdated: (config: Configuration): void => {
       this.reconciler?.setFontScale(fontScaleOf(this.context));
+      // fp insets follow the font scale.
+      this.applyViewportInsets((error: Error) => this.fail(error));
     },
     onMemoryLevel: (): void => {
     },

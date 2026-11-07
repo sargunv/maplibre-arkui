@@ -182,7 +182,8 @@ export function checkCoordinates(coordinates: LatLng[]): void {
 // Throws unless `geometry` has a position, each with a finite longitude and a
 // latitude from -90 to 90.
 export function checkGeometry(geometry: GeoJsonGeometry): void {
-  const positions = positionsOf(geometry);
+  const positions: GeoJsonPosition[] = [];
+  collectPositions(geometry, positions);
   if (positions.length === 0) {
     throw new Error(`The geometry to fit must have a position: ${JSON.stringify(geometry)}`);
   }
@@ -194,27 +195,39 @@ export function checkGeometry(geometry: GeoJsonGeometry): void {
   }
 }
 
-function flatten(rings: GeoJsonPosition[][]): GeoJsonPosition[] {
-  return rings.reduce((all: GeoJsonPosition[], ring: GeoJsonPosition[]) => all.concat(ring), []);
+function append(positions: GeoJsonPosition[], into: GeoJsonPosition[]): void {
+  for (const position of positions) {
+    into.push(position);
+  }
 }
 
-function positionsOf(geometry: GeoJsonGeometry): GeoJsonPosition[] {
+// Appends the positions of `geometry` to `into`, so a geometry of many parts
+// takes time in proportion to its positions.
+function collectPositions(geometry: GeoJsonGeometry, into: GeoJsonPosition[]): void {
   switch (geometry.type) {
     case 'Point':
-      return [(geometry as GeoJsonPoint).coordinates];
+      into.push((geometry as GeoJsonPoint).coordinates);
+      return;
     case 'MultiPoint':
-      return (geometry as GeoJsonMultiPoint).coordinates;
+      append((geometry as GeoJsonMultiPoint).coordinates, into);
+      return;
     case 'LineString':
-      return (geometry as GeoJsonLineString).coordinates;
+      append((geometry as GeoJsonLineString).coordinates, into);
+      return;
     case 'MultiLineString':
-      return flatten((geometry as GeoJsonMultiLineString).coordinates);
+      (geometry as GeoJsonMultiLineString).coordinates.forEach((line: GeoJsonPosition[]) => append(line, into));
+      return;
     case 'Polygon':
-      return flatten((geometry as GeoJsonPolygon).coordinates);
+      (geometry as GeoJsonPolygon).coordinates.forEach((ring: GeoJsonPosition[]) => append(ring, into));
+      return;
     case 'MultiPolygon':
-      return flatten((geometry as GeoJsonMultiPolygon).coordinates.map(flatten));
+      (geometry as GeoJsonMultiPolygon).coordinates.forEach((polygon: GeoJsonPosition[][]) =>
+        polygon.forEach((ring: GeoJsonPosition[]) => append(ring, into)));
+      return;
     case 'GeometryCollection':
-      return (geometry as GeoJsonGeometryCollection).geometries.reduce(
-        (all: GeoJsonPosition[], part: GeoJsonGeometry) => all.concat(positionsOf(part)), []);
+      (geometry as GeoJsonGeometryCollection).geometries.forEach((part: GeoJsonGeometry) =>
+        collectPositions(part, into));
+      return;
     default:
       throw new Error(`Unknown geometry type: ${JSON.stringify(geometry)}`);
   }
