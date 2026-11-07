@@ -268,6 +268,7 @@ export default function styleTest(): void {
 
       const layers = await mapStyle().getLayers();
       expect(ids(layers)).assertEqual('background,dots,labels');
+      expect(layers?.map((layer: LayerHandle) => layer.fromContent).join(',')).assertEqual('false,true,false');
       expect(layers?.[1].type).assertEqual('circle');
       expect(layers?.[1].source).assertEqual('places');
       expect(layers?.[1].sourceLayer).assertUndefined();
@@ -277,6 +278,8 @@ export default function styleTest(): void {
       expect(ids(sources).split(',').sort().join(',')).assertEqual('base,places');
       expect(sources?.[0].type).assertEqual('geojson');
       expect(sources?.every((source: SourceHandle) => source instanceof GeoJsonSourceHandle)).assertTrue();
+      expect(sources?.find((source: SourceHandle) => source.id === 'places')?.fromContent).assertTrue();
+      expect(sources?.find((source: SourceHandle) => source.id === 'base')?.fromContent).assertFalse();
     });
 
     it('sets a base layer\'s property, and restores its default with null', 0, async () => {

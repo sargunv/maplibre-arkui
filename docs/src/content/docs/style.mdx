@@ -74,7 +74,9 @@ style spec writes it.
 ## Who owns an ID
 
 The content owns the IDs of its sources, layers, and images. The style API
-reads them, but its writes throw for them: change the content instead. When the
+reads them, but its writes throw for them: change the content instead. A
+handle's `fromContent` says whether its layer or source is the content's, so a
+loop over `getLayers()` can skip them. When the
 content declares the ID of a source that the app added, the content's source
 replaces it. The library reserves the IDs that start with `maplibre-arkui`,
 such as the user location indicator's, and the global state names that start

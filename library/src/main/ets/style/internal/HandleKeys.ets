@@ -34,6 +34,7 @@ export class SourceKey {
   readonly id: string;
   readonly type: string;
   readonly attribution: string;
+  readonly fromContent: boolean;
   readonly style: LoadedStyle;
   private readonly current: () => LoadedStyle | undefined;
   private readonly version: number;
@@ -42,6 +43,7 @@ export class SourceKey {
     this.id = info.id;
     this.type = SOURCE_TYPES.get(info.type) ?? 'unknown';
     this.attribution = info.attribution;
+    this.fromContent = style.reconciler.ownsSource(info.id);
     this.style = style;
     this.current = current;
     this.version = style.reconciler.sourceVersion(info.id);
@@ -77,12 +79,14 @@ export function sourceKeyOf(handle: Object): SourceKey {
 // the one it was made for.
 export class LayerKey {
   readonly summary: LayerSummary;
+  readonly fromContent: boolean;
   readonly style: LoadedStyle;
   private readonly current: () => LoadedStyle | undefined;
   private readonly version: number;
 
   constructor(current: () => LoadedStyle | undefined, style: LoadedStyle, info: StyleLayerInfo) {
     this.summary = summaryOf(info);
+    this.fromContent = style.reconciler.ownsLayer(info.id);
     this.style = style;
     this.current = current;
     this.version = style.reconciler.layerVersion(info.id);

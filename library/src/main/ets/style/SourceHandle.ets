@@ -33,12 +33,18 @@ export class SourceHandle {
    * for none. A source whose TileJSON loads later can gain one.
    */
   readonly attribution: string;
+  /**
+   * Whether the source is one of the map's content, when the map made the
+   * handle. The handle's writes throw for a source of the content.
+   */
+  readonly fromContent: boolean;
 
   /** @internal The map creates handles. */
   constructor(key: SourceKey) {
     this.id = key.id;
     this.type = key.type;
     this.attribution = key.attribution;
+    this.fromContent = key.fromContent;
     registerSourceKey(this, key);
   }
 

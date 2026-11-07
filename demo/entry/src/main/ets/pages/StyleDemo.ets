@@ -276,13 +276,13 @@ export struct StyleDemo {
     .title('Style')
   }
 
-  // Shows or hides each of the style's 3D building layers, as the page's state
-  // says.
+  // Shows or hides each of the base style's 3D building layers, as the page's
+  // state says. The content's layers take their properties from the content.
   private async showBuildings(): Promise<void> {
     try {
       const layers: LayerHandle[] = await this.controller.style.getLayers() ?? [];
       const visibility = this.buildingsShown ? 'visible' : 'none';
-      await Promise.all(layers.filter((layer: LayerHandle) => layer.type === 'fill-extrusion')
+      await Promise.all(layers.filter((layer: LayerHandle) => !layer.fromContent && layer.type === 'fill-extrusion')
         .map((layer: LayerHandle) => layer.setProperty('visibility', visibility)));
     } catch (error) {
       this.message = (error as Error).message;

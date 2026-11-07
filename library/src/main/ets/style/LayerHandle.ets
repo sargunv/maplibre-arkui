@@ -26,6 +26,11 @@ export class LayerHandle implements LayerSummary {
   readonly source?: string;
   /** The layer of a vector source that the layer draws, or undefined for a source without layers. */
   readonly sourceLayer?: string;
+  /**
+   * Whether the layer is one of the map's content, when the map made the
+   * handle. `setProperty()` throws for a layer of the content.
+   */
+  readonly fromContent: boolean;
   private readonly key: LayerKey;
 
   /** @internal The map creates handles. */
@@ -34,6 +39,7 @@ export class LayerHandle implements LayerSummary {
     this.type = key.summary.type;
     this.source = key.summary.source;
     this.sourceLayer = key.summary.sourceLayer;
+    this.fromContent = key.fromContent;
     this.key = key;
   }
 
