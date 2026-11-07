@@ -1,61 +1,44 @@
 import {
   AnimationOptions,
-  Camera as CameraPosition,
   CameraFitOptions,
   CameraOptions,
-  cameraToOptions,
   CameraTransitionEnd,
   CameraTransitionOutcome,
-  CameraUpdate,
-  CameraUpdateMode,
-  EdgeInsets,
-  LatLng,
-  LatLngBounds,
   MapHandle,
   MapProjectionHandle,
   MapView as FrameView,
   RenderSessionHandle,
   RuntimeHandle,
-  ScreenPoint,
 } from '@maplibre/native-ffi';
 import geoLocationManager from '@ohos.geoLocationManager';
 
+import { CameraPosition, CameraTransitionOptions, CameraUpdate, FitCameraOptions } from './CameraPosition';
+import {
+  checkBounds,
+  checkCamera,
+  checkCoordinates,
+  CheckedCamera,
+  CheckedFit,
+  CheckedTransition,
+  checkFit,
+  checkGeometry,
+  checkTransition,
+  toLatLng,
+  toScreenPoint,
+} from './FfiValues';
 import { GeoJsonGeometry } from './GeoJson';
+import { LatLng, LatLngBounds, ScreenPoint } from './Geometry';
 import { FollowBearing, FollowUserLocationOptions, course } from './location';
-import { logError } from './log';
 import { MapView } from './MapView';
 
 /** Options for a new `MapController`. */
 export interface MapControllerOptions {
-  /** Where the camera starts. Fields it leaves out keep the map's defaults. */
-  camera?: CameraOptions;
-}
-
-/**
- * How `fitCameraToLatLngBounds()` and the other fit methods of `MapController`
- * move the camera.
- */
-export interface FitCameraOptions {
-  /** Whether the camera jumps, eases, or flies. Jumps by default. */
-  mode?: CameraUpdateMode;
-  /** How long the camera takes, its curve, and its end handler, unless it jumps. */
-  animation?: AnimationOptions;
-  /** The bearing of the camera, in degrees. Keeps the map's by default. */
-  bearing?: number;
-  /** The pitch of the camera, in degrees. Keeps the map's by default. */
-  pitch?: number;
   /**
-   * Space, in vp, to keep between what the camera fits and the edges of the
-   * part of the map that the viewport insets and the camera padding leave.
-   * The camera keeps it only for the fit; it doesn't stay in the camera's
-   * padding.
+   * Where the camera starts. Fields it leaves out keep the map's defaults. The
+   * constructor throws an `Error` for a camera that `updateCamera()` would
+   * throw for.
    */
-  fitPadding?: EdgeInsets;
-  /**
-   * The padding of the camera after the fit, which stays as `updateCamera()`
-   * sets it. Keeps the camera's padding by default.
-   */
-  cameraPadding?: EdgeInsets;
+  camera?: CameraUpdate;
 }
 
 /**
@@ -70,8 +53,9 @@ export interface FitCameraOptions {
  * are observable, so a component that reads them updates when they change.
  * The map and the follow methods set them; apps only read them. `frameCamera` and the projection methods, such as
  * `pixelForLatLng()`, are observable too, and change with every frame the
- * camera moves. The camera methods need a map on screen whose FFI map is ready,
- * and reject without one.
+ * camera moves. The camera methods check their arguments first, and throw an
+ * `Error` for an invalid one; then they need a map on screen whose FFI map is
+ * ready, and reject without one.
  *
  * The camera's `padding` is the app's: the space, in vp, around the part of
  * the map that the camera centers in. It's what `updateCamera()` or a fit last
@@ -113,17 +97,17 @@ export class MapController {
   // The projection of `frame`, made when first read.
   private projection: MapProjectionHandle | undefined = undefined;
   private view: MapView | undefined = undefined;
-  private readonly startCamera: CameraOptions | undefined;
+  private readonly startCamera: CheckedCamera | undefined;
   private followOptions: FollowUserLocationOptions = {};
   // The zoom that the next move to follow the location takes.
   private followZoom: number | undefined = undefined;
-  // How many times the app has moved the camera, and how the last move ends
-  // the one before, so a fit that's still finding its camera gives way.
+  // How many times the app has moved the camera, so a fit that's still
+  // finding its camera gives way.
   private moves: number = 0;
-  private lastMove: CameraTransitionOutcome = CameraTransitionOutcome.replaced;
 
   constructor(options?: MapControllerOptions) {
-    this.startCamera = options?.camera;
+    const camera = options?.camera;
+    this.startCamera = camera === undefined ? undefined : checkCamera(camera);
   }
 
   /**
@@ -181,26 +165,26 @@ export class MapController {
    */
   get frameCamera(): CameraPosition | undefined {
     const camera = this.frame?.camera;
-    return camera === undefined || this.view === undefined ? camera : this.view.appCamera(camera);
+    return camera === undefined || this.view === undefined ? undefined : this.view.appCamera(camera);
   }
 
   /**
-   * Where `coordinate` is in the frame on screen, in vp from the map's top-left
-   * corner, as FFI's `MapProjectionHandle.pixelForLatLng()` finds it. The point
-   * can be outside the map. Undefined until the map shows a frame. Observable,
-   * as `frameCamera` is, so content placed with it follows the map.
+   * Where `coordinate` is in the frame on screen. The point can be outside the
+   * map. Undefined until the map shows a frame. Observable, as `frameCamera`
+   * is, so content placed with it follows the map.
    */
   pixelForLatLng(coordinate: LatLng): ScreenPoint | undefined {
-    return this.frameProjection()?.pixelForLatLng(coordinate);
+    const point = this.frameProjection()?.pixelForLatLng(coordinate);
+    return point === undefined ? undefined : toScreenPoint(point);
   }
 
   /**
-   * The coordinate at `point`, in vp from the map's top-left corner, in the
-   * frame on screen. Undefined until the map shows a frame. Observable, as
-   * `frameCamera` is.
+   * The coordinate at `point` in the frame on screen. Undefined until the map
+   * shows a frame. Observable, as `frameCamera` is.
    */
   latLngForPixel(point: ScreenPoint): LatLng | undefined {
-    return this.frameProjection()?.latLngForPixel(point);
+    const coordinate = this.frameProjection()?.latLngForPixel(point);
+    return coordinate === undefined ? undefined : toLatLng(coordinate);
   }
 
   /**
@@ -213,68 +197,80 @@ export class MapController {
   }
 
   /**
-   * Moves the camera, at once or with an animation, as FFI's
-   * `MapHandle.updateCamera()` does. A `padding` replaces the camera's
-   * padding, inside the map's `viewportInsets`; without one, the camera keeps
-   * its padding. A `center` goes to the middle of what they leave.
+   * Moves the camera, at once or with an animation, as `options` says. A
+   * `padding` replaces the camera's padding, inside the map's
+   * `viewportInsets`; without one, the camera keeps its padding. A `center`
+   * goes to the middle of what they leave.
    *
-   * Resolves once the camera stops: with `CameraTransitionOutcome.completed`
-   * when it got there, `cancelled` or `replaced` when
-   * `cancelCameraTransitions()`, a gesture, or a later camera change stopped
-   * it first, or `closed` when the map left the screen first. It rejects when
-   * the map rejects the change.
+   * ```ets
+   * controller.updateCamera({ zoom: 12 }, { mode: CameraTransitionMode.EASE });
+   * ```
+   *
+   * It throws an `Error` for a field that isn't finite, a `center` latitude
+   * outside -90 to 90, a padding side below 0 or in percent, or a `durationMs`
+   * below 0. Otherwise it resolves `true` once the camera gets there, or
+   * `false` when `cancelCameraTransitions()`, the user's input, a later camera
+   * change, or the map leaving the screen stopped it first. It rejects without
+   * a map on screen.
    */
-  updateCamera(update: CameraUpdate): Promise<CameraTransitionOutcome> {
-    return this.transition(update.animation, (map: MapHandle, animation: AnimationOptions) => this.view!.updateCamera(map, {
-      mode: update.mode,
-      camera: update.camera,
-      gesturePhase: update.gesturePhase,
-      animation: animation,
-    }));
+  updateCamera(update: CameraUpdate, options?: CameraTransitionOptions): Promise<boolean> {
+    const camera = checkCamera(update);
+    const transition = checkTransition(options);
+    return this.transition(transition, (map: MapHandle, animation: AnimationOptions) => {
+      const view = this.view!;
+      view.moveCamera(map, view.resolveCamera(camera), transition, animation);
+    });
   }
 
   /**
    * Moves the camera so `bounds` fits in the part of the map that the
-   * `viewportInsets`, the camera's padding, and `options.fitPadding` leave, as
-   * FFI's `MapHandle.cameraForLatLngBounds()` finds it. Resolves as
-   * `updateCamera()` does, and rejects when the padding leaves no room.
+   * `viewportInsets`, the camera's padding, and `options.fitPadding` leave.
    *
    * ```ets
-   * controller.fitCameraToLatLngBounds(bounds, {
-   *   mode: CameraUpdateMode.ease,
+   * controller.fitCameraToBounds(bounds, {
+   *   mode: CameraTransitionMode.EASE,
    *   fitPadding: { top: 24, left: 24, bottom: 24, right: 24 },
    * });
    * ```
+   *
+   * It throws an `Error` for bounds with a value that isn't finite, a latitude
+   * outside -90 to 90, or a southwest corner north or east of the northeast,
+   * and for `options` that `updateCamera()` would throw for, or with a bearing
+   * or pitch that isn't finite. Otherwise it resolves as `updateCamera()`
+   * does, and also rejects when the padding leaves no room.
    */
-  fitCameraToLatLngBounds(bounds: LatLngBounds, options?: FitCameraOptions): Promise<CameraTransitionOutcome> {
-    return this.fit(options ?? {},
+  fitCameraToBounds(bounds: LatLngBounds, options?: FitCameraOptions): Promise<boolean> {
+    checkBounds(bounds);
+    return this.fit(checkFit(options),
       (map: MapHandle, fit: CameraFitOptions) => map.cameraForLatLngBounds(bounds, fit));
   }
 
   /**
-   * Moves the camera so `coordinates` fit, as `fitCameraToLatLngBounds()`
-   * does, by FFI's `MapHandle.cameraForLatLngs()`. `coordinates` must not be
-   * empty.
+   * Moves the camera so `coordinates` fit, as `fitCameraToBounds()` does. It
+   * throws an `Error` for an empty array, or a coordinate that `updateCamera()`
+   * would throw for as a `center`.
    */
-  fitCameraToLatLngs(coordinates: LatLng[], options?: FitCameraOptions): Promise<CameraTransitionOutcome> {
-    return this.fit(options ?? {},
+  fitCameraToCoordinates(coordinates: LatLng[], options?: FitCameraOptions): Promise<boolean> {
+    checkCoordinates(coordinates);
+    return this.fit(checkFit(options),
       (map: MapHandle, fit: CameraFitOptions) => map.cameraForLatLngs(coordinates, fit));
   }
 
   /**
-   * Moves the camera so `geometry` fits, as `fitCameraToLatLngBounds()` does,
-   * by FFI's `MapHandle.cameraForGeometry()`. `geometry` is a GeoJSON geometry
-   * with at least one position, not a feature.
+   * Moves the camera so `geometry` fits, as `fitCameraToBounds()` does. It
+   * throws an `Error` for a geometry with no position, or with a position
+   * whose longitude isn't finite or whose latitude is outside -90 to 90.
    */
-  fitCameraToGeometry(geometry: GeoJsonGeometry, options?: FitCameraOptions): Promise<CameraTransitionOutcome> {
-    return this.fit(options ?? {},
+  fitCameraToGeometry(geometry: GeoJsonGeometry, options?: FitCameraOptions): Promise<boolean> {
+    checkGeometry(geometry);
+    return this.fit(checkFit(options),
       (map: MapHandle, fit: CameraFitOptions) => map.cameraForGeometry(geometry, fit));
   }
 
   /** Stops every camera animation where it is, and a gesture's momentum. */
   async cancelCameraTransitions(): Promise<void> {
     const map = this.requireMap();
-    this.takeOverCamera(CameraTransitionOutcome.cancelled);
+    this.takeOverCamera();
     await map.cancelCameraTransitions();
   }
 
@@ -312,7 +308,7 @@ export class MapController {
     this.followOptions = options ?? {};
     this.followZoom = options?.zoom;
     this.followingUserLocation = true;
-    this.takeOverCamera(CameraTransitionOutcome.replaced);
+    this.takeOverCamera();
     this.view?.followUserLocation();
   }
 
@@ -347,9 +343,9 @@ export class MapController {
    * Internal: the MapLibreMap that shows this controller calls it. Returns
    * where its map's camera starts.
    */
-  attach(view: MapView): CameraOptions | undefined {
+  attach(view: MapView): CheckedCamera | undefined {
     this.view = view;
-    return this.camera !== undefined ? cameraToOptions(this.camera) : this.startCamera;
+    return this.camera !== undefined ? checkCamera(this.camera) : this.startCamera;
   }
 
   /**
@@ -390,59 +386,40 @@ export class MapController {
 
   // The app's camera change takes over from a gesture's momentum, and from a
   // fit that's still finding its camera.
-  private takeOverCamera(outcome: CameraTransitionOutcome): void {
+  private takeOverCamera(): void {
     this.view?.takeOverCamera();
     this.moves++;
-    this.lastMove = outcome;
   }
 
   // Finds the camera for a fit, then moves it there, unless the map leaves, or
   // the app or the user moves the camera first.
-  private async fit(options: FitCameraOptions,
-    query: (map: MapHandle, fit: CameraFitOptions) => Promise<CameraOptions>): Promise<CameraTransitionOutcome> {
+  private async fit(options: CheckedFit,
+    query: (map: MapHandle, fit: CameraFitOptions) => Promise<CameraOptions>): Promise<boolean> {
     this.requireMap();
     const view = this.view!;
-    this.takeOverCamera(CameraTransitionOutcome.replaced);
+    this.takeOverCamera();
     const moves = this.moves;
     const gestures = view.gestureStarts;
     const camera = await view.fitCamera(options, query);
-    if (camera === undefined || this.view !== view) {
-      return endEarly(options, CameraTransitionOutcome.closed);
+    if (camera === undefined || this.view !== view || this.moves !== moves || view.gestureStarts !== gestures) {
+      return false;
     }
-    if (this.moves !== moves) {
-      return endEarly(options, this.lastMove);
-    }
-    if (view.gestureStarts !== gestures) {
-      return endEarly(options, CameraTransitionOutcome.cancelled);
-    }
-    return this.transition(options.animation, (map: MapHandle, animation: AnimationOptions) => view.updateCamera(map, {
-      mode: options.mode,
-      camera: camera,
-      animation: animation,
-    }));
+    return this.transition(options.transition, (map: MapHandle, animation: AnimationOptions) =>
+      view.moveCamera(map, camera, options.transition, animation));
   }
 
   // Starts a camera change whose animation ends with FFI's end handler, and
-  // resolves with how it ended. A jump runs the handler as soon as the camera
-  // moves.
-  private async transition(options: AnimationOptions | undefined,
-    start: (map: MapHandle, animation: AnimationOptions) => void): Promise<CameraTransitionOutcome> {
+  // resolves whether it completed. A jump runs the handler as soon as the
+  // camera moves.
+  private async transition(transition: CheckedTransition,
+    start: (map: MapHandle, animation: AnimationOptions) => void): Promise<boolean> {
     const map = this.requireMap();
-    this.takeOverCamera(CameraTransitionOutcome.replaced);
-    return new Promise<CameraTransitionOutcome>((resolve, reject) => {
-      const appHandler = options?.endHandler?.callback;
+    this.takeOverCamera();
+    return new Promise<boolean>((resolve, reject) => {
       const animation: AnimationOptions = {
-        durationMs: options?.durationMs,
-        velocity: options?.velocity,
-        minZoom: options?.minZoom,
-        easing: options?.easing,
-        transitionId: options?.transitionId,
+        durationMs: transition.durationMs,
         endHandler: {
-          // Settle first, so a throwing app handler can't leave it pending.
-          callback: (end: CameraTransitionEnd) => {
-            resolve(end.outcome);
-            appHandler?.(end);
-          },
+          callback: (end: CameraTransitionEnd) => resolve(end.outcome === CameraTransitionOutcome.completed),
         },
       };
       try {
@@ -460,19 +437,4 @@ export class MapController {
     }
     return map;
   }
-}
-
-// Ends a fit that never moved the camera as FFI ends a camera change: through
-// the app's end handler, then the promise.
-function endEarly(options: FitCameraOptions, outcome: CameraTransitionOutcome): CameraTransitionOutcome {
-  try {
-    options.animation?.endHandler?.callback?.({
-      outcome: outcome,
-      generation: BigInt(0),
-      velocity: { pan: { x: 0, y: 0 }, zoom: 0, bearing: 0, pitch: 0 },
-    });
-  } catch (error) {
-    logError(`A camera transition's end handler threw: ${(error as Error).message}`);
-  }
-  return outcome;
 }

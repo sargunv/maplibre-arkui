@@ -3,7 +3,6 @@
 
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
 import {
-  CameraUpdateMode,
   GeoJsonFeatureCollection,
   MapClickEvent,
   MapContent,
@@ -94,7 +93,7 @@ export default function clicksTest(): void {
     beforeEach(async () => {
       consuming = new Set<string>();
       await testMap.reset(STYLE);
-      await testMap.controller.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: ZOOM } });
+      await testMap.controller.updateCamera({ zoom: ZOOM });
     });
 
     it('gives a click to the map, then its layers from the top down, until one consumes it', 0, async () => {

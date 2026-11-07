@@ -2,7 +2,29 @@
 
 export { MapLibreMap } from './src/main/ets/MapLibreMap';
 export { MapController } from './src/main/ets/MapController';
-export type { FitCameraOptions, MapControllerOptions } from './src/main/ets/MapController';
+export type { MapControllerOptions } from './src/main/ets/MapController';
+export { CameraTransitionMode } from './src/main/ets/CameraPosition';
+export type {
+  CameraPosition,
+  CameraTransitionOptions,
+  CameraUpdate,
+  FitCameraOptions,
+} from './src/main/ets/CameraPosition';
+export type { LatLng, LatLngBounds, ScreenPoint } from './src/main/ets/Geometry';
+export type {
+  GeoJsonFeature,
+  GeoJsonFeatureCollection,
+  GeoJsonGeometry,
+  GeoJsonGeometryCollection,
+  GeoJsonLineString,
+  GeoJsonMultiLineString,
+  GeoJsonMultiPoint,
+  GeoJsonMultiPolygon,
+  GeoJsonObject,
+  GeoJsonPoint,
+  GeoJsonPolygon,
+  GeoJsonPosition,
+} from './src/main/ets/GeoJson';
 export { WheelAction } from './src/main/ets/gestures';
 export type { MapInteractionOptions, MovementOptions, RotationOptions } from './src/main/ets/gestures';
 export { FollowBearing } from './src/main/ets/location';
@@ -24,28 +46,8 @@ export type { SnapshotOptions } from './src/main/ets/Snapshot';
 
 // The FFI types that the API takes and returns, so apps needn't depend on FFI
 // themselves for them.
-export {
-  cameraToOptions,
-  CameraTransitionOutcome,
-  CameraUpdateMode,
-  GesturePhase,
-  MapHandle,
-  RenderSessionHandle,
-  RuntimeHandle,
-} from '@maplibre/native-ffi';
-export type {
-  AnimationOptions,
-  BoundOptions,
-  Camera as CameraPosition,
-  CameraOptions,
-  CameraTransitionEnd,
-  CameraVelocity,
-  CameraUpdate,
-  EdgeInsets,
-  LatLng,
-  LatLngBounds,
-  UnitBezier,
-} from '@maplibre/native-ffi';
+export { MapHandle, RenderSessionHandle, RuntimeHandle } from '@maplibre/native-ffi';
+export type { BoundOptions } from '@maplibre/native-ffi';
 
 export * from './src/main/ets/Expressions';
 
@@ -169,7 +171,6 @@ export type {
   RenderedFeatureQueryOptions,
   RenderedQueryGeometry,
   ScreenBox,
-  ScreenPoint,
   SourceFeature,
   SourceFeatureQueryOptions,
   StyleExpressionInfo,
@@ -184,7 +185,6 @@ export type {
   StyleTransitionOptions,
   Vec3,
 } from '@maplibre/native-ffi';
-export type { GeoJsonFeature, GeoJsonFeatureCollection, GeoJsonGeometry, GeoJsonPosition } from './src/main/ets/GeoJson';
 export { readPixelMap } from './src/main/ets/StyleImage';
 
 export { MapAttributionOnlyOverlay, MapDefaultOverlay, MapFullOverlay } from './src/main/ets/Overlay';

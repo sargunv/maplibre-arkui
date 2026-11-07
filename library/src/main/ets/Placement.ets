@@ -4,9 +4,8 @@
 // its parent, and finds where the map's points are in its own frame from
 // where it and the map are on the page, so it works anywhere in the overlay.
 
-import { LatLng, ScreenPoint } from '@maplibre/native-ffi';
-import i18n from '@ohos.i18n';
-
+import { LatLng, ScreenPoint } from './Geometry';
+import { isRtl } from './Insets';
 import { controlKey, findScope, MapScope } from './scope';
 
 // What a trailing closure that the app leaves out builds.
@@ -17,7 +16,7 @@ export function noContent() {
 // The point of content that `alignment` names, as percentages of its size
 // from its top-left corner, with start and end in the app's direction.
 function anchorOf(alignment: Alignment): Position {
-  const rtl = i18n.isRTL(i18n.System.getAppPreferredLanguage());
+  const rtl = isRtl();
   const start = rtl ? '100%' : '0%';
   const end = rtl ? '0%' : '100%';
   switch (alignment) {
@@ -273,7 +272,7 @@ const PIN_ROUND_SIZE = PIN_SIZE * 48 / 76;
  * ```ets
  * MapPointerPinButton({
  *   coordinate: PARIS,
- *   onTap: () => this.map.updateCamera({ mode: CameraUpdateMode.ease, camera: { center: PARIS } }),
+ *   onTap: () => this.map.updateCamera({ center: PARIS }, { mode: CameraTransitionMode.EASE }),
  * }) {
  *   Image($r('sys.media.ohos_ic_public_location')).width(24).height(24)
  * }

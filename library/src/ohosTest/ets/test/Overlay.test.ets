@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
-import { CameraUpdateMode, LatLng, ScaleBarUnits, ScreenPoint } from '@maplibre/arkui';
+import { LatLng, ScaleBarUnits, ScreenPoint } from '@maplibre/arkui';
 import { Component, Driver, MatchPattern, ON, On, Point, Rect as Bounds } from '@ohos.UiTest';
 import { BusinessError } from '@ohos.base';
 
@@ -26,10 +26,7 @@ const EQUATOR_METERS_PER_PIXEL = 40075016.686 / 512;
 const map = testMap.controller;
 
 async function jumpTo(latitude: number, zoom: number, bearing: number = 0): Promise<void> {
-  await map.updateCamera({
-    mode: CameraUpdateMode.jump,
-    camera: { center: { latitude: latitude, longitude: 10 }, zoom: zoom, bearing: bearing, pitch: 0 },
-  });
+  await map.updateCamera({ center: { latitude: latitude, longitude: 10 }, zoom: zoom, bearing: bearing, pitch: 0 });
   await until('the frame shows the camera', () => near(map.frameCamera?.zoom ?? 0, zoom, 0.001) &&
     near(map.frameCamera?.bearing ?? 0, bearing, 0.001));
 }
@@ -307,7 +304,7 @@ export default function overlayTest(): void {
       expect(Date.now() - zoomed).assertLarger(500);
 
       // A pan that keeps the zoom leaves it hidden.
-      await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { center: { latitude: 10, longitude: 20 } } });
+      await map.updateCamera({ center: { latitude: 10, longitude: 20 } });
       await frames(30);
       expect(await Driver.create().findComponent(ON.text(' km', MatchPattern.ENDS_WITH))).assertNull();
     });
@@ -399,10 +396,7 @@ export default function overlayTest(): void {
 
     it('places content at a coordinate by its alignment', 0, async () => {
       const coordinate: LatLng = { latitude: 20, longitude: 30 };
-      await map.updateCamera({
-        mode: CameraUpdateMode.jump,
-        camera: { center: { latitude: 15, longitude: 25 }, zoom: 4, bearing: 30, pitch: 20 },
-      });
+      await map.updateCamera({ center: { latitude: 15, longitude: 25 }, zoom: 4, bearing: 30, pitch: 20 });
       await until('the frame shows the camera', () => near(map.frameCamera?.bearing ?? 0, 30, 0.001));
       // The controller projects with the frame's view, as FFI does.
       const expected: ScreenPoint = pixelFor(coordinate);
@@ -424,7 +418,7 @@ export default function overlayTest(): void {
 
     it('places content at a coordinate from inside a padded parent', 0, async () => {
       const coordinate: LatLng = { latitude: 10, longitude: 20 };
-      await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { center: coordinate, zoom: 4 } });
+      await map.updateCamera({ center: coordinate, zoom: 4 });
       await until('the frame shows the camera', () => near(map.frameCamera?.zoom ?? 0, 4, 0.001));
       testMap.placementPadding = 40;
       testMap.placedAt = coordinate;

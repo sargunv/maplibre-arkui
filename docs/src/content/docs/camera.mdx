@@ -20,10 +20,15 @@ when they change:
 
 `camera` changes when the camera comes to rest;
 <Api of="MapController.getCamera" display="getCamera()" /> reads where it is
-now. <Api of="MapController.updateCamera" display="updateCamera()" /> jumps,
-eases, or flies; `fitCameraToLatLngBounds()`, `fitCameraToLatLngs()`, and
-`fitCameraToGeometry()` fit an area, coordinates, or a GeoJSON geometry; and
-each resolves with how the move ended:
+now. <Api of="MapController.updateCamera" display="updateCamera()" /> changes
+the fields of the camera that you give it, and its options choose whether it
+jumps, eases, or flies (<Api of="CameraTransitionMode" />):
+
+<Code code={region(examples, "camera-move")} lang="ts" />
+
+`fitCameraToBounds()`, `fitCameraToCoordinates()`, and `fitCameraToGeometry()`
+fit an area, coordinates, or a GeoJSON geometry. Each move resolves `true` when
+the camera got there, and `false` when something stopped it first:
 
 <Code code={region(examples, "camera-fit")} lang="ts" />
 
@@ -58,8 +63,9 @@ panel.
 The controller keeps the camera while the app runs. The system can end the
 app's process in the background, and start it again when the user returns. To
 bring the camera back then, save it in the ability's `onSaveState()`, and start
-the controller from it with `cameraToOptions()`. Here the page keeps its
-controller in `AppStorageV2`, where the ability can reach it:
+the controller from it: a <Api of="CameraPosition" /> survives JSON as it is.
+Here the page keeps its controller in `AppStorageV2`, where the ability can reach
+it:
 
 <Code code={region(examples, "save-camera")} lang="ts" />
 

@@ -3,7 +3,7 @@
 // cases aim in vp and convert, whatever the display's density.
 
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
-import { CameraUpdateMode, LatLng, ScreenPoint, WheelAction } from '@maplibre/arkui';
+import { LatLng, ScreenPoint, WheelAction } from '@maplibre/arkui';
 
 import { Driver, Point } from '@ohos.UiTest';
 import { KeyCode } from '@ohos.multimodalInput.keyCode';
@@ -33,7 +33,7 @@ const ORIGIN: LatLng = { latitude: 0, longitude: 0 };
 // Shows the map alone or in a Scroll, with the camera at the origin at ZOOM.
 async function start(inScroll: boolean = false): Promise<void> {
   await testMap.reset(STYLE, inScroll);
-  await testMap.controller.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: ZOOM } });
+  await testMap.controller.updateCamera({ zoom: ZOOM });
 }
 
 // How far the map has moved the origin from its center, in vp.
@@ -144,7 +144,7 @@ export default function gestureInputTest(): void {
       const c = await mapCenter();
       testMap.compass = true;
       testMap.interactions = { rotate: { snapBearings: [90] } };
-      await testMap.controller.updateCamera({ mode: CameraUpdateMode.jump, camera: { bearing: 90 } });
+      await testMap.controller.updateCamera({ bearing: 90 });
       await gesture(async () => {
         await driver.injectMultiPointerAction(twist(c, 100, 10, 10, STILL_TWIST_HOLD), speed(200));
       });
@@ -190,7 +190,7 @@ export default function gestureInputTest(): void {
     it('keeps a camera jump that the app makes as the gesture ends', 0, async () => {
       const c = await mapCenter();
       testMap.onGestureEnd = () => {
-        testMap.controller.updateCamera({ mode: CameraUpdateMode.jump, camera: { bearing: 5 } });
+        testMap.controller.updateCamera({ bearing: 5 });
       };
       await gesture(async () => {
         await driver.injectMultiPointerAction(twist(c, 100, 10, 10, STILL_TWIST_HOLD), speed(200));

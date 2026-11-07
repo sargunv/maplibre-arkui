@@ -114,6 +114,9 @@ isDisabled?: boolean;
   - A failure with no caller to reject, such as a style that fails to load, goes
     to the component's error event and to the log.
     [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#3-general-api-design)
+  - An invalid value in a component parameter is a failure with no caller: the
+    component reports it to its error event, or to the log when it has none, and
+    uses the default or the last valid value in its place.
 - Return `undefined` when data can't be found or computed. Don't use exceptions
   for control flow.
   [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#3-general-api-design)

@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from '@ohos/hypium';
 import {
   addRuntimeEventListener,
   CameraPosition,
-  CameraUpdateMode,
+  CameraTransitionMode,
   getDefaultRuntime,
   MapHandle,
   MapLayer,
@@ -16,6 +16,7 @@ import {
   RuntimeEventType,
   RuntimeHandle,
 } from '@maplibre/arkui';
+import { CameraUpdateMode } from '@maplibre/native-ffi';
 
 import { backgroundStyle, STYLE, testMap } from '../testability/TestMaps';
 import { camera, eventually, expectNear, frames, near, requireMap, setStyle, until, vp2px } from './helpers';
@@ -58,7 +59,7 @@ export default function lifecycleTest(): void {
 
     it('reports to onCameraIdle where the camera comes to rest', 0, async () => {
       let idles = testMap.cameraIdles.length;
-      await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 3 } });
+      await map.updateCamera({ zoom: 3 });
       await until('the map reports the jump', () => testMap.cameraIdles.length > idles);
       const jumped: CameraPosition = testMap.cameraIdles[testMap.cameraIdles.length - 1];
       expectNear(jumped.zoom, 3, 0.001);
@@ -66,7 +67,7 @@ export default function lifecycleTest(): void {
 
       // An animation reports only where it ends.
       idles = testMap.cameraIdles.length;
-      await map.updateCamera({ mode: CameraUpdateMode.ease, camera: { zoom: 5 }, animation: { durationMs: 300 } });
+      await map.updateCamera({ zoom: 5 }, { mode: CameraTransitionMode.EASE, durationMs: 300 });
       await until('the map reports the animation', () => testMap.cameraIdles.length > idles);
       await frames(10);
       const reported = testMap.cameraIdles.slice(idles);
@@ -75,18 +76,17 @@ export default function lifecycleTest(): void {
 
     it('rejects camera changes until the FFI map is ready, and then starts where the last map left', 0,
       async () => {
-        await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 4 } });
+        await map.updateCamera({ zoom: 4 });
         await hideMap();
         testMap.shown = true;
         // The component is coming, but its FFI map isn't ready.
-        await expect(map.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 8 } }))
-          .assertPromiseIsRejected();
+        await expect(map.updateCamera({ zoom: 8 })).assertPromiseIsRejected();
         expectNear(map.getCamera()?.zoom ?? NaN, 4, 0.001);
         expect(map.frameCamera).assertUndefined();
 
         await until('the map shows the style', () => map.styleLoaded);
         expectNear(camera().zoom, 4, 0.001);
-        await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 8 } });
+        await map.updateCamera({ zoom: 8 });
         expectNear(camera().zoom, 8, 0.001);
       });
 
@@ -99,7 +99,7 @@ export default function lifecycleTest(): void {
 
       // The camera methods move the second map, and the first map's camera no
       // longer reaches the controller.
-      await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 4 } });
+      await map.updateCamera({ zoom: 4 });
       expect(restsAtZoom(second, 4)).assertTrue();
       expect(restsAtZoom(first, 1)).assertTrue();
       await until('the controller rests at the second map\'s camera', () => near(map.camera?.zoom ?? 0, 4, 0.001));
@@ -162,10 +162,7 @@ export default function lifecycleTest(): void {
       const dots: MapLayer = { id: 'dots', type: 'background' };
       testMap.content = { layers: [dots] };
       await eventually('the content applies', () => requireMap().getStyleLayer('dots'));
-      await map.updateCamera({
-        mode: CameraUpdateMode.jump,
-        camera: { center: { latitude: 10, longitude: 20 }, zoom: 4 },
-      });
+      await map.updateCamera({ center: { latitude: 10, longitude: 20 }, zoom: 4 });
       const density = vp2px(1);
       // A custom density is at most 4.
       const changed = density > 2 ? density - 1 : density + 1;
@@ -205,7 +202,7 @@ export default function lifecycleTest(): void {
       };
       addRuntimeEventListener(runtime, listener, RuntimeEventFlag.mapIdle);
       try {
-        await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 3 } });
+        await map.updateCamera({ zoom: 3 });
         await until('the map goes idle', () => idles > 0);
       } finally {
         removeRuntimeEventListener(runtime, listener);
@@ -240,11 +237,11 @@ export default function lifecycleTest(): void {
       addRuntimeEventListener(runtime, removing, RuntimeEventFlag.mapIdle);
       addRuntimeEventListener(runtime, counting, RuntimeEventFlag.mapIdle);
       try {
-        await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 3 } });
+        await map.updateCamera({ zoom: 3 });
         await until('the listeners after them hear the event', () => counted > 0);
         expect(once).assertEqual(1);
         const before = counted;
-        await map.updateCamera({ mode: CameraUpdateMode.jump, camera: { zoom: 4 } });
+        await map.updateCamera({ zoom: 4 });
         await until('the map goes idle again', () => counted > before);
         expect(once).assertEqual(1);
         expect(thrown).assertLarger(1);

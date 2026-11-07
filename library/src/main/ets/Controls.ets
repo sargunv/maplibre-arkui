@@ -4,12 +4,12 @@
 // follows animations. They draw with the system's colors, so they follow dark
 // mode, and label themselves with the library's localized strings.
 
-import { CameraUpdateMode } from '@maplibre/native-ffi';
 import common from '@ohos.app.ability.common';
 import { LengthMetrics } from '@ohos.arkui.node';
 import i18n from '@ohos.i18n';
 import intl from '@ohos.intl';
 
+import { CameraTransitionMode } from './CameraPosition';
 import { GESTURE_ANIMATION_MS } from './gestures';
 import { logError } from './log';
 import { afterDelay, controlKey, findScope, MapScope } from './scope';
@@ -60,11 +60,9 @@ export struct MapCompassButton {
       this.scope = findScope(this.getUIContext(), this.nodeId);
     })
     .onClick(() => {
-      this.scope.controller.updateCamera({
-        mode: CameraUpdateMode.ease,
-        camera: { bearing: 0, pitch: 0 },
-        animation: { durationMs: GESTURE_ANIMATION_MS },
-      }).catch((error: Error) => logError(error.message));
+      this.scope.controller.updateCamera({ bearing: 0, pitch: 0 },
+        { mode: CameraTransitionMode.EASE, durationMs: GESTURE_ANIMATION_MS })
+        .catch((error: Error) => logError(error.message));
     })
   }
 }
@@ -186,15 +184,13 @@ export struct MapZoomButtons {
       zoom: (last !== undefined && last.zoomIn === zoomIn ? last.zoom : camera.zoom) + delta,
     };
     this.step = step;
-    controller.updateCamera({
-      mode: CameraUpdateMode.ease,
-      camera: { zoom: step.zoom },
-      animation: { durationMs: GESTURE_ANIMATION_MS },
-    }).catch((error: Error) => logError(error.message)).finally(() => {
-      if (this.step === step) {
-        this.step = undefined;
-      }
-    });
+    controller.updateCamera({ zoom: step.zoom }, { mode: CameraTransitionMode.EASE, durationMs: GESTURE_ANIMATION_MS })
+      .catch((error: Error) => logError(error.message))
+      .finally(() => {
+        if (this.step === step) {
+          this.step = undefined;
+        }
+      });
   }
 }
 

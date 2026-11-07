@@ -5,7 +5,6 @@
 
 import {
   CommandCompletion,
-  LatLng,
   MapHandle,
   PremultipliedRgba8Image,
   RenderedFeature,
@@ -15,6 +14,7 @@ import {
 
 import { Expression } from './Expressions';
 import { FONT_SCALE_STATE } from './fontScale';
+import { LatLng } from './Geometry';
 import { logError } from './log';
 
 /** Picks a layer of the base style, for `MapLayer.below`. */
