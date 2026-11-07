@@ -170,7 +170,7 @@ struct ContentExample {
         controller: this.controller,
         content: this.content,
         // Before the layers: true keeps the long click from them.
-        onLongClick: (event: MapClickEvent): boolean => {
+        onMapLongClick: (event: MapClickEvent): boolean => {
           this.selected = `${event.coordinate.latitude.toFixed(4)}, ${event.coordinate.longitude.toFixed(4)}`;
           return true;
         },
@@ -378,11 +378,10 @@ struct CameraExample {
       // #endregion gestures
       Column({ space: 8 }) {
         // #region camera-observable
-        // `viewport` changes with each frame that the map draws, and `camera`
-        // as the camera comes to rest.
-        Text(`Zoom ${this.controller.viewport?.camera.zoom.toFixed(1) ?? '…'}`)
-        Text(this.moving ? 'Moving' : `Rests at zoom ${this.controller.camera.zoom.toFixed(1)}`)
+        // `camera` changes with each frame while the camera moves.
+        Text(`Zoom ${this.controller.camera.zoom.toFixed(1)}`)
         // #endregion camera-observable
+        Text(this.moving ? 'Moving' : 'Still')
         Text(this.message)
         Row({ space: 8 }) {
           Button('Zoom in').onClick(() => this.zoomIn())
@@ -722,7 +721,7 @@ function snapshotOf(controller: MapController, content: MapContent): Promise<ima
     width: 320,
     height: 200,
     // Where the camera is now, also during a move.
-    camera: controller.viewport?.camera ?? controller.camera,
+    camera: controller.camera,
   });
 }
 // #endregion snapshot-of

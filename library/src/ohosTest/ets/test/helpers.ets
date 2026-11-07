@@ -42,20 +42,25 @@ export function camera(): FfiCamera {
   return mapSnapshot().view.camera;
 }
 
-// Waits until the camera rests and the controller reports it, and returns
-// the controller's camera, whose padding is the app's.
+// Waits until the camera rests and the controller's frame shows it, also its
+// padding, and returns the controller's camera, whose padding is the app's.
 export async function restingCamera(): Promise<CameraPosition> {
   const controller = testMap.controller;
   await until('the controller reports the resting camera', () => {
     const snapshot = controller.withFfiMap((map: MapHandle) => map.getSnapshot());
-    if (snapshot === undefined || snapshot.transitionInProgress) {
+    const viewport = controller.viewport;
+    if (snapshot === undefined || snapshot.transitionInProgress || viewport === undefined) {
       return false;
     }
     const now = snapshot.view.camera;
     const rest = controller.camera;
+    // The padding moves where the center is drawn.
+    const drawn = viewport.project(now.center);
+    const center = pixelFor(now.center);
     return near(rest.zoom, now.zoom, 1e-6) && near(rest.bearing, now.bearing, 1e-6) &&
       near(rest.pitch, now.pitch, 1e-6) && near(rest.center.latitude, now.center.latitude, 1e-9) &&
-      near(rest.center.longitude, now.center.longitude, 1e-9);
+      near(rest.center.longitude, now.center.longitude, 1e-9) && near(drawn.x, center.x, 0.01) &&
+      near(drawn.y, center.y, 0.01);
   });
   return controller.camera;
 }

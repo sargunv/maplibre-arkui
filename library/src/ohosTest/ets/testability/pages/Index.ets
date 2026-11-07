@@ -1,5 +1,5 @@
 import {
-  CameraPosition,
+  CameraIdleEvent,
   LatLng,
   MapAttributionButton,
   MapAttributionOnlyOverlay,
@@ -248,8 +248,8 @@ struct Index {
         onStyleLoaded: () => {
           testMap.styleLoads++;
         },
-        onCameraIdle: (camera: CameraPosition) => {
-          testMap.cameraIdles.push(camera);
+        onCameraIdle: (event: CameraIdleEvent) => {
+          testMap.cameraIdles.push(event.camera);
           if (testMap.throwOnCameraIdle) {
             throw new Error('the app handler failed');
           }
@@ -270,7 +270,7 @@ struct Index {
           testMap.onGestureEnd();
         },
         onMapClick: (event: MapClickEvent): boolean => testMap.click('click', event, testMap.consumeClicks),
-        onLongClick: (event: MapClickEvent): boolean => testMap.click('long click', event, testMap.consumeClicks),
+        onMapLongClick: (event: MapClickEvent): boolean => testMap.click('long click', event, testMap.consumeClicks),
         onUnhandledClick: (event: MapClickEvent) => {
           testMap.click('unhandled', event, false);
         },

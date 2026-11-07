@@ -17,12 +17,12 @@ updates when they change.
 
 ## Where the camera is
 
-<Api of="MapController.camera" display="camera" /> is where the camera last came
-to rest. It's always there: before a map shows the controller, it's the camera
-that the controller starts with. <Api of="MapController.viewport" display="viewport" />
-is the latest frame that the map drew, a <Api of="Viewport" />, which changes
-with every frame of a move or a gesture. Read `viewport?.camera ?? camera` for
-where the camera is now:
+<Api of="MapController.camera" display="camera" /> is where the camera is, and
+changes with every frame of a move or a gesture. It's always there: before a map
+shows the controller, it's the camera that the controller starts with. The
+map's `onCameraIdle` tells you where the camera comes to rest.
+<Api of="MapController.viewport" display="viewport" /> is the latest frame that
+the map drew, a <Api of="Viewport" />, with the same camera:
 
 <Code code={region(examples, "camera-observable")} lang="ts" />
 

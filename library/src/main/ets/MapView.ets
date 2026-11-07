@@ -37,6 +37,7 @@ import observer from '@ohos.arkui.observer';
 import geoLocationManager from '@ohos.geoLocationManager';
 
 import { CameraBoundsOptions, toBoundOptions } from './CameraBounds';
+import { CameraIdleEvent } from './CameraIdleEvent';
 import { CameraPosition } from './CameraPosition';
 import { ContentReconciler, loadStyle, MapContent, MapLayer } from './Content';
 import { ControllerState } from './ControllerState';
@@ -78,14 +79,14 @@ const HANDLED_EVENTS: RuntimeEventFlag = RuntimeEventFlag.mapLoadingFailed |
 // What the view reports to its component, whose handlers don't throw.
 export interface MapViewEvents {
   onStyleLoaded: () => void;
-  onCameraIdle: (camera: CameraPosition) => void;
+  onCameraIdle: (event: CameraIdleEvent) => void;
   onError: (error: MapError) => void;
   // The viewport insets in vp changed, as the view resolved them.
   onViewportInsets: (insets: Insets) => void;
   onGestureStart: () => void;
   onGestureEnd: () => void;
   onMapClick: (event: MapClickEvent) => boolean;
-  onLongClick: (event: MapClickEvent) => boolean;
+  onMapLongClick: (event: MapClickEvent) => boolean;
   onUnhandledClick: (event: MapClickEvent) => void;
 }
 
@@ -547,7 +548,7 @@ export class MapView extends XComponentController implements GestureTarget {
     if (this.map !== map || reconciler === undefined) {
       return;
     }
-    if (long ? this.events.onLongClick(event) : this.events.onMapClick(event)) {
+    if (long ? this.events.onMapLongClick(event) : this.events.onMapClick(event)) {
       return;
     }
     const layers = reconciler.clickableLayers(long);
@@ -759,12 +760,7 @@ export class MapView extends XComponentController implements GestureTarget {
   }
 
   private cameraIdle(mapCamera: FfiCamera): void {
-    const camera = this.appCamera(mapCamera);
-    const state = this.state;
-    if (state !== undefined && state.view === this) {
-      state.camera = camera;
-    }
-    this.events.onCameraIdle(camera);
+    this.events.onCameraIdle({ camera: this.appCamera(mapCamera) });
   }
 
   private applyStyle(): void {

@@ -214,7 +214,7 @@ export struct StyleDemo {
           onUnhandledClick: (event: MapClickEvent) => {
             this.select(undefined, event);
           },
-          onLongClick: (event: MapClickEvent): boolean => {
+          onMapLongClick: (event: MapClickEvent): boolean => {
             this.added = this.added.concat([addedPoint(this.added.length, event.coordinate)]);
             return true;
           },
@@ -268,7 +268,7 @@ export struct StyleDemo {
       const preview = await snapshot({
         style: this.style,
         content: this.content,
-        camera: this.controller.viewport?.camera ?? this.controller.camera,
+        camera: this.controller.camera,
         width: 160,
         height: 120,
       });

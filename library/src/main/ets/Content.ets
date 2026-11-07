@@ -125,7 +125,7 @@ export interface MapLayer {
   onClick?: FeatureClickHandler;
   /**
    * Handles a long click on the layer's features, a long press or a right
-   * click, as `onClick` does a click, after `MaplibreMap.onLongClick`.
+   * click, as `onClick` does a click, after `MaplibreMap.onMapLongClick`.
    */
   onLongClick?: FeatureClickHandler;
   /**

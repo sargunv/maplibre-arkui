@@ -2,6 +2,7 @@
 
 export { MaplibreMap } from './src/main/ets/MaplibreMap';
 export { ContentError, MapError, StyleLoadError } from './src/main/ets/MapError';
+export type { CameraIdleEvent } from './src/main/ets/CameraIdleEvent';
 export type { MapClickEvent } from './src/main/ets/MapClickEvent';
 export type { CameraBoundsOptions } from './src/main/ets/CameraBounds';
 export { MapController } from './src/main/ets/MapController';

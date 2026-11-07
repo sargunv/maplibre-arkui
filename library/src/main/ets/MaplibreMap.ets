@@ -2,7 +2,7 @@ import { RuntimeHandle } from '@maplibre/native-ffi';
 import geoLocationManager from '@ohos.geoLocationManager';
 
 import { CameraBoundsOptions } from './CameraBounds';
-import { CameraPosition } from './CameraPosition';
+import { CameraIdleEvent } from './CameraIdleEvent';
 import { MapContent } from './Content';
 import { MapInteractionOptions, TAP_SLOP } from './gestures';
 import { callHandler, consumes } from './log';
@@ -150,10 +150,10 @@ export struct MaplibreMap {
   @Event onStyleLoaded: () => void = () => {
   };
   /**
-   * The camera has come to rest, after a jump or once an animation ends.
-   * Called on the UI thread; the map logs what it throws.
+   * The camera has come to rest, after a jump or once an animation or a
+   * gesture ends. Called on the UI thread; the map logs what it throws.
    */
-  @Event onCameraIdle: (camera: CameraPosition) => void = (camera: CameraPosition) => {
+  @Event onCameraIdle: (event: CameraIdleEvent) => void = (event: CameraIdleEvent) => {
   };
   /**
    * Something failed while the map runs, such as a style that fails to load,
@@ -190,7 +190,7 @@ export struct MaplibreMap {
    * `content` get the long click. Return `true` to consume it. Called on the
    * UI thread; the map logs what it throws, and passes the long click on.
    */
-  @Event onLongClick: (event: MapClickEvent) => boolean = (event: MapClickEvent) => false;
+  @Event onMapLongClick: (event: MapClickEvent) => boolean = (event: MapClickEvent) => false;
   /**
    * Neither `onMapClick` nor a layer consumed a click, such as one beside the
    * app's features, which may clear a selection. Called on the UI thread; the
@@ -211,7 +211,7 @@ export struct MaplibreMap {
   // The app's handlers, which never throw into the view.
   private view: MapView = new MapView(this.getUIContext(), {
     onStyleLoaded: () => callHandler('onStyleLoaded', () => this.onStyleLoaded()),
-    onCameraIdle: (camera: CameraPosition) => callHandler('onCameraIdle', () => this.onCameraIdle(camera)),
+    onCameraIdle: (event: CameraIdleEvent) => callHandler('onCameraIdle', () => this.onCameraIdle(event)),
     onError: (error: MapError) => callHandler('onError', () => this.onError(error)),
     onViewportInsets: (insets: Insets) => {
       this.scope.insets = insets;
@@ -225,7 +225,7 @@ export struct MaplibreMap {
       callHandler('onGestureEnd', () => this.onGestureEnd());
     },
     onMapClick: (event: MapClickEvent): boolean => consumes('onMapClick', () => this.onMapClick(event)),
-    onLongClick: (event: MapClickEvent): boolean => consumes('onLongClick', () => this.onLongClick(event)),
+    onMapLongClick: (event: MapClickEvent): boolean => consumes('onMapLongClick', () => this.onMapLongClick(event)),
     onUnhandledClick: (event: MapClickEvent) => callHandler('onUnhandledClick', () => this.onUnhandledClick(event)),
   });
 

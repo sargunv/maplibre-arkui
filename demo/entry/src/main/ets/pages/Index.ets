@@ -246,8 +246,7 @@ struct Index {
 
   // Turns the map, which shows the compass. Tapping it turns the map north.
   private turn(): void {
-    const camera = this.map.viewport?.camera ?? this.map.camera;
-    this.report(this.map.updateCamera({ bearing: camera.bearing + 45 },
+    this.report(this.map.updateCamera({ bearing: this.map.camera.bearing + 45 },
       { mode: CameraTransitionMode.EASE, durationMs: 1000 }));
   }
 

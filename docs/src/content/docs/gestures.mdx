@@ -72,8 +72,8 @@ plays no ticks and reports nothing.
 ## Clicks
 
 A tap is a click, and a long press or a right click is a long click. The map's
-`onMapClick` or `onLongClick` gets it first, and returns `true` to consume
-it. Then the layers of the [content](/maplibre-arkui/content/) with features
+`onMapClick` or `onMapLongClick` gets it first, and returns `true` to
+consume it. Then the layers of the [content](/maplibre-arkui/content/) with features
 under it get it, from the top layer down, until a layer's `onClick` or
 `onLongClick` returns `true`. A click that nothing consumed goes to
 `onUnhandledClick`:

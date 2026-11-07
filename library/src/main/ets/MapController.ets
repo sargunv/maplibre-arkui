@@ -82,10 +82,13 @@ export class MapController {
   }
 
   /**
-   * Where the camera last came to rest: after a jump, once an animation or a
-   * gesture ends, or where the last map left it. Before a map shows the
-   * controller, it's the start camera of `MapControllerOptions`, with
-   * MapLibre's defaults for the fields it leaves out. Observable.
+   * Where the camera is: the camera of the frame on screen while a map shows
+   * one, and otherwise where the camera last was, or, before any map showed
+   * the controller, the start camera of `MapControllerOptions` with MapLibre's
+   * defaults for the fields it leaves out. Observable: it changes with every
+   * frame while the camera moves, so read it in `@Computed` getters of the
+   * components that follow the map. The map's `onCameraIdle` reports where the
+   * camera comes to rest.
    */
   get camera(): CameraPosition {
     return this.state.camera;
@@ -95,8 +98,7 @@ export class MapController {
    * The latest frame that the map drew, with its camera and projection.
    * Undefined while no map shows a frame. Observable: it changes with every
    * frame that the view changes in, so read it in `@Computed` getters of the
-   * components that follow the map. Read `viewport?.camera ?? camera` for
-   * where the camera is now; it can trail a move by a frame.
+   * components that follow the map. Its camera is `camera`.
    */
   get viewport(): Viewport | undefined {
     return this.state.viewport;
@@ -146,8 +148,7 @@ export class MapController {
    * the promise resolves when the move ends: `true` once the camera gets
    * there, or `false` when `cancelCameraTransitions()`, the user's input, a
    * later camera change, or the map leaving or starting again at a new
-   * density stopped it first. Once the camera stops, `camera` holds where it
-   * rests. It rejects when the map rejects the move.
+   * density stopped it first. It rejects when the map rejects the move.
    */
   updateCamera(update: CameraUpdate, options?: CameraTransitionOptions): Promise<boolean> {
     return this.state.updateCamera(checkCamera(update), checkTransition(options));

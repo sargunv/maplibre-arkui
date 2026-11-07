@@ -38,8 +38,10 @@ interface WaitingMove {
 
 @ObservedV2
 export class ControllerState {
-  @Trace camera: CameraPosition;
   @Trace viewport: FrameViewport | undefined = undefined;
+  // Where the camera was while no map shows a frame: the start camera, or
+  // where the last frame or the last map left it.
+  @Trace lastCamera: CameraPosition;
   @Trace styleLoaded: boolean = false;
   @Trace attributions: string[] = [];
   @Trace followingUserLocation: boolean = false;
@@ -60,7 +62,12 @@ export class ControllerState {
   private moves: number = 0;
 
   constructor(camera: CameraPosition) {
-    this.camera = camera;
+    this.lastCamera = camera;
+  }
+
+  // The camera of the frame on screen, or where the camera last was.
+  get camera(): CameraPosition {
+    return this.viewport?.camera ?? this.lastCamera;
   }
 
   // Whether camera moves go to the map now.
@@ -90,9 +97,6 @@ export class ControllerState {
     if (this.view !== view) {
       return;
     }
-    if (camera !== undefined) {
-      this.camera = camera;
-    }
     this.view = undefined;
     this.sized = false;
     this.settles++;
@@ -100,13 +104,23 @@ export class ControllerState {
     this.styleLoaded = false;
     this.attributions = [];
     this.showFrame(undefined);
+    if (camera !== undefined) {
+      this.lastCamera = camera;
+    }
   }
 
-  // The map that shows the controller drew a frame, or shows none. Its first
-  // frame is at its size, and the moves that wait go to it, then the camera
-  // catches up with the user's location.
+  // The map that shows the controller drew a frame, or shows none, which
+  // leaves the camera where the last frame showed it. Its first frame is at
+  // its size, and the moves that wait go to it, then the camera catches up
+  // with the user's location.
   showFrame(viewport: FrameViewport | undefined): void {
-    this.viewport?.retire();
+    const last = this.viewport;
+    if (last !== undefined) {
+      last.retire();
+      if (viewport === undefined) {
+        this.lastCamera = last.camera;
+      }
+    }
     this.viewport = viewport;
     const view = this.view;
     if (viewport === undefined || view === undefined || this.sized) {

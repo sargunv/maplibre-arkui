@@ -73,8 +73,8 @@ export interface SnapshotOptions {
  * It resolves once every resource the image needs has loaded, and rejects when
  * the style or one of those resources fails to load. To capture what a
  * `MaplibreMap` shows, pass its style, its content, and its controller's
- * `viewport?.camera ?? camera`. The image holds only the map: show the
- * style's attribution with it.
+ * `camera`. The image holds only the map: show the style's attribution with
+ * it.
  */
 export async function snapshot(options: SnapshotOptions): Promise<image.PixelMap> {
   followConnectivity();

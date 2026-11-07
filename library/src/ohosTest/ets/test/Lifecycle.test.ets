@@ -76,7 +76,6 @@ export default function lifecycleTest(): void {
       await until('the map reports the jump', () => testMap.cameraIdles.length > idles);
       const jumped: CameraPosition = testMap.cameraIdles[testMap.cameraIdles.length - 1];
       expectNear(jumped.zoom, 3, 0.001);
-      expectNear(map.camera.zoom, 3, 0.001);
 
       // An animation reports only where it ends.
       idles = testMap.cameraIdles.length;

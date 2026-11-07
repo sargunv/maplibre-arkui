@@ -148,7 +148,7 @@ export default function mapControllerTest(): void {
 
     it('jumps a move without a mode, even one with a duration', 0, async () => {
       const move = map.updateCamera({ zoom: 5 }, { durationMs: 10000 });
-      await map.cancelCameraTransitions();
+      map.cancelCameraTransitions();
       expect(await move).assertTrue();
       expectNear(camera().zoom, 5, 0.001);
     });
@@ -164,6 +164,15 @@ export default function mapControllerTest(): void {
       expect(done).assertFalse();
       expect(await move).assertTrue();
       expectNear(camera().zoom, 6, 0.001);
+    });
+
+    it('reports the camera of each frame while the camera moves', 0, async () => {
+      const animation = map.updateCamera({ zoom: 12 }, { mode: CameraTransitionMode.EASE, durationMs: 10000 });
+      await until('the observed camera moves', () => map.camera.zoom > 1.01);
+      expect(map.camera.zoom).assertLess(12);
+      expectNear(map.camera.zoom, map.viewport?.camera.zoom ?? NaN, 0);
+      map.cancelCameraTransitions();
+      expect(await animation).assertFalse();
     });
 
     it('resolves an animation that a later one replaces', 0, async () => {
