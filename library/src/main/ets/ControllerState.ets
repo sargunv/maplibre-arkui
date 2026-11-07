@@ -101,11 +101,19 @@ export class ControllerState {
     this.sized = true;
     const waiting = this.waiting;
     this.waiting = [];
-    for (const move of waiting) {
-      this.start(view, move.start).then((completed: boolean) => move.resolve(completed),
-        (error: Error) => move.reject(error));
+    if (waiting.length === 0) {
+      view.followUserLocation();
+      return;
     }
-    view.followUserLocation();
+    // Following starts once the moves that waited for the map end, so a fit
+    // that's still finding its camera can't move it away afterwards.
+    const ended = waiting.map((move: WaitingMove) => this.start(view, move.start).then(
+      (completed: boolean) => move.resolve(completed), (error: Error) => move.reject(error)));
+    Promise.all(ended).then(() => {
+      if (this.view === view) {
+        view.followUserLocation();
+      }
+    });
   }
 
   updateCamera(camera: CheckedCamera, transition: CheckedTransition): Promise<boolean> {
@@ -181,7 +189,8 @@ export class ControllerState {
       return undefined;
     }
     try {
-      return await queryRendered(session, point, hitPadding, options?.layers, options?.filter);
+      const features = await queryRendered(session, point, hitPadding, options?.layers, options?.filter);
+      return this.frameSession() === session ? features : undefined;
     } catch (error) {
       if (this.frameSession() !== session) {
         return undefined;
@@ -197,7 +206,8 @@ export class ControllerState {
       return undefined;
     }
     try {
-      return await querySource(session, sourceId, options);
+      const features = await querySource(session, sourceId, options);
+      return this.frameSession() === session ? features : undefined;
     } catch (error) {
       if (this.frameSession() !== session) {
         return undefined;
