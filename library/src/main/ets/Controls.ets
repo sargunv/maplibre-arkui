@@ -557,12 +557,21 @@ export struct AttributionText {
       return;
     }
     this.html = html;
+    // fromHtml() rejects empty HTML, so clear the text directly.
+    if (html === '') {
+      this.text.setStyledString(new StyledString(''));
+      return;
+    }
     StyledString.fromHtml(html).then((converted: StyledString) => {
       if (html !== this.html) {
         return;
       }
       const text = new MutableStyledString('');
       text.appendStyledString(converted);
+      if (text.length === 0) {
+        this.text.setStyledString(text);
+        return;
+      }
       text.setStyle({
         start: 0,
         length: text.length,

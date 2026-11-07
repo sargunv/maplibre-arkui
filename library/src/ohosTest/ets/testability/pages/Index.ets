@@ -1,6 +1,7 @@
 import {
   AttributionButton,
   AttributionControls,
+  AttributionText,
   CameraIdleEvent,
   CompassButton,
   DefaultControls,
@@ -167,6 +168,9 @@ struct Index {
   overlays() {
     this.preset()
     this.controls()
+    if (testMap.attributionText !== undefined) {
+      AttributionText({ attributions: testMap.attributionText })
+    }
     Column() {
       if (testMap.scaleBar !== undefined) {
         this.scaleBar()
