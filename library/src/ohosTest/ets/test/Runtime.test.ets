@@ -4,7 +4,9 @@
 import { describe, expect, it } from '@ohos/hypium';
 import {
   addRuntimeEventListener,
+  GeoJsonGeometry,
   getDefaultRuntime,
+  MapContent,
   OfflineRegionDefinition,
   OfflineRegionDownloadState,
   OfflineRegionStatus,
@@ -17,8 +19,8 @@ import {
   ResourceTransformRequestHandle,
   RuntimeEvent,
   RuntimeEventFlag,
+  renderSnapshot,
   RuntimeHandle,
-  snapshot,
   UrlMatchFlag,
 } from '@maplibre/arkui';
 
@@ -27,8 +29,8 @@ import display from '@ohos.display';
 import fs from '@ohos.file.fs';
 import util from '@ohos.util';
 
-import { STYLE_JSON } from '../testability/TestMaps';
-import { expectNear, settled } from './helpers';
+import { STYLE, STYLE_JSON, styleDocument } from '../testability/TestMaps';
+import { expectNear, pixelAt, readPixels, settled } from './helpers';
 
 // A style that the cases' resource provider serves.
 const APP_STYLE = 'app://styles/test.json';
@@ -80,31 +82,65 @@ const WORLD: OfflineRegionDefinition = {
 export default function runtimeTest(): void {
   describe('Runtime', () => {
     it('renders a snapshot of the requested size', 0, async () => {
-      const pixelMap = await snapshot({
-        style: STYLE_JSON, width: 64, height: 32, scaleFactor: 2, camera: { zoom: 0 },
-      });
-      const size = pixelMap.getImageInfoSync().size;
+      const image = (await renderSnapshot({ style: STYLE, width: 64, height: 32, pixelRatio: 2 })).image;
+      const size = image.getImageInfoSync().size;
       expect(size.width).assertEqual(128);
       expect(size.height).assertEqual(64);
-      await pixelMap.release();
+      await image.release();
     });
 
     it('renders a snapshot at the display\'s density by default', 0, async () => {
       const density = display.getDefaultDisplaySync().densityPixels;
-      const pixelMap = await snapshot({ style: STYLE_JSON, width: 64, height: 32, camera: { zoom: 0 } });
-      const size = pixelMap.getImageInfoSync().size;
+      const image = (await renderSnapshot({ style: STYLE, width: 64, height: 32 })).image;
+      const size = image.getImageInfoSync().size;
       expectNear(size.width, 64 * density, 1);
       expectNear(size.height, 32 * density, 1);
-      await pixelMap.release();
+      await image.release();
     });
 
-    it('rejects a snapshot whose style document is not JSON', 0, async () => {
-      await expect(snapshot({ style: '{"version": 8, "sources": ', width: 16, height: 16, scaleFactor: 1 }))
-        .assertPromiseIsRejected();
+    it('rounds a snapshot\'s size up to whole pixels', 0, async () => {
+      const image = (await renderSnapshot({ style: STYLE, width: 33, height: 20, pixelRatio: 1.5 })).image;
+      const size = image.getImageInfoSync().size;
+      expect(size.width).assertEqual(50);
+      expect(size.height).assertEqual(30);
+      await image.release();
+    });
+
+    it('throws for a snapshot size of 0 before it renders', 0, () => {
+      expect(() => renderSnapshot({ style: STYLE, width: 0, height: 16 })).assertThrowError(
+        'A snapshot\'s width must be finite and at least 1 vp once rounded: 0');
+    });
+
+    it('centers a snapshot camera that sets only a zoom at 0, 0, not at the style\'s center', 0, async () => {
+      // The style's own camera is far from 0, 0, where the content draws a dot.
+      const style = styleDocument('{"version":8,"center":[100,40],"zoom":3,"sources":{},"layers":[' +
+        '{"id":"background","type":"background","paint":{"background-color":"#0000ff"}}]}');
+      const origin: GeoJsonGeometry = { type: 'Point', coordinates: [0, 0] };
+      const dot: MapContent = {
+        sources: [{ id: 'dot', json: { 'type': 'geojson', 'data': origin } }],
+        layers: [{ id: 'dot', type: 'circle', source: 'dot', paint: { 'circle-color': '#ff0000', 'circle-radius': 8 } }],
+      };
+      const image = (await renderSnapshot({
+        style: style, content: dot, width: 64, height: 32, pixelRatio: 1, camera: { zoom: 0 },
+      })).image;
+      const pixels = await readPixels(image);
+      await image.release();
+      expect(pixelAt(pixels, 64, 32, 16).join()).assertEqual('255,0,0,255');
+    });
+
+    it('lists the style\'s source attributions with a snapshot', 0, async () => {
+      const style = styleDocument('{"version":8,"sources":{' +
+        '"a":{"type":"geojson","data":{"type":"FeatureCollection","features":[]},"attribution":"<b>A</b>"},' +
+        '"b":{"type":"geojson","data":{"type":"FeatureCollection","features":[]},"attribution":"B"},' +
+        '"c":{"type":"geojson","data":{"type":"FeatureCollection","features":[]},"attribution":"<b>A</b>"}},' +
+        '"layers":[]}');
+      const snapshot = await renderSnapshot({ style: style, width: 16, height: 16, pixelRatio: 1 });
+      await snapshot.image.release();
+      expect(snapshot.attributions.join()).assertEqual('<b>A</b>,B');
     });
 
     it('rejects a snapshot whose style fails to load', 0, async () => {
-      await expect(snapshot({ style: 'file:///nonexistent/style.json', width: 16, height: 16, scaleFactor: 1 }))
+      await expect(renderSnapshot({ style: 'file:///nonexistent/style.json', width: 16, height: 16, pixelRatio: 1 }))
         .assertPromiseIsRejected();
     });
 
@@ -120,8 +156,8 @@ export default function runtimeTest(): void {
             request.complete(url === original ? 'https://demotiles.maplibre.org/style.json' : url);
           },
         });
-        const pixelMap = await snapshot({ style: original, width: 16, height: 16, scaleFactor: 1, runtime: runtime });
-        await pixelMap.release();
+        const snapshot = await renderSnapshot({ style: original, width: 16, height: 16, pixelRatio: 1, runtime: runtime });
+        await snapshot.image.release();
         expect(transformed.indexOf(original)).assertLarger(-1);
       });
     });

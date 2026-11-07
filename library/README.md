@@ -12,7 +12,7 @@ on [MapLibre Native FFI]:
 - The user's location from Location Kit, and a camera that follows it
 - Map content (sources, layers, and images) declared as data from the app's
   state, and functions that build style expressions
-- `snapshot()`, a still image of a map
+- `renderSnapshot()`, a still image of a map, with its attribution
 - Feature queries, and MapLibre Native FFI's map for the rest of its style API
 - MapLibre Native FFI's request handlers, offline regions, and logs
 

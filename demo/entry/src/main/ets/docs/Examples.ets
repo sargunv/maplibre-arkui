@@ -48,12 +48,14 @@ import {
   MapController,
   MapError,
   MaplibreMap,
+  MapSnapshot,
   Marker,
   match,
   OfflineRegionDefinition,
   OfflineRegionDownloadState,
   PointerPinButton,
   RenderedFeature,
+  renderSnapshot,
   RuntimeEvent,
   RuntimeEventFlag,
   RuntimeEventType,
@@ -61,7 +63,6 @@ import {
   ScaleBar,
   setConnectivityMode,
   setLogCallback,
-  snapshot,
   StyleLayer,
   UrlMatchFlag,
   WheelAction,
@@ -693,18 +694,19 @@ struct IndicatorExample {
 @ComponentV2
 struct SnapshotExample {
   // #region snapshot
-  @Local preview: image.PixelMap | undefined = undefined;
+  @Local preview: MapSnapshot | undefined = undefined;
   private disappeared: boolean = false;
 
   aboutToAppear(): void {
-    snapshot({
+    renderSnapshot({
       style: STYLE,
       width: 320,
       height: 200,
       camera: { center: { latitude: 48.8584, longitude: 2.2945 }, zoom: 14 },
-    }).then((preview: image.PixelMap) => {
+      uiContext: this.getUIContext(),
+    }).then((preview: MapSnapshot) => {
       if (this.disappeared) {
-        preview.release();
+        preview.image.release();
       } else {
         this.preview = preview;
       }
@@ -713,16 +715,18 @@ struct SnapshotExample {
 
   aboutToDisappear(): void {
     this.disappeared = true;
-    this.preview?.release();
+    this.preview?.image.release();
   }
   // #endregion snapshot
 
   build() {
     Column() {
       if (this.preview !== undefined) {
-        Image(this.preview)
+        Image(this.preview.image)
           .width(320)
           .height(200)
+        Text(this.preview.attributions.join(' '))
+          .fontSize(12)
       }
     }
     .width('100%')
@@ -730,18 +734,60 @@ struct SnapshotExample {
 }
 
 // An image of what a MaplibreMap shows: its style, its content, and its camera.
-// #region snapshot-of
-function snapshotOf(controller: MapController, content: MapContent): Promise<image.PixelMap> {
-  return snapshot({
-    style: STYLE,
-    content: content,
-    width: 320,
-    height: 200,
-    // Where the camera is now, also during a move.
-    camera: controller.camera,
-  });
+@ComponentV2
+struct SnapshotOfExample {
+  @Local preview: MapSnapshot | undefined = undefined;
+  private disappeared: boolean = false;
+  private controller: MapController = new MapController({ camera: { center: PARIS_CENTER, zoom: 13 } });
+  private content: MapContent = {
+    sources: [{ id: 'places', json: { 'type': 'geojson', 'data': PARIS } }],
+    layers: [{ id: 'places', type: 'circle', source: 'places', paint: { 'circle-color': '#e53935' } }],
+  };
+
+  aboutToDisappear(): void {
+    this.disappeared = true;
+    this.preview?.image.release();
+  }
+
+  // #region snapshot-of
+  async takeSnapshot(): Promise<void> {
+    // Where the camera is now, also during a move. The padding that makes
+    // room for the map's own UI is left out.
+    const camera = this.controller.camera;
+    const preview = await renderSnapshot({
+      style: STYLE,
+      content: this.content,
+      width: 320,
+      height: 200,
+      camera: { center: camera.center, zoom: camera.zoom, bearing: camera.bearing, pitch: camera.pitch },
+      uiContext: this.getUIContext(),
+    });
+    if (this.disappeared) {
+      preview.image.release();
+      return;
+    }
+    this.preview?.image.release();
+    this.preview = preview;
+  }
+
+  build() {
+    Column({ space: 8 }) {
+      MaplibreMap({ style: STYLE, controller: this.controller, content: this.content })
+        .layoutWeight(1)
+      Button('Snapshot')
+        .onClick(() => this.takeSnapshot().catch((error: Error) => console.error(error.message)))
+      if (this.preview !== undefined) {
+        Image(this.preview.image)
+          .width(320)
+          .height(200)
+        // The sources' terms usually require their attribution with the image.
+        Text(this.preview.attributions.join(' '))
+          .fontSize(12)
+      }
+    }
+  }
+  // #endregion snapshot-of
 }
-// #endregion snapshot-of
 
 // Expressions and the style API
 
@@ -900,6 +946,9 @@ export struct DocExamples {
         TabContent() {
           SnapshotExample()
         }.tabBar('Snapshot')
+        TabContent() {
+          SnapshotOfExample()
+        }.tabBar('Snapshot of a map')
       }
       .barMode(BarMode.Scrollable)
     }
@@ -908,5 +957,5 @@ export struct DocExamples {
 }
 
 // Keeps the functions that no tab calls from being unused.
-export const COMPILED_EXAMPLES: Object[] = [snapshotOf, styleWithExpressions, reportMapError, useApiKey, downloadParis,
+export const COMPILED_EXAMPLES: Object[] = [styleWithExpressions, reportMapError, useApiKey, downloadParis,
   watchMissingImages, takeLogs];

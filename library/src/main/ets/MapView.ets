@@ -29,7 +29,6 @@ import {
   RuntimeEventType,
   RuntimeHandle,
   ScreenPoint as FfiScreenPoint,
-  StyleSourceInfo,
 } from '@maplibre/native-ffi';
 import { Configuration } from '@ohos.app.ability.Configuration';
 import ConfigurationConstant from '@ohos.app.ability.ConfigurationConstant';
@@ -48,6 +47,7 @@ import {
   loadStyle,
   MapContent,
   StyleLayer,
+  styleAttributions,
 } from './Content';
 import { ControllerState } from './ControllerState';
 import {
@@ -783,14 +783,7 @@ export class MapView extends XComponentController implements GestureTarget {
   }
 
   private readAttributions(map: MapHandle, state: ControllerState): void {
-    map.listStyleSources().then((sources: readonly StyleSourceInfo[]) => {
-      const attributions: string[] = [];
-      for (const source of sources) {
-        const attribution = source.attribution.trim();
-        if (attribution !== '' && !attributions.includes(attribution)) {
-          attributions.push(attribution);
-        }
-      }
+    styleAttributions(map).then((attributions: string[]) => {
       // Sources change often, as their data does, so keep an unchanged list.
       if (state.view === this && this.map === map && state.styleLoaded &&
         JSON.stringify(attributions) !== JSON.stringify(state.attributions)) {

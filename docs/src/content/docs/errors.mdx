@@ -31,4 +31,5 @@ import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw"
 - An invalid map parameter goes to `onError` too, and the map uses its default
   or its last valid value in its place.
 
-- `snapshot()` rejects when the style or a resource it needs fails to load.
+- `renderSnapshot()` throws for invalid options, such as a size of 0, and
+  rejects when the style or a resource it needs fails to load.

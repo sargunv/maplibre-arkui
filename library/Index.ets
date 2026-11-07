@@ -43,7 +43,8 @@ export type { FollowUserLocationOptions, UserLocationIndicatorOptions } from './
 export { addRuntimeEventListener, getDefaultRuntime, removeRuntimeEventListener } from './src/main/ets/runtime';
 export type { RuntimeEventListener } from './src/main/ets/runtime';
 export { ConnectivityMode, getConnectivityMode, setConnectivityMode } from './src/main/ets/connectivity';
-export { snapshot } from './src/main/ets/Snapshot';
+export { renderSnapshot } from './src/main/ets/Snapshot';
+export type { MapSnapshot, MapSnapshotOptions } from './src/main/ets/Snapshot';
 export type {
   FeatureClickEvent,
   FeatureClickHandler,
@@ -54,7 +55,6 @@ export type {
   StyleLayer,
   StyleSource,
 } from './src/main/ets/Content';
-export type { SnapshotOptions } from './src/main/ets/Snapshot';
 
 // The FFI runtime that a map and a snapshot take.
 export { RuntimeHandle } from '@maplibre/native-ffi';

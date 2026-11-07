@@ -27,7 +27,7 @@ export function styleDocument(json: string): Record<string, Object> {
 }
 
 // A style without network requests, a background of `color`, as JSON text,
-// which a snapshot takes.
+// which a resource provider serves.
 export function backgroundStyleJson(color: string): string {
   return '{"version":8,"sources":{},"layers":[{"id":"background","type":"background",' +
     `"paint":{"background-color":"${color}"}}]}`;

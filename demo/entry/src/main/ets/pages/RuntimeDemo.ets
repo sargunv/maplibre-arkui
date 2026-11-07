@@ -10,10 +10,10 @@ import {
   ResourceTransformRequestHandle,
   RuntimeEvent,
   RuntimeEventFlag,
+  MapSnapshot,
+  renderSnapshot,
   RuntimeHandle,
-  snapshot,
 } from '@maplibre/arkui';
-import image from '@ohos.multimedia.image';
 import util from '@ohos.util';
 
 import { LIBERTY } from './common';
@@ -38,7 +38,7 @@ const PARIS: OfflineRegionDefinition = {
 // a resource transform rewrites, and the download of an offline region.
 @ComponentV2
 export struct RuntimeDemo {
-  @Local preview: image.PixelMap | undefined = undefined;
+  @Local preview: MapSnapshot | undefined = undefined;
   @Local requests: number = 0;
   @Local region: OfflineRegionInfo | undefined = undefined;
   @Local status: OfflineRegionStatus | undefined = undefined;
@@ -59,7 +59,7 @@ export struct RuntimeDemo {
       runtime.discarding.clearResourceTransform();
       removeRuntimeEventListener(runtime, this.listener);
     }
-    this.preview?.release();
+    this.preview?.image.release();
   }
 
   build() {
@@ -68,10 +68,11 @@ export struct RuntimeDemo {
         Column({ space: 12 }) {
           Text('A snapshot, which no map on screen renders').fontSize(16).fontWeight(FontWeight.Medium)
           if (this.preview !== undefined) {
-            Image(this.preview)
+            Image(this.preview.image)
               .width(320)
               .height(200)
               .borderRadius(8)
+            Text(this.preview.attributions.join(' ')).fontSize(12)
           } else {
             Text('Rendering…').height(200)
           }
@@ -123,14 +124,15 @@ export struct RuntimeDemo {
     if (regions.length > 0) {
       await this.show(regions[0]);
     }
-    const preview = await snapshot({
+    const preview = await renderSnapshot({
       style: REWRITTEN,
       width: 320,
       height: 200,
       camera: { center: { latitude: 48.8584, longitude: 2.2945 }, zoom: 14, pitch: 45 },
+      uiContext: this.getUIContext(),
     });
     if (this.gone) {
-      preview.release();
+      preview.image.release();
     } else {
       this.preview = preview;
     }

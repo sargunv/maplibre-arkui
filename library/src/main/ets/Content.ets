@@ -1,13 +1,15 @@
 // Map content as data: the sources, layers, and images that an app declares
 // for a MaplibreMap or a snapshot, and the reconciler that applies them to a
 // map's style. After MapLibre Compose's StyleReconciler, much simplified. Also
-// loadStyle(), which loads the style under the content, as both take it.
+// loadStyle(), which loads the style under the content, as both take it, and
+// styleAttributions(), which both read once the style has loaded.
 
 import {
   CommandCompletion,
   MapHandle,
   PremultipliedRgba8Image,
   StyleLayerInfo,
+  StyleSourceInfo,
 } from '@maplibre/native-ffi';
 import image from '@ohos.multimedia.image';
 
@@ -210,7 +212,7 @@ export interface StyleImage {
   /**
    * The image's pixels in each vp. The map's display density by default, so
    * the image draws at the size that ArkUI's `Image` draws the pixel map at;
-   * in a snapshot, its `scaleFactor`. Finite and greater than 0. A change
+   * in a snapshot, its `pixelRatio`. Finite and greater than 0. A change
    * replaces the image.
    */
   pixelRatio?: number;
@@ -257,7 +259,7 @@ class Stale extends Error {
 
 /**
  * Applies a `MapContent` to the styles that a map loads, one pass at a time.
- * Internal: MapView and snapshot() own one for their map.
+ * Internal: MapView and renderSnapshot() own one for their map.
  *
  * Each pass compares the latest content with what the reconciler added to the
  * current style and awaits each command, so it knows what the style holds. A
@@ -850,4 +852,18 @@ function layerJson(layer: StyleLayer): Record<string, Object> {
 // completes once the style is loaded.
 export function loadStyle(map: MapHandle, style: string | Record<string, Object>): Promise<CommandCompletion> {
   return typeof style === 'string' ? map.setStyleUrl(style) : map.setStyleJson(style);
+}
+
+// The attribution of the style's sources, as HTML, without repeats, in the
+// order the style lists them.
+export async function styleAttributions(map: MapHandle): Promise<string[]> {
+  const sources: readonly StyleSourceInfo[] = await map.listStyleSources();
+  const attributions: string[] = [];
+  for (const source of sources) {
+    const attribution = source.attribution.trim();
+    if (attribution !== '' && !attributions.includes(attribution)) {
+      attributions.push(attribution);
+    }
+  }
+  return attributions;
 }
