@@ -1,26 +1,20 @@
+// Reads the pixels of a PixelMap, for the content's images and the user
+// location indicator's.
+
 import image from '@ohos.multimedia.image';
 
 import { PremultipliedRgba8Image } from '@maplibre/native-ffi';
 
-/**
- * Copies the pixels of `pixelMap` into the premultiplied RGBA image that FFI's
- * `MapHandle.setStyleImage()` and image sources take:
- *
- * ```ets
- * map.setStyleImage('pin', readPixelMap(pixelMap), { pixelRatio: 2 });
- * ```
- *
- * It reads `RGBA_8888` and `BGRA_8888` pixel maps, premultiplied or not, which
- * is what decoding an image gives by default. Convert other formats first
- * with `PixelMap.convertPixelFormat()`. The style draws the image at
- * `pixelRatio` image pixels per vp, 1 by default. Throws when the pixel map
- * can't be read, such as after its release.
- */
+// Copies the pixels of `pixelMap` into the premultiplied RGBA image that FFI's
+// style images take. It reads RGBA_8888 and BGRA_8888 pixel maps,
+// premultiplied or not, which is what decoding an image gives by default, and
+// throws for another format, or when the pixel map can't be read, such as
+// after its release.
 export function readPixelMap(pixelMap: image.PixelMap): PremultipliedRgba8Image {
   const info = pixelMap.getImageInfoSync();
   const format = info.pixelFormat;
   if (format !== image.PixelMapFormat.RGBA_8888 && format !== image.PixelMapFormat.BGRA_8888) {
-    throw new Error(`readPixelMap() reads RGBA_8888 and BGRA_8888 pixel maps, not format ${format}`);
+    throw new Error(`Unsupported pixel format ${format}: a pixel map must be RGBA_8888 or BGRA_8888`);
   }
   const width = info.size.width;
   const height = info.size.height;

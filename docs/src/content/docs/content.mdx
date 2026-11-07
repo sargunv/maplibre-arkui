@@ -23,10 +23,7 @@ The map takes it as `content`, as in
 [the style API](/maplibre-arkui/style/)'s example.
 
 To change it, give the state a new value; the map doesn't see changes made
-inside a value it has. It compares properties and GeoJSON data by their JSON,
-and images by reference, so read an image once:
-
-<Code code={region(examples, "content-image")} lang="ts" />
+inside a value it has. It compares properties and GeoJSON data by their JSON:
 
 <Code code={region(examples, "content-change")} lang="ts" />
 
@@ -37,20 +34,33 @@ declares GeoJSON's types (<Api of="GeoJsonFeatureCollection" />,
 
 <Code code={region(examples, "geojson")} lang="ts" />
 
+## Layers
+
 Layers go on top, or under the layer that `below` names or picks, in their order
 in `layers`, and their `onClick` and `onLongClick` handle
 [clicks](/maplibre-arkui/gestures/#clicks) on their features. A string names a
 base-style layer or another content layer, and a predicate picks a base-style
-layer. Text sizes in <Api of="fp" display="fp()" /> follow the user's font size
-setting as ArkUI's `fp` sizes do, once the app opts in with
-`"fontSizeScale": "followSystem"` in its [configuration profile]; the base
-style's labels don't. A source, layer, or image that the map rejects goes to
-`onError` as a `ContentError` and stays out until it changes. An image replaces any image that
-the style has with its ID, such as one from the base style's sprite, and leaving
-the content removes that ID from the style. <Api of="readPixelMap" display="readPixelMap()" />
-turns a decoded `PixelMap` into a style image; the demo's [`readImage()`] reads
-one from `resources/rawfile`.
+layer from its <Api of="LayerSummary" />. Text sizes in
+<Api of="fp" display="fp()" /> follow the user's font size setting as ArkUI's
+`fp` sizes do, once the app opts in with `"fontSizeScale": "followSystem"` in
+its [configuration profile]; the base style's labels don't. A source, layer, or
+image that the map rejects goes to `onError` as a `ContentError` and stays out
+until it changes.
+
+## Images
+
+A <Api of="StyleImage" /> is a decoded `PixelMap`, such as one from the app's
+`resources/rawfile`:
+
+<Code code={region(examples, "content-image")} lang="ts" />
+
+The map compares images by reference and reads the pixels each time it applies
+one, such as when a style loads, so decode an image once, and release it only
+once the content no longer has it:
+
+<Code code={region(examples, "content-image-keep")} lang="ts" />
+
+An image replaces any image that the style has with its ID, such as one from the
+base style's sprite, and leaving the content removes that ID from the style.
 
 [configuration profile]: https://gitee.com/openharmony/docs/blob/master/en/application-dev/quick-start/app-configuration-file.md
-
-[`readImage()`]: https://github.com/sargunv/maplibre-arkui/blob/main/demo/entry/src/main/ets/docs/Examples.ets

@@ -12,10 +12,10 @@ import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw"
 Build [style expressions] with functions named after their operators, such as
 <Api of="get" />, <Api of="match" />, <Api of="interpolate" />, and
 <Api of="featureState" /> for `feature-state`. Symbols get words (`eq` for `==`,
-`add` for `+`), and `case` is <Api of="cases" />. Use them in
-[`MapContent`](/maplibre-arkui/content/), or pass them as they are to the
-style functions of the FFI map that
-[`withFfiMap()`](/maplibre-arkui/style/#the-ffi-map) lends:
+`add` for `+`), and `case` is <Api of="cases" />, which takes a list of
+<Api of="Condition" /> pairs. Use them in the `filter`, `paint`, and `layout` of a
+layer in the [content](/maplibre-arkui/content/), and as the `filter` of a
+[feature query](/maplibre-arkui/style/#query-features):
 
 <Code code={region(examples, "expressions")} lang="ts" />
 
@@ -24,7 +24,8 @@ by the font scale that the map sets, as ArkUI scales `fp` sizes.
 
 <Api of="call" display="call(operator, ...args)" /> and
 <Api of="Expression" display="new Expression(json)" /> cover the operators that
-have no function. Expressions are untyped: MapLibre checks their types as it
-parses them.
+have no function. Expressions are untyped: MapLibre checks their types as the
+map applies them, and an invalid expression in the content goes to the map's
+`onError`.
 
 [style expressions]: https://maplibre.org/maplibre-style-spec/expressions/

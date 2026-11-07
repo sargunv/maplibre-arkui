@@ -45,19 +45,90 @@ export type { RuntimeEventListener } from './src/main/ets/runtime';
 export { ConnectivityMode, getConnectivityMode, setConnectivityMode } from './src/main/ets/connectivity';
 export { snapshot } from './src/main/ets/Snapshot';
 export type {
+  FeatureClickEvent,
   FeatureClickHandler,
   LayerPredicate,
+  LayerSummary,
   MapContent,
-  MapImage,
-  MapLayer,
-  MapSource,
+  StyleImage,
+  StyleLayer,
+  StyleSource,
 } from './src/main/ets/Content';
 export type { SnapshotOptions } from './src/main/ets/Snapshot';
 
 // The FFI runtime that a map and a snapshot take.
 export { RuntimeHandle } from '@maplibre/native-ffi';
 
-export * from './src/main/ets/Expressions';
+export {
+  abs,
+  add,
+  all,
+  any,
+  call,
+  cases,
+  ceil,
+  coalesce,
+  concat,
+  cubicBezier,
+  divide,
+  downcase,
+  eq,
+  exponential,
+  Expression,
+  featureState,
+  floor,
+  format,
+  fp,
+  geometryType,
+  get,
+  globalState,
+  gt,
+  gte,
+  has,
+  heatmapDensity,
+  id,
+  image,
+  interpolate,
+  interpolateHcl,
+  interpolateLab,
+  Interpolation,
+  linear,
+  lineProgress,
+  literal,
+  lt,
+  lte,
+  match,
+  max,
+  min,
+  mod,
+  multiply,
+  neq,
+  not,
+  pow,
+  properties,
+  rgb,
+  rgba,
+  round,
+  sqrt,
+  step,
+  subtract,
+  toBoolean,
+  toColor,
+  toNumber,
+  toString,
+  upcase,
+  zoom,
+} from './src/main/ets/Expressions';
+export type {
+  Condition,
+  ExpressionInput,
+  FormatSection,
+  JsonObject,
+  JsonValue,
+  MatchCase,
+  MatchLabel,
+  Stop,
+} from './src/main/ets/Expressions';
 
 // The FFI API for requests, offline regions, events, and logs, which apps call
 // on a runtime. FFI's `setNetworkStatus()` isn't here: `setConnectivityMode()`
@@ -120,17 +191,6 @@ export type {
   TileId,
   UrlQueryParameter,
 } from '@maplibre/native-ffi';
-
-// The FFI types of the map's content, its layers and images.
-export { StyleImageTextFit } from '@maplibre/native-ffi';
-export type {
-  ImageContent,
-  ImageStretch,
-  PremultipliedRgba8Image,
-  StyleImageOptions,
-  StyleLayerInfo,
-} from '@maplibre/native-ffi';
-export { readPixelMap } from './src/main/ets/StyleImage';
 
 export { MapAttributionOnlyOverlay, MapDefaultOverlay, MapFullOverlay } from './src/main/ets/Overlay';
 export {

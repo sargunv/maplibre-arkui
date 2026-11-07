@@ -4,8 +4,8 @@
 // no fixes, and it has no compass.
 
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
-import { FollowBearing, LatLng, StyleLayerInfo } from '@maplibre/arkui';
-import { MapHandle } from '@maplibre/native-ffi';
+import { FollowBearing, LatLng } from '@maplibre/arkui';
+import { MapHandle, StyleLayerInfo } from '@maplibre/native-ffi';
 import {
   BORDER_RADIUS,
   DOT_COLOR,

@@ -133,13 +133,13 @@ export default function expressionsTest(): void {
       expect(JSON.stringify(names)).assertEqual('["literal",["a"]]');
     });
 
-    it('compares by JSON', 0, () => {
+    it('writes the same text for the same JSON', 0, () => {
       const a = interpolate(linear(), zoom(), [[0, 1], [10, get('size')]]);
       const b = interpolate(linear(), zoom(), [[0, 1], [10, get('size')]]);
       const c = interpolate(linear(), zoom(), [[0, 1], [10, get('width')]]);
-      expect(a.equals(b)).assertTrue();
-      expect(a.equals(c)).assertFalse();
-      expect(a.toString() === b.toString()).assertTrue();
+      expect(a.toString()).assertEqual(b.toString());
+      expect(a.toString() === c.toString()).assertFalse();
+      expect(JSON.stringify(exponential(2))).assertEqual('["exponential",2]');
     });
   });
 

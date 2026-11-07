@@ -9,7 +9,7 @@ import {
   CameraTransitionMode,
   ContentError,
   getDefaultRuntime,
-  MapLayer,
+  StyleLayer,
   removeRuntimeEventListener,
   RuntimeEvent,
   RuntimeEventFlag,
@@ -179,7 +179,7 @@ export default function lifecycleTest(): void {
       if (stage === undefined) {
         throw new Error('The test ability has no window stage');
       }
-      const dots: MapLayer = { id: 'dots', type: 'background' };
+      const dots: StyleLayer = { id: 'dots', type: 'background' };
       testMap.content = { layers: [dots] };
       await eventually('the content applies', () => withMap((ffi: MapHandle) => ffi.getStyleLayer('dots')));
       await map.updateCamera({ center: { latitude: 10, longitude: 20 }, zoom: 4 });
@@ -285,8 +285,8 @@ export default function lifecycleTest(): void {
       await until('the map reports the URL', () => testMap.errors.length > 0);
       await setStyle(STYLE);
 
-      const lost: MapLayer = { id: 'lost', type: 'circle', source: 'missing' };
-      const dots: MapLayer = { id: 'dots', type: 'background' };
+      const lost: StyleLayer = { id: 'lost', type: 'circle', source: 'missing' };
+      const dots: StyleLayer = { id: 'dots', type: 'background' };
       testMap.content = { layers: [lost, dots] };
       await until('the map reports the layer', () =>
         testMap.errors.some((error: string) => error.includes('adding layer lost')));

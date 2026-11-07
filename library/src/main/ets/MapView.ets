@@ -39,7 +39,7 @@ import geoLocationManager from '@ohos.geoLocationManager';
 import { CameraBoundsOptions, toBoundOptions } from './CameraBounds';
 import { CameraIdleEvent } from './CameraIdleEvent';
 import { CameraPosition } from './CameraPosition';
-import { ContentReconciler, loadStyle, MapContent, MapLayer } from './Content';
+import { ContentReconciler, featureClickEvent, hitPaddingOf, loadStyle, MapContent, StyleLayer } from './Content';
 import { ControllerState } from './ControllerState';
 import {
   checkCamera,
@@ -581,9 +581,10 @@ export class MapView extends XComponentController implements GestureTarget {
       }
       for (const layer of layers) {
         const handler = long ? layer.onLongClick : layer.onClick;
-        const features = hits.filter((hit: RenderedFeature) => hit.layerId === layer.id);
-        if (handler !== undefined && features.length > 0 &&
-          consumes(`The click handler of layer ${layer.id}`, () => handler(features, event))) {
+        const features = hits.filter((hit: RenderedFeature) => hit.layerId === layer.id)
+          .map((hit: RenderedFeature) => hit.feature);
+        if (handler !== undefined && features.length > 0 && consumes(`The click handler of layer ${layer.id}`,
+          () => handler(featureClickEvent(event, features)))) {
           return;
         }
       }
@@ -594,15 +595,16 @@ export class MapView extends XComponentController implements GestureTarget {
   }
 
   // The features of the layers under the click, with one query for each
-  // hitPadding, or undefined if a query fails.
-  private async queryClick(layers: MapLayer[], event: MapClickEvent): Promise<RenderedFeature[] | undefined> {
+  // hitPadding, or undefined if a query fails. Each layer is in one query, so
+  // no feature comes twice.
+  private async queryClick(layers: StyleLayer[], event: MapClickEvent): Promise<RenderedFeature[] | undefined> {
     const session = this.session;
     if (session === undefined) {
       return [];
     }
     const byPadding = new Map<number, string[]>();
     for (const layer of layers) {
-      const padding = Math.max(0, layer.hitPadding ?? 0);
+      const padding = hitPaddingOf(layer);
       const ids = byPadding.get(padding) ?? [];
       ids.push(layer.id);
       byPadding.set(padding, ids);
@@ -714,7 +716,7 @@ export class MapView extends XComponentController implements GestureTarget {
       return;
     }
     this.map = map;
-    this.reconciler = new ContentReconciler(map, (error: Error) => this.fail(error));
+    this.reconciler = new ContentReconciler(map, (error: Error) => this.fail(error), scaleFactor);
     this.reconciler.setContent(this.content);
     this.reconciler.setFontScale(fontScaleOf(this.context));
     addRuntimeMap(runtime, map, (error: Error) => this.fail(error));
