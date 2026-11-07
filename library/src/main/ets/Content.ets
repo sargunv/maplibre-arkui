@@ -710,22 +710,37 @@ export class ContentReconciler {
     }
   }
 
-  // The base layer that a layer goes under, or '' for the top. A predicate
-  // that throws matches nothing.
+  /**
+   * The layer that `below` places a layer of the library's under, as the
+   * last pass left the style: the base-style or content layer with this ID,
+   * or the base layer that the predicate picks. '' when there's none. A
+   * predicate that throws is reported as `what`'s, and picks none.
+   */
+  layerBelow(below: string | LayerPredicate, what: string): string {
+    if (typeof below === 'string') {
+      return this.hasLayer(below) ? below : '';
+    }
+    return this.pick(below, what);
+  }
+
+  // The base layer that a layer goes under, or '' for the top.
   private resolve(layer: StyleLayer): string {
     const below = layer.below;
-    const base: LayerSummary[] = this.base ?? [];
-    let found: LayerSummary | undefined = undefined;
     if (typeof below === 'string') {
-      found = base.find((other: LayerSummary) => other.id === below);
-    } else if (below !== undefined) {
-      try {
-        found = base.find(below);
-      } catch (error) {
-        this.report(new MapError(`Content: the below predicate of layer ${layer.id} threw: ${(error as Error).message}`));
-      }
+      return (this.base ?? []).find((other: LayerSummary) => other.id === below)?.id ?? '';
     }
-    return found?.id ?? '';
+    return below === undefined ? '' : this.pick(below, `Content: the below predicate of layer ${layer.id}`);
+  }
+
+  // The base layer that `predicate` picks, or '' for none. One that throws is
+  // reported as `what`'s, and picks none.
+  private pick(predicate: LayerPredicate, what: string): string {
+    try {
+      return (this.base ?? []).find(predicate)?.id ?? '';
+    } catch (error) {
+      this.report(new MapError(`${what} threw: ${(error as Error).message}`));
+      return '';
+    }
   }
 }
 

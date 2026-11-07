@@ -4,7 +4,14 @@ import common from '@ohos.app.ability.common';
 import geoLocationManager from '@ohos.geoLocationManager';
 import sensor from '@ohos.sensor';
 
-import { FollowBearing, MapController, MapError, MaplibreMap, UserLocationIndicatorOptions } from '@maplibre/arkui';
+import {
+  FollowBearing,
+  LayerSummary,
+  MapController,
+  MapError,
+  MaplibreMap,
+  UserLocationIndicatorOptions,
+} from '@maplibre/arkui';
 
 import { LIBERTY, PANEL } from './common';
 
@@ -48,21 +55,20 @@ function simulatedLocation(seconds: number): geoLocationManager.Location {
 }
 
 // The camera's bearing while it follows, by the label of its button.
-const BEARINGS: (FollowBearing | undefined)[] = [undefined, FollowBearing.course, FollowBearing.heading];
+const BEARINGS: (FollowBearing | undefined)[] = [undefined, FollowBearing.COURSE, FollowBearing.HEADING];
 const BEARING_LABELS: string[] = ['Keep the bearing', 'Turn with course', 'Turn with heading'];
 
-// The restyled indicator: red, without a shadow, under the style's labels.
+// The restyled indicator: red, with an accuracy circle to match, without a
+// shadow, under the style's labels.
 const RED_INDICATOR: UserLocationIndicatorOptions = {
   color: '#e53935',
-  accuracyColor: 'rgba(229, 57, 53, 0.15)',
-  accuracyBorderColor: 'rgba(229, 57, 53, 0.5)',
   shadowImage: '',
-  below: 'waterway_line_label',
+  below: (layer: LayerSummary) => layer.type === 'symbol',
 };
 
 // A map that shows where the user is and where they face, from Location Kit
 // and the compass or a simulated walk, and follows it until the user pans.
-// Zooming and rotating keep following.
+// Zooming keeps following, and rotating keeps following without turning.
 @ComponentV2
 export struct LocationDemo {
   @Local location: geoLocationManager.Location | undefined = undefined;
@@ -109,7 +115,6 @@ export struct LocationDemo {
           userLocation: this.location,
           userHeading: this.heading,
           userLocationIndicator: this.red ? RED_INDICATOR : {},
-          interactions: { pan: { onStart: () => this.map.stopFollowingUserLocation() } },
           onError: (error: MapError) => {
             this.message = error.message;
           },
@@ -125,10 +130,12 @@ export struct LocationDemo {
             Button(this.map.followingUserLocation ? 'Following' : 'Locate me')
               .margin(4)
               .onClick(() => this.locate())
-            Button(BEARING_LABELS[this.bearing])
+            // While it follows, the bearing that it turns with, which a twist
+            // clears. A tap turns with the next.
+            Button(BEARING_LABELS[this.turning()])
               .margin(4)
               .onClick(() => {
-                this.bearing = (this.bearing + 1) % BEARINGS.length;
+                this.bearing = (this.turning() + 1) % BEARINGS.length;
                 if (this.map.followingUserLocation) {
                   this.map.followUserLocation({ bearing: BEARINGS[this.bearing] });
                 }
@@ -157,6 +164,12 @@ export struct LocationDemo {
       .height('100%')
     }
     .title('Location')
+  }
+
+  // The index in BEARINGS of how the camera turns as it follows, or will turn
+  // once it follows.
+  private turning(): number {
+    return this.map.followingUserLocation ? BEARINGS.indexOf(this.map.followedBearing) : this.bearing;
   }
 
   private describe(): string {

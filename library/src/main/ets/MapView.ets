@@ -32,6 +32,7 @@ import {
   StyleSourceInfo,
 } from '@maplibre/native-ffi';
 import { Configuration } from '@ohos.app.ability.Configuration';
+import ConfigurationConstant from '@ohos.app.ability.ConfigurationConstant';
 import EnvironmentCallback from '@ohos.app.ability.EnvironmentCallback';
 import observer from '@ohos.arkui.observer';
 import geoLocationManager from '@ohos.geoLocationManager';
@@ -39,7 +40,15 @@ import geoLocationManager from '@ohos.geoLocationManager';
 import { CameraBoundsOptions, toBoundOptions } from './CameraBounds';
 import { CameraIdleEvent } from './CameraIdleEvent';
 import { CameraPosition } from './CameraPosition';
-import { ContentReconciler, featureClickEvent, hitPaddingOf, loadStyle, MapContent, StyleLayer } from './Content';
+import {
+  ContentReconciler,
+  featureClickEvent,
+  hitPaddingOf,
+  LayerPredicate,
+  loadStyle,
+  MapContent,
+  StyleLayer,
+} from './Content';
 import { ControllerState } from './ControllerState';
 import {
   checkCamera,
@@ -122,11 +131,18 @@ export class MapView extends XComponentController implements GestureTarget {
       this.reconciler?.setFontScale(fontScaleOf(this.context));
       // fp insets follow the font scale.
       this.applyViewportInsets((error: Error) => this.fail(error));
+      // A color resource can have another value in dark mode.
+      if (config.colorMode !== undefined && config.colorMode !== this.colorMode) {
+        this.colorMode = config.colorMode;
+        this.locationLayer.colorModeChanged(this.map);
+      }
     },
     onMemoryLevel: (): void => {
     },
   };
   private environmentCallbackId: number | undefined = undefined;
+  // The color mode of the last configuration change.
+  private colorMode: ConfigurationConstant.ColorMode | undefined = undefined;
   // The state of the controller that the component binds.
   private state: ControllerState | undefined = undefined;
   private disposed: boolean = false;
@@ -374,23 +390,17 @@ export class MapView extends XComponentController implements GestureTarget {
     return withPadding(fitted, cameraPadding, center);
   }
 
-  // Options that an app writes in `build()` are a new value each time, so
-  // only a change of their JSON draws the indicator again.
+  // Options that an app writes in `build()` are a new value each time, which
+  // the indicator compares with the last.
   setUserLocationIndicator(options: UserLocationIndicatorOptions): void {
-    if (JSON.stringify(options) === JSON.stringify(this.indicatorOptions)) {
-      return;
-    }
     this.indicatorOptions = options;
     this.locationLayer.setOptions(this.map, options);
-    const map = this.map;
-    if (map !== undefined) {
-      this.locationLayer.draw(map, this.userLocation, this.userHeading);
-    }
   }
 
   private newLocationLayer(scaleFactor: number): UserLocationLayer {
     return new UserLocationLayer(scaleFactor, this.indicatorOptions,
-      () => this.reconciler?.applied ?? Promise.resolve(), (id: string) => this.reconciler?.hasLayer(id) ?? false,
+      () => this.reconciler?.applied ?? Promise.resolve(),
+      (below: string | LayerPredicate) => this.reconciler?.layerBelow(below, 'userLocationIndicator.below') ?? '',
       (error: Error) => this.fail(error));
   }
 
@@ -417,9 +427,8 @@ export class MapView extends XComponentController implements GestureTarget {
   // Moves the camera to the user's location while the controller follows it,
   // and returns whether it did. It waits for the camera moves that wait for
   // the map. A move would stop the user's input, so it waits for the input to
-  // end; the camera turns to `snapBearing` when it doesn't follow a bearing of
-  // its own.
-  followUserLocation(headingChanged: boolean = false, snapBearing?: number): boolean {
+  // end.
+  followUserLocation(headingChanged: boolean = false): boolean {
     const map = this.map;
     const location = this.userLocation;
     const state = this.state;
@@ -430,9 +439,6 @@ export class MapView extends XComponentController implements GestureTarget {
     const camera = state.followCamera(location, this.userHeading, headingChanged);
     if (camera === undefined) {
       return false;
-    }
-    if (camera.bearing === undefined) {
-      camera.bearing = snapBearing;
     }
     map.discarding.updateCamera({
       mode: CameraUpdateMode.ease,
@@ -500,22 +506,34 @@ export class MapView extends XComponentController implements GestureTarget {
 
   // While the camera follows the location, which is at its center.
   keepsCenter(): boolean {
-    const state = this.state;
-    return state !== undefined && state.view === this && state.followingUserLocation;
+    return this.shownState()?.followingUserLocation === true;
   }
 
-  // While the camera follows a location that it has, which it moves to once
-  // the input ends.
-  catchesUp(): boolean {
-    return this.map !== undefined && this.userLocation !== undefined && this.keepsCenter() &&
-      this.state?.ready === true;
+  // A pan stops following, a rotation keeps the bearing that the user leaves,
+  // and a zoom keeps the zoom that the user leaves.
+  panned(): void {
+    this.shownState()?.stopFollowingUserLocation();
+  }
+
+  rotated(): void {
+    this.shownState()?.dropFollowedBearing();
+  }
+
+  zoomed(): void {
+    this.shownState()?.dropFollowZoom();
+  }
+
+  // The controller's state while it shows this map.
+  private shownState(): ControllerState | undefined {
+    const state = this.state;
+    return state !== undefined && state.view === this ? state : undefined;
   }
 
   // FFI raises no event as a gesture ends, so the view reads where the camera
   // came to rest, after the gesture's changes. A camera that follows the
-  // location catches up with it, as it waited for the gesture, and turns to
-  // the gesture's snap bearing. A map that leaves reports no end.
-  gestureEnded(snapBearing: number | undefined): void {
+  // location catches up with it, as it waited for the gesture. A map that
+  // leaves reports no end.
+  gestureEnded(): void {
     if (this.disposed) {
       return;
     }
@@ -532,7 +550,7 @@ export class MapView extends XComponentController implements GestureTarget {
         map.getSnapshot().transitionInProgress) {
         return;
       }
-      if (!this.followUserLocation(false, snapBearing)) {
+      if (!this.followUserLocation()) {
         this.cameraIdle(result.camera);
       }
     }).catch((error: Error) => this.fail(error));

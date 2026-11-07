@@ -49,8 +49,10 @@ import { callHandler } from './log';
  * that are still on.
  *
  * While the camera follows the user's location, as
- * `MapController.followUserLocation()` describes, zoom and rotation keep the
- * location at the center, and two fingers pan only after they drag 400 vp.
+ * `MapController.followUserLocation()` describes, a pan stops following and a
+ * rotation clears the followed bearing, before `onGestureStart`. Zoom and
+ * rotation keep the location at the center, and two fingers pan only after
+ * they drag 400 vp. With `pan` or `rotate` off, the user can't do either.
  */
 export interface InteractionOptions {
   /**
@@ -176,20 +178,20 @@ export interface GestureTarget {
   /** The user started to move the camera. */
   gestureStarted(): void;
   /**
+   * The user's input pans, rotates, or zooms the camera, with the change it
+   * just applied. Each comes before `gestureStarted()` and the movement's
+   * `onStart`. Momentum and a snap don't call them.
+   */
+  panned(): void;
+  rotated(): void;
+  zoomed(): void;
+  /**
    * Whether zoom and rotation keep the camera's center in place, as while the
    * camera follows the user's location.
    */
   keepsCenter(): boolean;
-  /**
-   * Whether the camera catches up with the user's location as a gesture ends.
-   * The catch-up then turns it to the gesture's snap bearing.
-   */
-  catchesUp(): boolean;
-  /**
-   * The camera stopped moving from the user's input. A camera that catches up
-   * with the location turns to `snapBearing`, when there is one.
-   */
-  gestureEnded(snapBearing: number | undefined): void;
+  /** The camera stopped moving from the user's input. */
+  gestureEnded(): void;
   /** A rotation by the user crossed a haptic notch. */
   hapticTick(): void;
   /** An option was invalid. */
@@ -851,7 +853,7 @@ export class MapGestures {
       this.phaseOpen = false;
       this.moving = false;
       this.target.applyCameraDelta({ gesturePhase: GesturePhase.cancel });
-      this.target.gestureEnded(undefined);
+      this.target.gestureEnded();
     }
   }
 
@@ -1310,18 +1312,19 @@ export class MapGestures {
       this.rotated = true;
     }
     this.target.applyCameraDelta(delta);
+    const moved = this.moved(delta, movements);
     // After the change, so a camera change that the app makes as the gesture
     // starts follows it.
     if (delta.gesturePhase === GesturePhase.begin) {
       this.target.gestureStarted();
     }
-    this.began(delta, movements);
+    this.began(moved);
   }
 
-  // Runs the onStart of the movements that haven't started in this gesture,
-  // once `delta` moves the camera their way: a pinch that pans for a moment
-  // hasn't zoomed yet, and keys that cancel don't move.
-  private began(delta: CameraDelta, movements: number): void {
+  // The movements of `movements` that `delta` moves the camera in, which the
+  // target hears of: a pinch that pans for a moment hasn't zoomed yet, and
+  // keys that cancel don't move.
+  private moved(delta: CameraDelta, movements: number): number {
     const offset = delta.offset;
     if (offset === undefined || (offset.x === 0 && offset.y === 0)) {
       movements &= ~PAN;
@@ -1335,6 +1338,20 @@ export class MapGestures {
     if ((delta.pitch ?? 0) === 0) {
       movements &= ~PITCH;
     }
+    if ((movements & PAN) !== 0) {
+      this.target.panned();
+    }
+    if ((movements & ROTATE) !== 0) {
+      this.target.rotated();
+    }
+    if ((movements & ZOOM) !== 0) {
+      this.target.zoomed();
+    }
+    return movements;
+  }
+
+  // Runs the onStart of the movements that haven't started in this gesture.
+  private began(movements: number): void {
     const fresh = movements & ~this.started;
     this.started |= movements;
     const options = this.options;
@@ -1367,14 +1384,13 @@ export class MapGestures {
       this.snap();
     } else {
       this.moving = false;
-      this.target.gestureEnded(undefined);
+      this.target.gestureEnded();
     }
   }
 
   // The last step of a rotation, which the gesture ends with. Once the map
   // reports where the rotation left the bearing, the camera eases to the
-  // nearest snap bearing, or turns to it as it catches up with the user's
-  // location after the gesture.
+  // nearest snap bearing.
   private snap(): void {
     const step = ++this.step;
     this.target.readBearing((bearing: number | undefined) => {
@@ -1384,8 +1400,6 @@ export class MapGestures {
       const snapped = bearing === undefined ? undefined : snapBearing(bearing, this.snapBearings.values);
       if (bearing === undefined || snapped === undefined) {
         this.endStep();
-      } else if (this.target.catchesUp()) {
-        this.endStep(snapped);
       } else {
         this.animateStep({ bearing: snapped - bearing }, step);
       }
@@ -1423,9 +1437,10 @@ export class MapGestures {
     const step = ++this.step;
     this.moving = true;
     this.animateStep(delta, step);
+    const moved = this.moved(delta, movements);
     this.target.gestureStarted();
     this.started = 0;
-    this.began(delta, movements);
+    this.began(moved);
   }
 
   // Animates the camera by `delta` as the step numbered `step`, which ends
@@ -1447,12 +1462,12 @@ export class MapGestures {
 
   // Ends the animated step, if one is under way, and the gesture with it. A
   // step that something else ends stops where it is.
-  private endStep(snapBearing?: number): void {
+  private endStep(): void {
     this.step++;
     if (this.moving && !this.phaseOpen) {
       this.moving = false;
       this.target.cancelTransitions(STEP_TRANSITION);
-      this.target.gestureEnded(snapBearing);
+      this.target.gestureEnded();
     }
   }
 }

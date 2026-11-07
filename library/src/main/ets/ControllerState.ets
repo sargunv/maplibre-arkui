@@ -45,6 +45,7 @@ export class ControllerState {
   @Trace styleLoaded: boolean = false;
   @Trace attributions: string[] = [];
   @Trace followingUserLocation: boolean = false;
+  @Trace followedBearing: FollowBearing | undefined = undefined;
   // The map that shows the controller, and whether it has shown a frame at its
   // size, from which camera moves go to it.
   view: MapView | undefined = undefined;
@@ -54,7 +55,6 @@ export class ControllerState {
   private settles: number = 0;
   private settling: boolean = false;
   private waiting: WaitingMove[] = [];
-  private followOptions: FollowUserLocationOptions = {};
   // The zoom that the next move to follow the location takes.
   private followZoom: number | undefined = undefined;
   // How many times the app has moved the camera, so a fit that's still
@@ -150,15 +150,26 @@ export class ControllerState {
     });
   }
 
+  // A new center stops following, and a new bearing drops the followed one.
   updateCamera(camera: CheckedCamera, transition: CheckedTransition): Promise<boolean> {
+    if (camera.center !== undefined) {
+      this.stopFollowingUserLocation();
+    } else if (camera.bearing !== undefined) {
+      this.dropFollowedBearing();
+    }
+    if (camera.zoom !== undefined) {
+      this.dropFollowZoom();
+    }
     return this.move((view: MapView) => this.transition(view, transition,
       (map: MapHandle, animation: AnimationOptions) =>
         view.moveCamera(map, view.resolveCamera(camera), transition, animation)));
   }
 
   // Finds the camera for a fit, then moves it there, unless the map leaves, or
-  // the app or the user moves the camera first.
+  // the app or the user moves the camera first. A fit sets the center, so it
+  // stops following.
   fit(options: CheckedFit, query: (map: MapHandle, fit: CameraFitOptions) => Promise<CameraOptions>): Promise<boolean> {
+    this.stopFollowingUserLocation();
     return this.move(async (view: MapView) => {
       this.takeOverCamera(view);
       const moves = this.moves;
@@ -185,7 +196,7 @@ export class ControllerState {
   }
 
   followUserLocation(options: FollowUserLocationOptions | undefined): void {
-    this.followOptions = options ?? {};
+    this.followedBearing = options?.bearing;
     this.followZoom = options?.zoom;
     this.followingUserLocation = true;
     const view = this.view;
@@ -195,14 +206,30 @@ export class ControllerState {
     }
   }
 
+  stopFollowingUserLocation(): void {
+    this.followingUserLocation = false;
+    this.followedBearing = undefined;
+    this.followZoom = undefined;
+  }
+
+  // The user or the app turned the map, so following keeps the bearing.
+  dropFollowedBearing(): void {
+    this.followedBearing = undefined;
+  }
+
+  // The user or the app zoomed, so following keeps that zoom.
+  dropFollowZoom(): void {
+    this.followZoom = undefined;
+  }
+
   // Where the map moves the camera for `location` and `heading`, or undefined
   // while the camera doesn't follow them. A new heading alone, which
   // `headingChanged` says, moves the camera only while it turns with the
   // heading.
   followCamera(location: geoLocationManager.Location, heading: number | undefined,
     headingChanged: boolean): CameraOptions | undefined {
-    const follow = this.followOptions.bearing;
-    if (!this.followingUserLocation || (headingChanged && follow !== FollowBearing.heading)) {
+    const follow = this.followedBearing;
+    if (!this.followingUserLocation || (headingChanged && follow !== FollowBearing.HEADING)) {
       return undefined;
     }
     const zoom = this.followZoom;
@@ -210,8 +237,8 @@ export class ControllerState {
     return {
       center: { latitude: location.latitude, longitude: location.longitude },
       zoom: zoom,
-      bearing: follow === FollowBearing.course ? course(location) :
-        follow === FollowBearing.heading ? heading : undefined,
+      bearing: follow === FollowBearing.COURSE ? course(location) :
+        follow === FollowBearing.HEADING ? heading : undefined,
     };
   }
 

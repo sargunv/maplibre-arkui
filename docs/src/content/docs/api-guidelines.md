@@ -160,6 +160,8 @@ breaking change.
 
 - State the kind in the doc comment: "Closed." or "Values may be added in later
   releases; give a `switch` over it a `default` branch."
+- An input enum that a getter only echoes back, such as `FollowBearing` from
+  `followedBearing`, stays open input.
   [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#4-types-that-may-grow)
 - When a value means "no answer", use `undefined` instead of a named catch-all
   such as `UNKNOWN`.

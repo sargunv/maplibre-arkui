@@ -15,20 +15,19 @@ arrow for its course while it moves.
 
 <Api of="MapController.followUserLocation" display="followUserLocation()" />
 
-moves the camera with each new location until the app calls
-`stopFollowingUserLocation()`, which sets the controller's observable
-`followingUserLocation` to false. The user's input doesn't stop it on its own:
-an app stops as the user starts to pan, in the `onStart` of
-[`interactions.pan`](/maplibre-arkui/gestures/#choose-the-cameras-movements):
+moves the camera with each new location until the user pans, the app moves the
+camera's center, or the app calls `stopFollowingUserLocation()`. The
+controller's observable `followingUserLocation` shows whether it follows, so a
+Locate me button can offer it again:
 
 <Code code={region(examples, "location")} lang="ts" />
 
-While the camera follows, the user can zoom and rotate: both keep the location
-at the center, and two fingers zoom and rotate without panning. The camera
-waits for the user's input to end, then catches up with the location, after
-`onGestureEnd`. A pan that doesn't stop following eases back, and so does a
-rotation while the camera turns with the course or heading, unless the app
-follows without the bearing from the rotation's `onStart`.
+While the camera follows, the user can zoom, pitch, and rotate. Zoom and
+rotation keep the location at the center, and two fingers zoom and rotate
+without panning. The camera waits for the user's input to end, then catches up
+with the location, after `onGestureEnd`. To keep the user from stopping it, turn
+pan off with
+[`interactions`](/maplibre-arkui/gestures/#choose-the-cameras-movements).
 
 The library declares no permission and starts no location request, so apps that
 don't show a location don't ask for one. An app that does declares
@@ -44,21 +43,23 @@ The arrow points where the device faces while the app passes a heading as
 `userHeading`, in degrees clockwise from north, and shows the course again once
 it's `undefined`. The compass needs no permission. An app reads it from
 `@ohos.sensor`'s orientation sensor while the page shows, and turns the map with
-it by following with `FollowBearing.heading`:
+it by following with `FollowBearing.HEADING`.
+
+A rotation by the user keeps following but stops turning the map, and so does a
+camera move by the app that sets the bearing, such as a tap on the compass. The
+controller's observable `followedBearing` becomes `undefined`, so a button can
+turn the map with the heading again:
 
 <Code code={region(examples, "heading")} lang="ts" />
 
 ## Style the indicator
 
-`userLocationIndicator` changes the colors of the default dot and arrow and of
-the accuracy circle, puts images of the style's own, or of the map's
-[content](/maplibre-arkui/content/), in place of the default dot, arrow, and
-shadow, and puts the indicator under a layer of the base style or the content
-with `below`. An image name of `''` draws none:
+`userLocationIndicator` changes the color of the default dot and arrow, which
+the accuracy circle takes too unless it has colors of its own. It puts images of
+the style's own, or of the map's [content](/maplibre-arkui/content/), in place
+of the default dot, arrow, and shadow, and puts the indicator under a layer of
+the base style or the content with `below`. An image name of `''` draws none:
 
 <Code code={region(examples, "location-indicator")} lang="ts" />
 
-See <Api of="UserLocationIndicatorOptions" /> for every option. For more, such
-as other sizes or transitions, leave `userLocation` out and draw a
-`location-indicator` layer in the map's content, with the location in its
-`paint`.
+See <Api of="UserLocationIndicatorOptions" /> for every option.
