@@ -4,9 +4,9 @@ import {
   Expression, exponential, featureState, floor, format, fp, geometryType, get, globalState, gt, gte, has,
   heatmapDensity, id, image, interpolate, interpolateHcl, interpolateLab, JsonValue, linear,
   lineProgress, literal, lt, lte, match, max, min, mod, multiply, neq, not, pow, properties, rgb, rgba,
-  round, sqrt, step, StyleExpressionHandle, StyleExpressionInputs, StyleExpressionTypeKind, subtract, toBoolean,
-  toColor, toNumber, toString, upcase, zoom
+  round, sqrt, step, subtract, toBoolean, toColor, toNumber, toString, upcase, zoom
 } from '@maplibre/arkui';
+import { StyleExpressionHandle, StyleExpressionInputs, StyleExpressionTypeKind } from '@maplibre/native-ffi';
 
 import { expectNear } from './helpers';
 

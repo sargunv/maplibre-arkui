@@ -1,5 +1,5 @@
 import {
-  CameraPosition,
+  CameraIdleEvent,
   LatLng,
   MapAttributionButton,
   MapAttributionOnlyOverlay,
@@ -8,8 +8,9 @@ import {
   MapDefaultOverlay,
   MapDisappearingCompassButton,
   MapDisappearingScaleBar,
+  MapError,
   MapFullOverlay,
-  MapLibreMap,
+  MaplibreMap,
   MapPlacedAt,
   MapPlacedTowards,
   MapPointerPinButton,
@@ -224,18 +225,18 @@ struct Index {
   @Builder
   map() {
     if (testMap.overlay === 'omitted') {
-      MapLibreMap({
-        controller: testMap.controller,
+      MaplibreMap({
         style: testMap.style,
+        controller: testMap.controller,
         viewportInsets: testMap.viewportInsets,
         onStyleLoaded: () => {
           testMap.styleLoads++;
         },
       })
     } else {
-      MapLibreMap({
-        controller: testMap.controller,
+      MaplibreMap({
         style: testMap.style,
+        controller: testMap.controller,
         content: testMap.content,
         cameraBounds: testMap.cameraBounds,
         runtime: testMap.runtime,
@@ -247,11 +248,15 @@ struct Index {
         onStyleLoaded: () => {
           testMap.styleLoads++;
         },
-        onCameraIdle: (camera: CameraPosition) => {
-          testMap.cameraIdles.push(camera);
+        onCameraIdle: (event: CameraIdleEvent) => {
+          testMap.cameraIdles.push(event.camera);
+          if (testMap.throwOnCameraIdle) {
+            throw new Error('the app handler failed');
+          }
         },
-        onMapError: (error: Error) => {
+        onError: (error: MapError) => {
           testMap.errors.push(error.message);
+          testMap.failures.push(error);
           if (testMap.throwOnError) {
             throw new Error('the app handler failed');
           }
@@ -278,7 +283,7 @@ struct Index {
   // The second map shows the same controller, without controls.
   @Builder
   secondMap() {
-    MapLibreMap({ controller: testMap.controller, style: STYLE }) {
+    MaplibreMap({ style: STYLE, controller: testMap.controller }) {
     }
   }
 }

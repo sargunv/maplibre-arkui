@@ -45,8 +45,13 @@ from this guide.
 - Name a class that the app creates and passes to a component to read and
   control it `<Thing>Controller`, as ArkUI's `TextController` is.
 - Name settings `<Thing>Options`, after what they configure.
-- Name events `on` and what happened. When ArkUI's universal events already take
-  the name, add the component's noun.
+- Name events `on` and what happened. When ArkUI's universal events take one
+  name of a family, add the component's noun to the whole family: `onMapClick`
+  and `onMapLongClick`, because of the universal `onClick`.
+- Name an event's type after its handler, without `on`, and add `Event`:
+  `onCameraIdle` takes a `CameraIdleEvent`. Handlers whose payloads are the same
+  may share one type, as `onMapClick` and `onMapLongClick` share
+  `MapClickEvent`.
 - Don't give booleans an `is` prefix or a negative name.
   [[2]](https://gitee.com/openharmony/docs/blob/master/en/contribute/OpenHarmony-ArkTS-coding-style-guide.md)
 - In the expression DSL, write operators that take no arguments as functions,
@@ -288,8 +293,8 @@ export type FeatureClickHandler = (features: GeoJsonFeature[], x: number, y: num
 Events, query results, and frame state are created by the library and only read
 by callers.
 
-- Declare them as interfaces, or as classes with a private constructor. Add
-  fields in any release.
+- Declare them as interfaces. Errors are classes that extend `Error`. Add fields
+  in any release.
   [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#8-types-the-library-creates)
 - When state can change outside the caller's control, and the caller can't check
   it first without a race, return `undefined` from reads instead of throwing.
@@ -324,7 +329,7 @@ export interface LatLng {
   longitude: number;
 }
 
-withFfiMap<T>(block: (map: MapHandle) => T): T | undefined;
+withFfiMap<T>(block: (map: MapHandle, session: RenderSessionHandle | undefined) => T): T | undefined;
 
 // Don't
 export type { LatLng } from '@maplibre/native-ffi';

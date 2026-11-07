@@ -1,4 +1,4 @@
-// The map behind a MapLibreMap and the XComponent surface it renders to. It
+// The map behind a MaplibreMap and the XComponent surface it renders to. It
 // creates the FFI map when the component appears, attaches a render session to
 // each surface the XComponent reports, makes a new map and session when the
 // display's density changes, and disposes everything when the component
@@ -22,8 +22,6 @@ import {
   MapProjectionHandle,
   MapView as FrameView,
   RenderDriverKind,
-  RenderedFeature,
-  RenderedQueryGeometry,
   RenderResult,
   RenderSessionHandle,
   RuntimeEvent,
@@ -38,8 +36,11 @@ import EnvironmentCallback from '@ohos.app.ability.EnvironmentCallback';
 import observer from '@ohos.arkui.observer';
 import geoLocationManager from '@ohos.geoLocationManager';
 
+import { CameraBoundsOptions, toBoundOptions } from './CameraBounds';
+import { CameraIdleEvent } from './CameraIdleEvent';
 import { CameraPosition } from './CameraPosition';
-import { ContentReconciler, loadStyle, MapClickEvent, MapContent, MapLayer } from './Content';
+import { ContentReconciler, loadStyle, MapContent, MapLayer } from './Content';
+import { ControllerState } from './ControllerState';
 import {
   checkCamera,
   CheckedCamera,
@@ -53,9 +54,11 @@ import { fontScaleOf } from './fontScale';
 import { GESTURE_ANIMATION_MS, GestureTarget, MapGestures, snapBearing } from './gestures';
 import { playTick } from './haptics';
 import { FOLLOW_MS, UserLocationIndicatorOptions, UserLocationLayer } from './location';
-import { logError } from './log';
+import { consumes, logError } from './log';
 import { addInsets, contextScales, Insets, NO_INSETS, paddingInVp, paddingInVpOrZero, sameInsets } from './Insets';
-import { MapController } from './MapController';
+import { MapClickEvent } from './MapClickEvent';
+import { MapError, StyleLoadError } from './MapError';
+import { queryRendered, RenderedFeature } from './Queries';
 import {
   addRuntimeEventListener,
   addRuntimeMap,
@@ -65,6 +68,7 @@ import {
   removeRuntimeMap,
   runtimeEventMask,
 } from './runtime';
+import { FrameViewport } from './Viewport';
 
 // The map events that the view handles.
 const HANDLED_EVENTS: RuntimeEventFlag = RuntimeEventFlag.mapLoadingFailed |
@@ -72,15 +76,11 @@ const HANDLED_EVENTS: RuntimeEventFlag = RuntimeEventFlag.mapLoadingFailed |
   RuntimeEventFlag.mapCameraDidChange |
   RuntimeEventFlag.mapSourceChanged;
 
-// The limits that FFI gives a new map, from MapLibre Native's defaults, which
-// apply again when the app removes its own.
-const DEFAULT_BOUNDS: BoundOptions = { unbounded: true, minZoom: 0, maxZoom: 22, minPitch: 0, maxPitch: 60 };
-
-// What the view reports to its component.
+// What the view reports to its component, whose handlers don't throw.
 export interface MapViewEvents {
   onStyleLoaded: () => void;
-  onCameraIdle: (camera: CameraPosition) => void;
-  onMapError: (error: Error) => void;
+  onCameraIdle: (event: CameraIdleEvent) => void;
+  onError: (error: MapError) => void;
   // The viewport insets in vp changed, as the view resolved them.
   onViewportInsets: (insets: Insets) => void;
   onGestureStart: () => void;
@@ -89,6 +89,9 @@ export interface MapViewEvents {
   onMapLongClick: (event: MapClickEvent) => boolean;
   onUnhandledClick: (event: MapClickEvent) => void;
 }
+
+// A style's URL, or its document.
+export type MapStyle = string | Record<string, Object>;
 
 export class MapView extends XComponentController implements GestureTarget {
   runtime: RuntimeHandle | undefined = undefined;
@@ -124,7 +127,8 @@ export class MapView extends XComponentController implements GestureTarget {
     },
   };
   private environmentCallbackId: number | undefined = undefined;
-  private controller: MapController | undefined = undefined;
+  // The state of the controller that the component binds.
+  private state: ControllerState | undefined = undefined;
   private disposed: boolean = false;
   // How many times the app has moved the camera, which ends a gesture's say.
   private cameraTakeovers: number = 0;
@@ -134,12 +138,16 @@ export class MapView extends XComponentController implements GestureTarget {
   // factor: the density it was created at.
   private created: MapHandle | undefined = undefined;
   private scaleFactor: number = 1;
-  private style: string = '';
-  private content: MapContent | undefined = undefined;
+  private style: MapStyle = '';
+  // The style as JSON, which a new value must change to load again.
+  private styleJson: string = '""';
+  private content: MapContent = {};
   private reconciler: ContentReconciler | undefined = undefined;
   // The style that the map loads, until another replaces it.
   private loading: Promise<CommandCompletion> | undefined = undefined;
-  private bounds: BoundOptions | undefined = undefined;
+  // The last valid camera bounds, as FFI takes them, and as JSON.
+  private bounds: BoundOptions = toBoundOptions({});
+  private boundsJson: string = JSON.stringify(this.bounds);
   private userLocation: geoLocationManager.Location | undefined = undefined;
   private userHeading: number | undefined = undefined;
   private indicatorOptions: UserLocationIndicatorOptions = {};
@@ -208,12 +216,13 @@ export class MapView extends XComponentController implements GestureTarget {
     });
   }
 
-  start(controller: MapController, runtime: RuntimeHandle | undefined, style: string,
-    content: MapContent | undefined, bounds: BoundOptions | undefined): void {
-    this.controller = controller;
+  start(state: ControllerState, runtime: RuntimeHandle | undefined, style: MapStyle, content: MapContent,
+    bounds: CameraBoundsOptions): void {
+    this.state = state;
     this.style = style;
+    this.styleJson = JSON.stringify(style);
     this.content = content;
-    this.bounds = bounds;
+    this.setBounds(bounds);
     this.context.getUIObserver().on('densityUpdate', this.densityListener);
     this.environmentCallbackId = this.context.getHostContext()?.getApplicationContext()
       .on('environment', this.environmentCallback);
@@ -230,18 +239,39 @@ export class MapView extends XComponentController implements GestureTarget {
     }).catch((error: Error) => this.fail(error));
   }
 
-  setStyle(style: string): void {
+  // A style document that an app writes in `build()` is a new value each
+  // time, so only a change of its JSON loads it again.
+  setStyle(style: MapStyle): void {
+    const json = JSON.stringify(style);
+    if (json === this.styleJson) {
+      return;
+    }
     this.style = style;
+    this.styleJson = json;
     this.applyStyle();
   }
 
-  setContent(content: MapContent | undefined): void {
+  setContent(content: MapContent): void {
     this.content = content;
     this.reconciler?.setContent(content);
   }
 
-  setBounds(bounds: BoundOptions | undefined): void {
+  // Invalid limits are reported, and the map keeps its last limits. Only a
+  // change of their JSON applies them.
+  setBounds(options: CameraBoundsOptions): void {
+    let bounds: BoundOptions;
+    try {
+      bounds = toBoundOptions(options);
+    } catch (error) {
+      this.fail(error as Error);
+      return;
+    }
+    const json = JSON.stringify(bounds);
+    if (json === this.boundsJson) {
+      return;
+    }
     this.bounds = bounds;
+    this.boundsJson = json;
     this.applyBounds();
   }
 
@@ -385,18 +415,19 @@ export class MapView extends XComponentController implements GestureTarget {
   }
 
   // Moves the camera to the user's location while the controller follows it,
-  // and returns whether it did. A move would stop the user's input, so it
-  // waits for the input to end; the camera turns to `snapBearing` when it
-  // doesn't follow a bearing of its own.
+  // and returns whether it did. It waits for the camera moves that wait for
+  // the map. A move would stop the user's input, so it waits for the input to
+  // end; the camera turns to `snapBearing` when it doesn't follow a bearing of
+  // its own.
   followUserLocation(headingChanged: boolean = false, snapBearing?: number): boolean {
     const map = this.map;
     const location = this.userLocation;
-    const controller = this.controller;
-    if (map === undefined || location === undefined || controller === undefined || controller.map !== map ||
-      !this.gestures.idle) {
+    const state = this.state;
+    if (map === undefined || location === undefined || state === undefined || state.view !== this ||
+      !state.followReady || !this.gestures.idle) {
       return false;
     }
-    const camera = controller.followCamera(location, this.userHeading, headingChanged);
+    const camera = state.followCamera(location, this.userHeading, headingChanged);
     if (camera === undefined) {
       return false;
     }
@@ -448,8 +479,8 @@ export class MapView extends XComponentController implements GestureTarget {
 
   // While the camera follows the location, which is at its center.
   keepsCenter(): boolean {
-    const controller = this.controller;
-    return controller !== undefined && controller.map === this.map && controller.followingUserLocation;
+    const state = this.state;
+    return state !== undefined && state.view === this && state.followingUserLocation;
   }
 
   // FFI raises no event as a gesture ends, so the view reads where the camera
@@ -497,7 +528,10 @@ export class MapView extends XComponentController implements GestureTarget {
     const projection = MapProjectionHandle.create(map.getSnapshot().view);
     let event: MapClickEvent;
     try {
-      event = { x: point.x, y: point.y, coordinate: toLatLng(projection.latLngForPixel(point)) };
+      event = {
+        coordinate: toLatLng(projection.latLngForPixelUnwrapped(point)),
+        point: { x: point.x, y: point.y },
+      };
     } finally {
       projection.release();
     }
@@ -508,7 +542,7 @@ export class MapView extends XComponentController implements GestureTarget {
 
   // The map's handler first, then the layers' from the top down, then the
   // unhandled click. A click whose map or style went away during the query is
-  // dropped.
+  // dropped. A layer's handler that throws doesn't consume the click.
   private async dispatchClick(map: MapHandle, event: MapClickEvent, long: boolean): Promise<void> {
     const reconciler = this.reconciler;
     if (this.map !== map || reconciler === undefined) {
@@ -528,7 +562,8 @@ export class MapView extends XComponentController implements GestureTarget {
       for (const layer of layers) {
         const handler = long ? layer.onLongClick : layer.onClick;
         const features = hits.filter((hit: RenderedFeature) => hit.layerId === layer.id);
-        if (handler !== undefined && features.length > 0 && handler(features, event)) {
+        if (handler !== undefined && features.length > 0 &&
+          consumes(`The click handler of layer ${layer.id}`, () => handler(features, event))) {
           return;
         }
       }
@@ -552,24 +587,15 @@ export class MapView extends XComponentController implements GestureTarget {
       ids.push(layer.id);
       byPadding.set(padding, ids);
     }
-    const queries: Promise<readonly RenderedFeature[]>[] = [];
+    const queries: Promise<RenderedFeature[]>[] = [];
     byPadding.forEach((ids: string[], padding: number) => {
-      const geometry: RenderedQueryGeometry = padding === 0 ?
-        { kind: 'point', value: { x: event.x, y: event.y } } :
-        {
-          kind: 'box',
-          value: {
-            min: { x: event.x - padding, y: event.y - padding },
-            max: { x: event.x + padding, y: event.y + padding },
-          },
-        };
-      queries.push(session.queryRenderedFeatures(geometry, { layerIds: ids }));
+      queries.push(queryRendered(session, event.point, padding, ids, undefined));
     });
     try {
       const results = await Promise.all(queries);
       let hits: RenderedFeature[] = [];
       for (const result of results) {
-        hits = hits.concat(Array.from(result));
+        hits = hits.concat(result);
       }
       return hits;
     } catch (error) {
@@ -603,7 +629,7 @@ export class MapView extends XComponentController implements GestureTarget {
     const camera = old === undefined ? undefined : this.appCamera(old.getSnapshot().view.camera);
     // A map that isn't ready yet hasn't taken the controller, and its
     // replacement takes it as the map would have.
-    const attach = old === undefined || this.controller?.map === old;
+    const attach = old === undefined || this.state?.view === this;
     this.releaseMap();
     this.createMap(attach, camera).catch((error: Error) => this.fail(error));
   }
@@ -617,7 +643,8 @@ export class MapView extends XComponentController implements GestureTarget {
     if (runtime !== undefined && map !== undefined) {
       removeRuntimeMap(runtime, map);
     }
-    this.controller?.detach(this);
+    const current = this.map;
+    this.state?.detach(this, current === undefined ? undefined : this.appCamera(current.getSnapshot().view.camera));
     this.reconciler?.styleUnloaded();
     this.locationLayer.styleChanging();
     this.reconciler = undefined;
@@ -636,12 +663,12 @@ export class MapView extends XComponentController implements GestureTarget {
   }
 
   // Creates the map at the current density. It takes the controller if
-  // `attach`, and its camera starts at `camera` or, without one, where the
-  // controller says.
+  // `attach`, and its camera starts at `camera` or, without one, at the
+  // controller's camera.
   private async createMap(attach: boolean, camera: CameraPosition | undefined): Promise<void> {
-    const controller = this.controller;
+    const state = this.state;
     const runtime = this.runtime;
-    if (this.disposed || controller === undefined || runtime === undefined) {
+    if (this.disposed || state === undefined || runtime === undefined) {
       return;
     }
     const scaleFactor = this.context.vp2px(1);
@@ -671,12 +698,13 @@ export class MapView extends XComponentController implements GestureTarget {
     this.reconciler.setContent(this.content);
     this.reconciler.setFontScale(fontScaleOf(this.context));
     addRuntimeMap(runtime, map, (error: Error) => this.fail(error));
-    // The controller takes camera changes from here on, and the map runs
-    // commands in order, so they follow the starting camera.
-    // The insets go around the start camera's padding, or the map's, which is
-    // none.
-    const attached = attach ? controller.attach(this) : undefined;
-    const startCamera = this.resolveCamera((camera !== undefined ? checkCamera(camera) : attached) ?? {});
+    // The controller's camera moves go to the map once it shows a frame, and
+    // the map runs commands in order, so they follow the starting camera. The
+    // insets go around the start camera's padding.
+    if (attach) {
+      state.attach(this);
+    }
+    const startCamera = this.resolveCamera(checkCamera(camera ?? state.camera));
     this.padding = addInsets(NO_INSETS, startCamera.padding ?? NO_INSETS);
     map.discarding.updateCamera({
       mode: CameraUpdateMode.jump,
@@ -694,7 +722,7 @@ export class MapView extends XComponentController implements GestureTarget {
       return;
     }
     // The controller's state is this map's only while the controller shows it.
-    const controller = this.controller?.map === map ? this.controller : undefined;
+    const state = this.state?.view === this ? this.state : undefined;
     if (event.type === RuntimeEventType.mapCameraDidChange) {
       // The camera changes at the end of each jump and animation. Report it
       // once nothing moves it any more.
@@ -704,16 +732,17 @@ export class MapView extends XComponentController implements GestureTarget {
       }
     } else if (event.type === RuntimeEventType.mapSourceChanged) {
       // A source's attribution can arrive after the style, with its TileJSON.
-      if (controller !== undefined && controller.styleLoaded) {
-        this.readAttributions(map, controller);
+      if (state !== undefined && state.styleLoaded) {
+        this.readAttributions(map, state);
       }
-    } else if (event.type === RuntimeEventType.mapLoadingFailed ||
-      event.type === RuntimeEventType.mapRenderError) {
-      this.fail(new Error(event.message));
+    } else if (event.type === RuntimeEventType.mapLoadingFailed) {
+      this.fail(new StyleLoadError(event.message));
+    } else if (event.type === RuntimeEventType.mapRenderError) {
+      this.fail(new MapError(event.message));
     }
   }
 
-  private readAttributions(map: MapHandle, controller: MapController): void {
+  private readAttributions(map: MapHandle, state: ControllerState): void {
     map.listStyleSources().then((sources: readonly StyleSourceInfo[]) => {
       const attributions: string[] = [];
       for (const source of sources) {
@@ -723,20 +752,15 @@ export class MapView extends XComponentController implements GestureTarget {
         }
       }
       // Sources change often, as their data does, so keep an unchanged list.
-      if (controller.map === map && controller.styleLoaded &&
-        JSON.stringify(attributions) !== JSON.stringify(controller.attributions)) {
-        controller.attributions = attributions;
+      if (state.view === this && this.map === map && state.styleLoaded &&
+        JSON.stringify(attributions) !== JSON.stringify(state.attributions)) {
+        state.attributions = attributions;
       }
     }).catch((error: Error) => this.fail(error));
   }
 
   private cameraIdle(mapCamera: FfiCamera): void {
-    const camera = this.appCamera(mapCamera);
-    const controller = this.controller;
-    if (controller !== undefined && controller.map === this.map) {
-      controller.camera = camera;
-    }
-    this.events.onCameraIdle(camera);
+    this.events.onCameraIdle({ camera: this.appCamera(mapCamera) });
   }
 
   private applyStyle(): void {
@@ -744,10 +768,10 @@ export class MapView extends XComponentController implements GestureTarget {
     if (map === undefined) {
       return;
     }
-    const controller = this.controller;
-    if (controller !== undefined && controller.map === map) {
-      controller.styleLoaded = false;
-      controller.attributions = [];
+    const state = this.state;
+    if (state !== undefined && state.view === this) {
+      state.styleLoaded = false;
+      state.attributions = [];
     }
     this.locationLayer.styleChanging();
     this.reconciler?.styleUnloaded();
@@ -769,9 +793,9 @@ export class MapView extends XComponentController implements GestureTarget {
         await this.reconciler?.styleLoaded();
       }
       if (current()) {
-        if (controller !== undefined && controller.map === map) {
-          controller.styleLoaded = true;
-          this.readAttributions(map, controller);
+        if (state !== undefined && state.view === this) {
+          state.styleLoaded = true;
+          this.readAttributions(map, state);
         }
         this.events.onStyleLoaded();
         // Above what the content and the app added as the style loaded.
@@ -782,17 +806,9 @@ export class MapView extends XComponentController implements GestureTarget {
     }).catch((error: Error) => logError(error.message));
   }
 
-  // The limits that the app leaves out keep the map's defaults, not the app's
-  // earlier limits.
+  // Every limit at once, so those that the app leaves out take their defaults.
   private applyBounds(): void {
-    const map = this.map;
-    if (map === undefined) {
-      return;
-    }
-    map.discarding.setBounds(DEFAULT_BOUNDS);
-    if (this.bounds !== undefined) {
-      map.discarding.setBounds(this.bounds);
-    }
+    this.map?.discarding.setBounds(this.bounds);
   }
 
   // Gives the session the component's latest surface, attaching the session
@@ -873,25 +889,18 @@ export class MapView extends XComponentController implements GestureTarget {
       }
     }
     const json = view === undefined ? '' : JSON.stringify(view);
-    const controller = this.controller;
-    if (view !== undefined && json !== this.frameView && controller !== undefined &&
-      controller.map === this.map) {
+    const state = this.state;
+    if (view !== undefined && json !== this.frameView && state !== undefined && state.view === this) {
       this.frameView = json;
-      controller.showFrame(view);
+      state.showFrame(new FrameViewport(view, this.padding));
     }
   }
 
-  // An error handler that throws doesn't reach ArkUI, which would end the app,
-  // or the map's own callbacks.
+  // Each failure reaches the app as a MapError.
   private fail(error: Error): void {
     logError(error.message);
-    if (this.disposed) {
-      return;
-    }
-    try {
-      this.events.onMapError(error);
-    } catch (thrown) {
-      logError(`onMapError threw: ${(thrown as Error).message}`);
+    if (!this.disposed) {
+      this.events.onError(error instanceof MapError ? error : new MapError(error.message));
     }
   }
 }

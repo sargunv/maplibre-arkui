@@ -12,11 +12,12 @@ import quickStart from "../../../../demo/entry/src/main/ets/docs/QuickStart.ets?
 MapLibre ArkUI is an ArkUI library for [MapLibre Native] on HarmonyOS and
 OpenHarmony, built on the ArkTS bindings of [MapLibre Native FFI]. It is a
 cousin of [MapLibre Compose]. The package, `@maplibre/arkui`, has a
-<Api of="MapLibreMap" /> component that moves with touch, mouse, touchpad, and
+<Api of="MaplibreMap" /> component that moves with touch, mouse, touchpad, and
 keyboard gestures, a <Api of="MapController" /> that reads and moves its camera,
 localized controls, ArkUI content placed on coordinates, the user's location, map content that
-the app declares from its state, style expressions, and snapshots. It passes on
-FFI's style API, request handlers, offline regions, and logs as they are.
+the app declares from its state, style expressions, and snapshots. It lends
+FFI's map for the style API that it doesn't cover, and passes on FFI's request
+handlers, offline regions, and logs as they are.
 
 This page shows a map of Paris, with a button that flies to New York:
 

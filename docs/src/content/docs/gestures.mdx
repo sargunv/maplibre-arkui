@@ -72,16 +72,16 @@ plays no ticks and reports nothing.
 ## Clicks
 
 A tap is a click, and a long press or a right click is a long click. The map's
-`onMapClick` or `onMapLongClick` gets it first, and returns `true` to consume
-it. Then the layers of the [content](/maplibre-arkui/content/) with features
+`onMapClick` or `onMapLongClick` gets it first, and returns `true` to
+consume it. Then the layers of the [content](/maplibre-arkui/content/) with features
 under it get it, from the top layer down, until a layer's `onClick` or
 `onLongClick` returns `true`. A click that nothing consumed goes to
 `onUnhandledClick`:
 
 <Code code={region(examples, "map-click")} lang="ts" />
 
-A layer's handler gets the layer's features under the click, as FFI's query
-returns them, and the click's point and coordinate (see <Api of="MapClickEvent" />). `hitPadding`
+A layer's handler gets the layer's features under the click, front first, and
+the click's point and coordinate (see <Api of="MapClickEvent" />). `hitPadding`
 widens what counts as under the click, so small circles and thin lines are
 easier to tap:
 

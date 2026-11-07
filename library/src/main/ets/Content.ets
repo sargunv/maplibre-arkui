@@ -1,5 +1,5 @@
 // Map content as data: the sources, layers, and images that an app declares
-// for a MapLibreMap or a snapshot, and the reconciler that applies them to a
+// for a MaplibreMap or a snapshot, and the reconciler that applies them to a
 // map's style. After MapLibre Compose's StyleReconciler, much simplified. Also
 // loadStyle(), which loads the style under the content, as both take it.
 
@@ -7,32 +7,23 @@ import {
   CommandCompletion,
   MapHandle,
   PremultipliedRgba8Image,
-  RenderedFeature,
   StyleImageOptions,
   StyleLayerInfo,
 } from '@maplibre/native-ffi';
 
 import { Expression } from './Expressions';
 import { FONT_SCALE_STATE } from './fontScale';
-import { LatLng } from './Geometry';
 import { logError } from './log';
+import { MapClickEvent } from './MapClickEvent';
+import { ContentError, MapError } from './MapError';
+import { RenderedFeature } from './Queries';
 
 /** Picks a layer of the base style, for `MapLayer.below`. */
 export type LayerPredicate = (layer: StyleLayerInfo) => boolean;
 
-/** Where the user clicked a map. */
-export interface MapClickEvent {
-  /** The click's distance from the map's left edge, in vp, as feature queries take it. */
-  x: number;
-  /** The click's distance from the map's top edge, in vp. */
-  y: number;
-  /** The coordinate under the click. */
-  coordinate: LatLng;
-}
-
 /**
- * Handles a click on a layer's features: those under the click, in the order
- * that FFI's `queryRenderedFeatures()` returns them. It returns `true` to
+ * Handles a click on a layer's features: those under the click, front first,
+ * as `MapController.queryRenderedFeatures()` finds them. It returns `true` to
  * consume the click, so the layers under it and `onUnhandledClick` don't get
  * it, or `false` to pass it on.
  */
@@ -43,7 +34,7 @@ export type FeatureClickHandler = (features: RenderedFeature[], event: MapClickE
  * them, and the images that symbol layers show. Each style the map loads gets
  * all of it, so it lasts across style changes.
  *
- * It's a value. To change what the map draws, give `MapLibreMap` a new one,
+ * It's a value. To change what the map draws, give `MaplibreMap` a new one,
  * such as from a `@Computed` getter that reads the app's state. The map
  * compares it with the content it applied, by ID, and changes only what
  * differs.
@@ -127,14 +118,14 @@ export interface MapLayer {
    */
   below?: string | LayerPredicate;
   /**
-   * Handles a click on the layer's features. After `MapLibreMap.onMapClick`
+   * Handles a click on the layer's features. After `MaplibreMap.onMapClick`
    * passes a click, the layers with features under it get it from the top
    * layer down, until one consumes it.
    */
   onClick?: FeatureClickHandler;
   /**
    * Handles a long click on the layer's features, a long press or a right
-   * click, as `onClick` does a click, after `MapLibreMap.onMapLongClick`.
+   * click, as `onClick` does a click, after `MaplibreMap.onMapLongClick`.
    */
   onLongClick?: FeatureClickHandler;
   /**
@@ -323,7 +314,7 @@ export class ContentReconciler {
       const scale = this.fontScale;
       if (this.appliedFontScale !== scale) {
         this.appliedFontScale = scale;
-        await this.run(generation, 'setting the font scale',
+        await this.run(generation, undefined, 'setting the font scale',
           this.map.setGlobalStateProperty(FONT_SCALE_STATE, scale));
       }
       await this.apply(this.content, generation);
@@ -339,7 +330,7 @@ export class ContentReconciler {
     try {
       this.onError(error);
     } catch (thrown) {
-      logError(`onMapError threw: ${(thrown as Error).message}`);
+      logError(`onError threw: ${(thrown as Error).message}`);
     }
   }
 
@@ -349,15 +340,18 @@ export class ContentReconciler {
     }
   }
 
-  // Runs a command, reports its failure, and returns whether it succeeded.
-  private async run(generation: number, what: string, command: Promise<CommandCompletion>): Promise<boolean> {
+  // Runs a command, reports its failure, as a ContentError for the content
+  // with `id` if any, and returns whether it succeeded.
+  private async run(generation: number, id: string | undefined, what: string,
+    command: Promise<CommandCompletion>): Promise<boolean> {
     let succeeded = true;
     try {
       await command;
     } catch (error) {
       succeeded = false;
       this.check(generation);
-      this.report(new Error(`Content: ${what} failed: ${(error as Error).message}`));
+      const message = `Content: ${what} failed: ${(error as Error).message}`;
+      this.report(id === undefined ? new MapError(message) : new ContentError(id, message));
     }
     this.check(generation);
     return succeeded;
@@ -401,13 +395,13 @@ export class ContentReconciler {
         replaced.has(desired.source ?? '')) {
         this.layers.delete(id);
         this.stack = this.stack.filter((other: string) => other !== id);
-        await this.run(generation, `removing layer ${id}`, map.removeStyleLayer(id));
+        await this.run(generation, id, `removing layer ${id}`, map.removeStyleLayer(id));
       }
     }
     // A source that the map won't remove, such as one that a layer the app
     // added still uses, stays the content's, to remove on a later pass.
     for (const id of Array.from(replaced)) {
-      if (await this.run(generation, `removing source ${id}`, map.removeStyleSource(id))) {
+      if (await this.run(generation, id, `removing source ${id}`, map.removeStyleSource(id))) {
         this.sources.delete(id);
       }
     }
@@ -426,7 +420,7 @@ export class ContentReconciler {
     for (const id of Array.from(this.images.keys())) {
       if (!images.has(id)) {
         this.images.delete(id);
-        await this.run(generation, `removing image ${id}`, map.removeStyleImage(id));
+        await this.run(generation, id, `removing image ${id}`, map.removeStyleImage(id));
       }
     }
     for (const image of Array.from(images.values())) {
@@ -436,7 +430,7 @@ export class ContentReconciler {
       const applied = this.images.get(image.id);
       if (applied === undefined || applied.image !== image.image ||
         JSON.stringify(applied.options) !== JSON.stringify(image.options)) {
-        const set = await this.run(generation, `setting image ${image.id}`,
+        const set = await this.run(generation, image.id, `setting image ${image.id}`,
           map.setStyleImage(image.id, image.image, image.options));
         // The content owns an image only once the map has taken it; one that
         // it rejects waits until its ID leaves the content.
@@ -490,7 +484,8 @@ export class ContentReconciler {
       if (this.rejectedSources.get(source.id) === key) {
         return;
       }
-      if (await this.run(generation, `adding source ${source.id}`, map.addStyleSourceJson(source.id, source.json))) {
+      if (await this.run(generation, source.id, `adding source ${source.id}`,
+        map.addStyleSourceJson(source.id, source.json))) {
         this.sources.set(source.id, { shape: shape, value: value, data: data });
         this.rejectedSources.delete(source.id);
       } else {
@@ -505,10 +500,10 @@ export class ContentReconciler {
     // Only a GeoJSON source's data changed.
     applied.data = data;
     if (typeof value === 'string') {
-      await this.run(generation, `setting the URL of source ${source.id}`,
+      await this.run(generation, source.id, `setting the URL of source ${source.id}`,
         map.setGeoJsonSourceUrl(source.id, value));
     } else {
-      await this.run(generation, `setting the data of source ${source.id}`,
+      await this.run(generation, source.id, `setting the data of source ${source.id}`,
         map.setGeoJsonSourceData(source.id, value));
     }
   }
@@ -531,7 +526,7 @@ export class ContentReconciler {
       if (this.rejectedLayers.get(layer.id) === key) {
         return false;
       }
-      const added = await this.run(generation, `adding layer ${layer.id}`,
+      const added = await this.run(generation, layer.id, `adding layer ${layer.id}`,
         map.addStyleLayerJson(json, above === '' ? undefined : above));
       if (!added) {
         this.rejectedLayers.set(layer.id, key);
@@ -562,7 +557,7 @@ export class ContentReconciler {
         } else {
           applied.properties.set(name, text);
         }
-        await this.run(generation, `setting ${name} of layer ${layer.id}`,
+        await this.run(generation, layer.id, `setting ${name} of layer ${layer.id}`,
           map.setStyleLayerProperty(layer.id, name, value));
       }
     }
@@ -571,7 +566,7 @@ export class ContentReconciler {
     if (current !== above) {
       this.stack.splice(index, 1);
       this.insert(layer.id, above);
-      await this.run(generation, `moving layer ${layer.id}`,
+      await this.run(generation, layer.id, `moving layer ${layer.id}`,
         map.moveStyleLayer(layer.id, above === '' ? undefined : above));
     }
     return true;
@@ -691,10 +686,8 @@ function layerJson(layer: MapLayer): Record<string, Object> {
   return json;
 }
 
-// A style that starts with `{` is a style document, and anything else is its
-// URL. It throws when the document isn't JSON, and the command completes once
-// the style is loaded.
-export function loadStyle(map: MapHandle, style: string): Promise<CommandCompletion> {
-  const trimmed = style.trim();
-  return trimmed.startsWith('{') ? map.setStyleJson(JSON.parse(trimmed)) : map.setStyleUrl(trimmed);
+// A string is the style's URL, and a record its document. The command
+// completes once the style is loaded.
+export function loadStyle(map: MapHandle, style: string | Record<string, Object>): Promise<CommandCompletion> {
+  return typeof style === 'string' ? map.setStyleUrl(style) : map.setStyleJson(style);
 }

@@ -13,8 +13,9 @@ Build [style expressions] with functions named after their operators, such as
 <Api of="get" />, <Api of="match" />, <Api of="interpolate" />, and
 <Api of="featureState" /> for `feature-state`. Symbols get words (`eq` for `==`,
 `add` for `+`), and `case` is <Api of="cases" />. Use them in
-[`MapContent`](/maplibre-arkui/content/), or pass them to FFI's style functions
-as they are:
+[`MapContent`](/maplibre-arkui/content/), or pass them as they are to the
+style functions of the FFI map that
+[`withFfiMap()`](/maplibre-arkui/style/#the-ffi-map) lends:
 
 <Code code={region(examples, "expressions")} lang="ts" />
 

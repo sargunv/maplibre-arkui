@@ -377,7 +377,7 @@ export function pow(base: ExpressionInput, exponent: ExpressionInput): Expressio
  * ```
  *
  * It multiplies `value` by the global state property
- * `maplibre-arkui:font-scale`, or by 1 where nothing sets it. `MapLibreMap`
+ * `maplibre-arkui:font-scale`, or by 1 where nothing sets it. `MaplibreMap`
  * sets it on each style it loads, to `fp2px(1) / vp2px(1)` of its UI context,
  * and again when that changes; `snapshot()` sets it to its `fontScale`. Like
  * ArkUI's text, it follows the user's setting only in an app that opts in with

@@ -1,4 +1,4 @@
-// What a MapLibreMap shares with the controls and placements in its overlay,
+// What a MaplibreMap shares with the controls and placements in its overlay,
 // so apps don't pass them the controller.
 //
 // ArkUI's @Provider and @Consumer can't carry it: a @Consumer looks up the
@@ -35,7 +35,7 @@ export class MapScope {
   }
 }
 
-// The scope of each MapLibreMap on screen, by its key.
+// The scope of each MaplibreMap on screen, by its key.
 const scopes: Map<string, MapScope> = new Map<string, MapScope>();
 let lastKey = 0;
 

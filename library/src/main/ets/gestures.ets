@@ -1,6 +1,6 @@
 // Gestures and other input that move a map's camera or click it.
 //
-// ArkUI's recognizers, which MapLibreMap binds, decide whether the map owns a
+// ArkUI's recognizers, which MaplibreMap binds, decide whether the map owns a
 // touch: against a parent such as a Scroll, and against content above the map.
 // The raw touches decide how the camera moves, after a claim, as MapLibre
 // Compose and MapLibre GL JS recognize them. Distances are in vp, which are the
@@ -20,7 +20,7 @@ import { CameraDelta, GesturePhase, ScreenPoint } from '@maplibre/native-ffi';
  * it.
  *
  * ```ets
- * MapLibreMap({
+ * MaplibreMap({
  *   controller: this.map,
  *   style: STYLE,
  *   interactions: { rotate: { enabled: false }, pitch: { enabled: false } },
@@ -212,7 +212,7 @@ class HeldKey {
 }
 
 /**
- * Turns a map's input into camera changes. `MapLibreMap` creates one and binds
+ * Turns a map's input into camera changes. `MaplibreMap` creates one and binds
  * its handlers to the map's ArkUI events and gestures; the claim callbacks come
  * from a `Pan`, `Pinch`, or `Rotation` gesture starting.
  */

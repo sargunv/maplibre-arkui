@@ -12,7 +12,7 @@ import {
 import { Driver, MouseButton } from '@ohos.UiTest';
 
 import { STYLE, testMap } from '../testability/TestMaps';
-import { camera, expectNear, frames, inMap, mapBounds, mapCenter, offset, until } from './helpers';
+import { camera, eventually, expectNear, frames, inMap, mapBounds, mapCenter, offset, until } from './helpers';
 
 const ZOOM = 3;
 
@@ -65,17 +65,11 @@ async function show(layers: MapLayer[]): Promise<void> {
   };
   testMap.content = content;
   const ids = layers.map((layer: MapLayer) => layer.id);
-  let found = false;
-  await until('the layers draw', () => {
-    const session = testMap.controller.renderSession;
-    const c = testMap.controller.pixelForLatLng({ latitude: 0, longitude: 0 });
-    if (session !== undefined && c !== undefined) {
-      session.queryRenderedFeatures({ kind: 'point', value: c }, { layerIds: ids })
-        .then((hits: readonly RenderedFeature[]) => {
-          found = ids.every((id: string) => hits.some((hit: RenderedFeature) => hit.layerId === id));
-        });
-    }
-    return found;
+  await eventually('the layers draw', async () => {
+    const c = testMap.controller.viewport?.project({ latitude: 0, longitude: 0 });
+    const hits = c === undefined ? undefined : await testMap.controller.queryRenderedFeatures(c, { layers: ids });
+    return hits !== undefined && ids.every((id: string) => hits.some((hit: RenderedFeature) => hit.layerId === id)) ?
+      true : undefined;
   });
 }
 
@@ -106,8 +100,8 @@ export default function clicksTest(): void {
       // the coordinate under it.
       const at = inMap(await mapBounds(), c);
       for (const event of testMap.clickEvents) {
-        expectNear(event.x, at.x, 1);
-        expectNear(event.y, at.y, 1);
+        expectNear(event.point.x, at.x, 1);
+        expectNear(event.point.y, at.y, 1);
         expectNear(event.coordinate.longitude, 0, 0.2);
         expectNear(event.coordinate.latitude, 0, 0.2);
       }

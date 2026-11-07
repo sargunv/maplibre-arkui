@@ -4,7 +4,8 @@
 // no fixes, and it has no compass.
 
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
-import { FollowBearing, LatLng, MapHandle, StyleLayerInfo } from '@maplibre/arkui';
+import { FollowBearing, LatLng, StyleLayerInfo } from '@maplibre/arkui';
+import { MapHandle } from '@maplibre/native-ffi';
 import {
   BORDER_RADIUS,
   DOT_COLOR,
@@ -15,7 +16,7 @@ import {
 import geoLocationManager from '@ohos.geoLocationManager';
 import { Driver, Point } from '@ohos.UiTest';
 
-import { backgroundStyle, testMap } from '../testability/TestMaps';
+import { backgroundStyle, showsMap, testMap } from '../testability/TestMaps';
 import {
   camera,
   eventually,
@@ -23,9 +24,9 @@ import {
   frames,
   gesture,
   mapCenter,
+  mapSnapshot,
   near,
   offset,
-  requireMap,
   rgb,
   screenPixel,
   setStyle,
@@ -33,6 +34,7 @@ import {
   twist,
   twoFingers,
   until,
+  withMap,
 } from './helpers';
 
 // A location as Location Kit reports one.
@@ -52,7 +54,7 @@ function fix(latitude: number, longitude: number, accuracy: number = 0, speed: n
 
 // Whether the camera is at rest with its center at `latitude`, `longitude`.
 function restsAt(latitude: number, longitude: number): boolean {
-  const snapshot = testMap.controller.map?.getSnapshot();
+  const snapshot = testMap.controller.withFfiMap((map: MapHandle) => map.getSnapshot());
   return snapshot !== undefined && !snapshot.transitionInProgress &&
     near(snapshot.view.camera.center.latitude, latitude, 0.0001) &&
     near(snapshot.view.camera.center.longitude, longitude, 0.0001);
@@ -60,19 +62,19 @@ function restsAt(latitude: number, longitude: number): boolean {
 
 // The location that the indicator layer draws, as latitude and longitude, or
 // undefined without the layer.
-async function drawnLocation(map: MapHandle): Promise<number[] | undefined> {
-  if (await map.getStyleLayer(USER_LOCATION_LAYER) === undefined) {
+async function drawnLocation(): Promise<number[] | undefined> {
+  if (await withMap((ffi: MapHandle) => ffi.getStyleLayer(USER_LOCATION_LAYER)) === undefined) {
     return undefined;
   }
-  const value = await map.getStyleLayerProperty(USER_LOCATION_LAYER, 'location') as number[];
+  const value = await withMap((ffi: MapHandle) => ffi.getStyleLayerProperty(USER_LOCATION_LAYER, 'location')) as
+    number[];
   return [value[0], value[1]];
 }
 
 // Waits until the indicator draws at `latitude`, `longitude`.
 async function drawnAt(latitude: number, longitude: number): Promise<void> {
-  const map = requireMap();
   await eventually(`the indicator draws at ${latitude}, ${longitude}`, async () => {
-    const drawn = await drawnLocation(map);
+    const drawn = await drawnLocation();
     return drawn !== undefined && near(drawn[0], latitude, 1e-9) && near(drawn[1], longitude, 1e-9) ?
       true : undefined;
   });
@@ -80,22 +82,23 @@ async function drawnAt(latitude: number, longitude: number): Promise<void> {
 
 // A property of the indicator layer, as JSON.
 async function property(name: string): Promise<string> {
-  return JSON.stringify(await requireMap().getStyleLayerProperty(USER_LOCATION_LAYER, name));
+  return JSON.stringify(await withMap((ffi: MapHandle) => ffi.getStyleLayerProperty(USER_LOCATION_LAYER, name)));
 }
 
 // The name of an image property of the indicator layer, which the style
 // normalizes to an object with the name.
 async function imageName(name: string): Promise<string> {
-  const value = await requireMap().getStyleLayerProperty(USER_LOCATION_LAYER, name) as Record<string, Object>;
+  const value = await withMap((ffi: MapHandle) => ffi.getStyleLayerProperty(USER_LOCATION_LAYER, name)) as
+    Record<string, Object>;
   return value['name'] as string;
 }
 
 async function accuracyRadius(): Promise<number> {
-  return await requireMap().getStyleLayerProperty(USER_LOCATION_LAYER, 'accuracy-radius') as number;
+  return await withMap((ffi: MapHandle) => ffi.getStyleLayerProperty(USER_LOCATION_LAYER, 'accuracy-radius')) as number;
 }
 
 async function arrowBearing(): Promise<number> {
-  return await requireMap().getStyleLayerProperty(USER_LOCATION_LAYER, 'bearing') as number;
+  return await withMap((ffi: MapHandle) => ffi.getStyleLayerProperty(USER_LOCATION_LAYER, 'bearing')) as number;
 }
 
 // Where the camera's center is as the next gesture ends, before the camera
@@ -103,7 +106,7 @@ async function arrowBearing(): Promise<number> {
 function centerAtEnd(): LatLng[] {
   const centers: LatLng[] = [];
   testMap.onGestureEnd = () => {
-    const center = requireMap().getSnapshot().view.camera.center;
+    const center = mapSnapshot().view.camera.center;
     centers.push({ latitude: center.latitude, longitude: center.longitude });
   };
   return centers;
@@ -165,7 +168,7 @@ export default function locationTest(): void {
       expect(await accuracyRadius()).assertEqual(25);
       testMap.userLocation = undefined;
       await eventually('the indicator goes', async () =>
-        await requireMap().getStyleLayer(USER_LOCATION_LAYER) === undefined ? true : undefined);
+        await withMap((ffi: MapHandle) => ffi.getStyleLayer(USER_LOCATION_LAYER)) === undefined ? true : undefined);
     });
 
     it('draws the indicator again in a new style', 0, async () => {
@@ -204,7 +207,7 @@ export default function locationTest(): void {
       await until('the camera reaches the resting location', () => restsAt(5.8, 6.8));
       expectNear(camera().bearing, 90, 0.001);
       // The hidden arrow keeps its course, so the next one eases from it.
-      expect(await requireMap().getStyleLayerProperty(USER_LOCATION_LAYER, 'bearing') as number).assertEqual(90);
+      expect(await arrowBearing()).assertEqual(90);
     });
 
     it('points the arrow to the heading, or to the course while it moves', 0, async () => {
@@ -268,7 +271,7 @@ export default function locationTest(): void {
     it('follows from the start a map that appears after the app asks', 0, async () => {
       const map = testMap.controller;
       testMap.shown = false;
-      await until('the map leaves', () => map.map === undefined);
+      await until('the map leaves', () => !showsMap(map));
       map.followUserLocation({ zoom: 8 });
       expect(map.followingUserLocation).assertTrue();
       testMap.userLocation = fix(7, 8);
@@ -320,7 +323,7 @@ export default function locationTest(): void {
       testMap.userLocation = fix(0.02, 0.02);
       await drawnAt(0.02, 0.02);
       await frames(30);
-      expect(map.map?.getSnapshot().transitionInProgress).assertFalse();
+      expect(mapSnapshot().transitionInProgress).assertFalse();
       expectNear(camera().center.longitude, panned.longitude, 1e-9);
 
       map.followUserLocation();
@@ -416,14 +419,13 @@ export default function locationTest(): void {
       };
       testMap.userLocation = fix(0, 0, 25, 3, 45);
       await drawnAt(0, 0);
-      const map = requireMap();
       // The style's normalized forms, as JSON.
       expect(await property('accuracy-radius-color')).assertEqual('["rgba",0,255,0,1]');
       expect(await property('accuracy-radius-border-color')).assertEqual('["rgba",0,0,255,0.5]');
       expect(await imageName('top-image')).assertEqual('maplibre-arkui-user-location-dot');
       expect(await imageName('bearing-image')).assertEqual('custom-arrow');
       expect(await imageName('shadow-image')).assertEqual('');
-      const ids = (await map.listStyleLayers()).map((layer: StyleLayerInfo) => layer.id);
+      const ids = (await withMap((ffi: MapHandle) => ffi.listStyleLayers())).map((layer: StyleLayerInfo) => layer.id);
       expect(ids.indexOf(USER_LOCATION_LAYER)).assertEqual(ids.indexOf('top') - 1);
 
       // On screen, the default dot in the options' color.
@@ -437,10 +439,10 @@ export default function locationTest(): void {
       // Without the options, the indicator is the default again, at the top.
       testMap.userLocationIndicator = {};
       await eventually('the default accuracy color', async () =>
-        await map.getStyleLayer(USER_LOCATION_LAYER) !== undefined &&
+        await withMap((ffi: MapHandle) => ffi.getStyleLayer(USER_LOCATION_LAYER)) !== undefined &&
           await property('accuracy-radius-color') !== '["rgba",0,255,0,1]' ? true : undefined);
       expect(await imageName('shadow-image')).assertEqual('maplibre-arkui-user-location-shadow');
-      const after = (await map.listStyleLayers()).map((layer: StyleLayerInfo) => layer.id);
+      const after = (await withMap((ffi: MapHandle) => ffi.listStyleLayers())).map((layer: StyleLayerInfo) => layer.id);
       expect(after[after.length - 1]).assertEqual(USER_LOCATION_LAYER);
     });
 
@@ -448,11 +450,11 @@ export default function locationTest(): void {
       // A layer that only the app added doesn't count.
       const clear: Record<string, Object> = { 'background-opacity': 0 };
       const added: Record<string, Object> = { 'id': 'added', 'type': 'background', 'paint': clear };
-      await requireMap().addStyleLayerJson(added);
+      await withMap((ffi: MapHandle) => ffi.addStyleLayerJson(added));
       testMap.userLocationIndicator = { below: 'added' };
       testMap.userLocation = fix(0, 0);
       await drawnAt(0, 0);
-      const ids = (await requireMap().listStyleLayers()).map((layer: StyleLayerInfo) => layer.id);
+      const ids = (await withMap((ffi: MapHandle) => ffi.listStyleLayers())).map((layer: StyleLayerInfo) => layer.id);
       expect(ids[ids.length - 1]).assertEqual(USER_LOCATION_LAYER);
       expect(testMap.errors.length).assertEqual(0);
     });

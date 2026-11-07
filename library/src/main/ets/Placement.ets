@@ -1,4 +1,4 @@
-// Components that place ArkUI content by coordinates in a MapLibreMap's
+// Components that place ArkUI content by coordinates in a MaplibreMap's
 // overlay, as MapLibre Compose's `placedAt` and `placedTowards` modifiers do.
 // ArkUI has no custom modifiers, so each wraps its content. A wrapper fills
 // its parent, and finds where the map's points are in its own frame from
@@ -61,7 +61,7 @@ function frameOf(area: Area): Frame {
 // Where `coordinate` is in the frame on screen, in vp from the top-left corner
 // of `frame`, which is somewhere over the map.
 function pointIn(scope: MapScope, frame: Frame, coordinate: LatLng): ScreenPoint | undefined {
-  const point = scope.controller.pixelForLatLng(coordinate);
+  const point = scope.controller.viewport?.project(coordinate);
   if (point === undefined) {
     return undefined;
   }
@@ -70,10 +70,10 @@ function pointIn(scope: MapScope, frame: Frame, coordinate: LatLng): ScreenPoint
 
 /**
  * ArkUI content pinned to a coordinate, which follows the map as its camera
- * moves. Place it in a `MapLibreMap`'s overlay, its trailing closure:
+ * moves. Place it in a `MaplibreMap`'s overlay, its trailing closure:
  *
  * ```ets
- * MapLibreMap({ controller: this.map, style: STYLE }) {
+ * MaplibreMap({ controller: this.map, style: STYLE }) {
  *   MapDefaultOverlay()
  *   MapPlacedAt({ coordinate: { latitude: 48.8566, longitude: 2.3522 }, alignment: Alignment.Bottom }) {
  *     Text('Paris')
@@ -193,7 +193,7 @@ function ovalCrossing(width: number, height: number, target: ScreenPoint): Towar
  * faces the coordinate touches the wrapper's oval, so round content stays
  * inside it.
  *
- * Place it in a `MapLibreMap`'s overlay; pad its parent to move the oval in
+ * Place it in a `MaplibreMap`'s overlay; pad its parent to move the oval in
  * from the map's edges. `onAngleChange` gives the direction towards the
  * coordinate, to turn the content with it, as `MapPointerPinButton` does.
  */

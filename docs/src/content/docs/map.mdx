@@ -5,14 +5,37 @@ description: Show a map, load its style, and listen to its events.
 
 import Api from "../../components/Api.astro";
 
-<Api of="MapLibreMap" /> fills the size its parent gives it. Its
-<Api of="MapLibreMap.style" display="style" /> is a URL or a style document as
-JSON, and a new value loads the new style. The map creates its FFI map when it
-appears and releases it when it disappears. Pages in the background need no
-code, since the map draws only while its window shows.
+<Api of="MaplibreMap" /> fills the size its parent gives it. The map creates its
+FFI map when it appears and releases it when it disappears. Pages in the
+background need no code, since the map draws only while its window shows.
+
+## The style
+
+The map's <Api of="MaplibreMap.style" display="style" /> is a URL, or a style
+document as a `Record<string, Object>` with the [style spec]'s keys. A new value
+loads the new style. A document that `build()` writes anew loads only when its
+JSON changes, so the map doesn't load it again on each build.
+
+## Events
 
 Its events tell the app when the style has loaded (`onStyleLoaded`), the camera
 has come to rest (`onCameraIdle`), the user starts and stops moving the map
-(`onGestureStart`, `onGestureEnd`), and something failed (`onMapError`; see
-[Errors](/maplibre-arkui/errors/)). `cameraBounds` limits where the camera goes,
-and `runtime` takes an FFI runtime of the app's own, for another cache.
+(`onGestureStart`, `onGestureEnd`), the user clicks it (see
+[Clicks](/maplibre-arkui/gestures/#clicks)), and something failed (`onError`;
+see [Errors](/maplibre-arkui/errors/)).
+
+The map calls each event on the UI thread, so a handler can change the page's
+state. When a handler throws, the map logs the exception and goes on: the other
+handlers still run, and a click handler that throws doesn't consume the click.
+
+## Camera limits
+
+`cameraBounds` limits where the camera goes: an area that its center stays
+within, and ranges of zoom and pitch (see <Api of="CameraBoundsOptions" />).
+Each limit that it leaves out takes its default, so removing one puts the
+default back. Invalid limits, such as a minimum zoom above the maximum, go to
+`onError`, and the map keeps the limits it had.
+
+`runtime` takes an FFI runtime of the app's own, for another cache.
+
+[style spec]: https://maplibre.org/maplibre-style-spec/

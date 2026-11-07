@@ -3,7 +3,7 @@ import { LatLng, ScaleBarUnits, ScreenPoint } from '@maplibre/arkui';
 import { Component, Driver, MatchPattern, ON, On, Point, Rect as Bounds } from '@ohos.UiTest';
 import { BusinessError } from '@ohos.base';
 
-import { STYLE, testMap, TestOverlay } from '../testability/TestMaps';
+import { showsMap, STYLE, testMap, TestOverlay } from '../testability/TestMaps';
 import {
   eventually,
   expectNear,
@@ -27,8 +27,8 @@ const map = testMap.controller;
 
 async function jumpTo(latitude: number, zoom: number, bearing: number = 0): Promise<void> {
   await map.updateCamera({ center: { latitude: latitude, longitude: 10 }, zoom: zoom, bearing: bearing, pitch: 0 });
-  await until('the frame shows the camera', () => near(map.frameCamera?.zoom ?? 0, zoom, 0.001) &&
-    near(map.frameCamera?.bearing ?? 0, bearing, 0.001));
+  await until('the frame shows the camera', () => near(map.viewport?.camera.zoom ?? 0, zoom, 0.001) &&
+    near(map.viewport?.camera.bearing ?? 0, bearing, 0.001));
 }
 
 // A style whose two sources have this attribution. MapLibre Native reads the
@@ -37,15 +37,14 @@ async function jumpTo(latitude: number, zoom: number, bearing: number = 0): Prom
 const ATTRIBUTION = '<a href="https://example.com/">Example &amp; Co</a> &copy; Test';
 const ATTRIBUTION_TEXT = ON.text('Example & Co', MatchPattern.CONTAINS);
 
-function attributedStyle(attribution: string = ATTRIBUTION): string {
+function attributedStyle(attribution: string = ATTRIBUTION): Record<string, Object> {
   const source: Record<string, Object> = {
     'type': 'vector',
     'tiles': ['file:///nonexistent/{z}/{x}/{y}.pbf'],
     'attribution': attribution,
   };
   const sources: Record<string, Object> = { 'a': source, 'b': source };
-  const style: Record<string, Object> = { 'version': 8, 'sources': sources, 'layers': [] as Object[] };
-  return JSON.stringify(style);
+  return { 'version': 8, 'sources': sources, 'layers': [] as Object[] };
 }
 
 // Waits until `find` finds a component, or finds none.
@@ -83,14 +82,14 @@ async function expectScaleBar(units: ScaleBarUnits, label: string): Promise<void
 async function showOverlay(overlay: TestOverlay): Promise<void> {
   if (overlay === 'omitted') {
     testMap.shown = false;
-    await until('the map leaves', () => map.map === undefined);
+    await until('the map leaves', () => !showsMap(map));
   }
   const loads = testMap.styleLoads;
   testMap.overlay = overlay;
   testMap.style = attributedStyle();
   testMap.shown = true;
   await until('the map loads the style', () => testMap.styleLoads > loads && map.styleLoaded);
-  await until('the map shows a frame', () => map.frameCamera !== undefined);
+  await until('the map shows a frame', () => map.viewport !== undefined);
 }
 
 // Whether the content that a placement wraps, the box with `id`, shows.
@@ -267,7 +266,7 @@ export default function overlayTest(): void {
       // At 60 degrees, a meter spans twice as many vp as at the equator.
       await jumpTo(60, 5);
       const expected = EQUATOR_METERS_PER_PIXEL / 32 / 2;
-      expectNear(map.metersPerPixelAtLatitude(60) ?? 0, expected, expected * 1e-4);
+      expectNear(map.viewport?.metersPerVpAtLatitude(60) ?? 0, expected, expected * 1e-4);
       // The bar is at most 100 vp, which spans 122 km, or 76 mi, here, and
       // 60 m, or 196 ft, at zoom 16.
       await expectScaleBar(ScaleBarUnits.metric, '100 km');
@@ -333,7 +332,7 @@ export default function overlayTest(): void {
       const needle = await untilFound('the compass shows', find(ON.type('Polygon')));
       await needle.click();
       await until('the camera rests facing north', () => {
-        const bearing = map.camera?.bearing ?? 90;
+        const bearing = map.camera.bearing;
         return near(bearing, 0, 0.001) || near(bearing, 360, 0.001);
       });
     });
@@ -389,21 +388,21 @@ export default function overlayTest(): void {
       const buttons = await Driver.create().findComponents(ON.type('Button'));
       expect(buttons.length).assertEqual(2);
       await buttons[0].click();
-      await until('the camera rests a level in', () => near(map.camera?.zoom ?? 0, 2, 0.001));
+      await until('the camera rests a level in', () => near(map.camera.zoom, 2, 0.001));
       await buttons[1].click();
-      await until('the camera rests a level out', () => near(map.camera?.zoom ?? 0, 1, 0.001));
+      await until('the camera rests a level out', () => near(map.camera.zoom, 1, 0.001));
     });
 
     it('places content at a coordinate by its alignment', 0, async () => {
       const coordinate: LatLng = { latitude: 20, longitude: 30 };
       await map.updateCamera({ center: { latitude: 15, longitude: 25 }, zoom: 4, bearing: 30, pitch: 20 });
-      await until('the frame shows the camera', () => near(map.frameCamera?.bearing ?? 0, 30, 0.001));
+      await until('the frame shows the camera', () => near(map.viewport?.camera.bearing ?? 0, 30, 0.001));
       // The controller projects with the frame's view, as FFI does.
       const expected: ScreenPoint = pixelFor(coordinate);
-      const point = map.pixelForLatLng(coordinate)!;
+      const point = map.viewport!.project(coordinate);
       expectNear(point.x, expected.x, 0.001);
       expectNear(point.y, expected.y, 0.001);
-      expectNear(map.latLngForPixel(point)?.latitude ?? NaN, coordinate.latitude, 1e-6);
+      expectNear(map.viewport?.unproject(point).latitude ?? NaN, coordinate.latitude, 1e-6);
 
       // By default, the box's center sits on the coordinate.
       testMap.placedAt = coordinate;
@@ -419,7 +418,7 @@ export default function overlayTest(): void {
     it('places content at a coordinate from inside a padded parent', 0, async () => {
       const coordinate: LatLng = { latitude: 10, longitude: 20 };
       await map.updateCamera({ center: coordinate, zoom: 4 });
-      await until('the frame shows the camera', () => near(map.frameCamera?.zoom ?? 0, 4, 0.001));
+      await until('the frame shows the camera', () => near(map.viewport?.camera.zoom ?? 0, 4, 0.001));
       testMap.placementPadding = 40;
       testMap.placedAt = coordinate;
       await untilPlaced('placed-at', pixelFor(coordinate), CENTER);

@@ -1,4 +1,4 @@
-import { MapController, MapLibreMap } from '@maplibre/arkui';
+import { MapController, MaplibreMap } from '@maplibre/arkui';
 
 import { LIBERTY } from './common';
 
@@ -28,7 +28,7 @@ export struct ScrollingMap {
             'One finger scrolls the page, even over the map. Two fingers move the map.' :
             'Drags that start on the map move it. Drag elsewhere to scroll the page.')
             .fontSize(14)
-          MapLibreMap({
+          MaplibreMap({
             controller: this.map,
             style: LIBERTY,
             interactions: { cooperative: this.cooperative },

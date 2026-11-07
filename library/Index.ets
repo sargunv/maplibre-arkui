@@ -1,8 +1,19 @@
 // The public API of @maplibre/arkui.
 
-export { MapLibreMap } from './src/main/ets/MapLibreMap';
+export { MaplibreMap } from './src/main/ets/MaplibreMap';
+export { ContentError, MapError, StyleLoadError } from './src/main/ets/MapError';
+export type { CameraIdleEvent } from './src/main/ets/CameraIdleEvent';
+export type { MapClickEvent } from './src/main/ets/MapClickEvent';
+export type { CameraBoundsOptions } from './src/main/ets/CameraBounds';
 export { MapController } from './src/main/ets/MapController';
 export type { MapControllerOptions } from './src/main/ets/MapController';
+export type { Viewport } from './src/main/ets/Viewport';
+export type {
+  RenderedFeature,
+  RenderedFeatureQueryOptions,
+  SourceFeature,
+  SourceFeatureQueryOptions,
+} from './src/main/ets/Queries';
 export { CameraTransitionMode } from './src/main/ets/CameraPosition';
 export type {
   CameraPosition,
@@ -36,7 +47,6 @@ export { snapshot } from './src/main/ets/Snapshot';
 export type {
   FeatureClickHandler,
   LayerPredicate,
-  MapClickEvent,
   MapContent,
   MapImage,
   MapLayer,
@@ -44,10 +54,8 @@ export type {
 } from './src/main/ets/Content';
 export type { SnapshotOptions } from './src/main/ets/Snapshot';
 
-// The FFI types that the API takes and returns, so apps needn't depend on FFI
-// themselves for them.
-export { MapHandle, RenderSessionHandle, RuntimeHandle } from '@maplibre/native-ffi';
-export type { BoundOptions } from '@maplibre/native-ffi';
+// The FFI runtime that a map and a snapshot take.
+export { RuntimeHandle } from '@maplibre/native-ffi';
 
 export * from './src/main/ets/Expressions';
 
@@ -113,77 +121,14 @@ export type {
   UrlQueryParameter,
 } from '@maplibre/native-ffi';
 
-// The style and query API is FFI's, through `MapController.map` and
-// `MapController.renderSession`. These are the FFI types that its methods take
-// and return, such as the debug, viewport, and tile options of `MapHandle`, and
-// what ArkUI apps need besides.
-export {
-  ConstrainMode,
-  latLngForProjectedMeters,
-  MapDebugFlag,
-  MaplibreError,
-  MapProjectionHandle,
-  NorthOrientation,
-  projectedMetersForLatLng,
-  Status,
-  StyleExpressionHandle,
-  StyleExpressionTypeKind,
-  StyleImageTextFit,
-  StyleLayerVisibility,
-  StyleRasterDemEncoding,
-  StyleSourceType,
-  StyleTileScheme,
-  StyleVectorTileEncoding,
-  TileLodMode,
-  ViewportMode,
-} from '@maplibre/native-ffi';
+// The FFI types of the map's content, its layers and images.
+export { StyleImageTextFit } from '@maplibre/native-ffi';
 export type {
-  CameraBounds,
-  CameraDelta,
-  CameraFitOptions,
-  CameraFitUpdate,
-  CameraQueryResult,
-  CanonicalTileId,
-  CommandCompletion,
-  CustomGeometrySourceOptions,
-  CustomVectorSourceOptions,
-  FeatureId,
-  FeatureStateSelector,
-  FreeCamera,
-  FreeCameraOptions,
-  GeoJsonSourceOptions,
   ImageContent,
   ImageStretch,
-  LogicalExtent,
-  MapProjectionCameraResult,
-  MapSnapshot,
-  MapTileOptions,
-  MapTileSettings,
-  MapView,
-  MapViewport,
-  MapViewportOptions,
   PremultipliedRgba8Image,
-  ProjectedMeters,
-  ProjectionMode,
-  ProjectionModeOptions,
-  Quaternion,
-  RenderedFeature,
-  RenderedFeatureQueryOptions,
-  RenderedQueryGeometry,
-  ScreenBox,
-  SourceFeature,
-  SourceFeatureQueryOptions,
-  StyleExpressionInfo,
-  StyleExpressionInputs,
-  StyleExpressionOptions,
-  StyleExpressionType,
-  StyleImageInfo,
   StyleImageOptions,
   StyleLayerInfo,
-  StyleSourceInfo,
-  StyleSourceTileInfo,
-  StyleTransitionOptions,
-  Vec3,
 } from '@maplibre/native-ffi';
 export { readPixelMap } from './src/main/ets/StyleImage';
 

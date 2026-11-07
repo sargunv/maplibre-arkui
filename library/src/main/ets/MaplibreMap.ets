@@ -1,10 +1,14 @@
-import { BoundOptions, RuntimeHandle } from '@maplibre/native-ffi';
+import { RuntimeHandle } from '@maplibre/native-ffi';
 import geoLocationManager from '@ohos.geoLocationManager';
 
-import { CameraPosition } from './CameraPosition';
+import { CameraBoundsOptions } from './CameraBounds';
+import { CameraIdleEvent } from './CameraIdleEvent';
+import { MapContent } from './Content';
 import { MapInteractionOptions, TAP_SLOP } from './gestures';
-import { MapClickEvent, MapContent } from './Content';
-import { MapController } from './MapController';
+import { callHandler, consumes } from './log';
+import { MapClickEvent } from './MapClickEvent';
+import { controllerState, MapController } from './MapController';
+import { MapError } from './MapError';
 import { UserLocationIndicatorOptions } from './location';
 import { MapView } from './MapView';
 import { defaultOverlay } from './Overlay';
@@ -31,10 +35,10 @@ import { closeScope, MapScope, openScope } from './scope';
  * });
  *
  * build() {
- *   MapLibreMap({
- *     controller: this.map,
+ *   MaplibreMap({
  *     style: 'https://tiles.openfreemap.org/styles/liberty',
- *     onMapError: (error: Error) => console.error(error.message),
+ *     controller: this.map,
+ *     onError: (error: MapError) => console.error(error.message),
  *   }) {
  *     MapDefaultOverlay()
  *     MapPlacedAt({ coordinate: { latitude: 48.8584, longitude: 2.2945 } }) {
@@ -50,25 +54,23 @@ import { closeScope, MapScope, openScope } from './scope';
  * placements, such as `MapCompassButton` and `MapPlacedAt`, find the map
  * anywhere in the overlay. What the map itself draws, such as GeoJSON in
  * layers, is its `content`.
+ *
+ * The map calls each of its events on the UI thread. When a handler throws,
+ * the map logs the exception and goes on: the other handlers still run, and a
+ * click handler that throws doesn't consume the click.
  */
 @ComponentV2
-export struct MapLibreMap {
+export struct MaplibreMap {
+  /**
+   * The style: a URL, or a style document as style-spec JSON. A string is
+   * always a URL. A new value loads the new style; a document that has the
+   * same JSON as the last one doesn't, so one that `build()` writes anew loads
+   * once. A style that fails to load is reported to `onError` as a
+   * `StyleLoadError`.
+   */
+  @Require @Param style: string | Record<string, Object>;
   /** Reads and moves the camera. Without one, the map keeps its own. */
   @Param @Once controller: MapController = new MapController();
-  /** The style's URL, or a style document as JSON. */
-  @Require @Param style: string;
-  /**
-   * Sources, layers, and images to draw over the style, in each style the map
-   * loads. Give the map a new value to change them, such as from a `@Computed`
-   * getter; it changes only what differs. A source or layer that the map
-   * rejects is reported to `onMapError` and left out until it changes.
-   */
-  @Param content: MapContent | undefined = undefined;
-  /**
-   * Limits on the camera: an area that its center stays within, and zoom and
-   * pitch ranges. Limits it leaves out keep the map's defaults.
-   */
-  @Param cameraBounds: BoundOptions | undefined = undefined;
   /**
    * The FFI runtime that creates the map. Without one, maps share the
    * library's default runtime. The map sets the runtime's event handler, so
@@ -76,10 +78,20 @@ export struct MapLibreMap {
    */
   @Param @Once runtime: RuntimeHandle | undefined = undefined;
   /**
-   * How the user moves the map: which camera movements input makes, and what
-   * the app does as each starts. Every movement is on by default.
+   * Sources, layers, and images to draw over the style, in each style the map
+   * loads. Give the map a new value to change them, such as from a `@Computed`
+   * getter; it changes only what differs. A source, layer, or image that the
+   * map rejects is reported to `onError` as a `ContentError` and left out
+   * until it changes. None by default.
    */
-  @Param interactions: MapInteractionOptions = {};
+  @Param content: MapContent = {};
+  /**
+   * Limits on the camera: an area that its center stays within, and zoom and
+   * pitch ranges. Each limit left out takes its default. Invalid limits, such
+   * as a minimum above its maximum or a value that isn't finite, are reported
+   * to `onError`, and the map keeps its last limits. No limits by default.
+   */
+  @Param cameraBounds: CameraBoundsOptions = {};
   /**
    * The edges of the map that the app's own UI covers, such as a bottom
    * sheet. The overlay presets keep their controls clear of them, and they add
@@ -89,25 +101,24 @@ export struct MapLibreMap {
    * middle of what they leave. None by default.
    *
    * Each side is a length of at least 0, not a percentage; a side left out is
-   * 0. An invalid side is reported to `onMapError` and taken as 0. A
+   * 0. An invalid side is reported to `onError` and taken as 0. A
    * `LocalizedPadding`'s `start` and `end` follow the app's language, not an
    * ancestor's `.direction()`.
    *
    * ```ets
-   * MapLibreMap({
-   *   controller: this.map,
+   * MaplibreMap({
    *   style: STYLE,
+   *   controller: this.map,
    *   viewportInsets: { bottom: this.sheetHeight },
    * })
    * ```
    */
   @Param viewportInsets: Padding | LocalizedPadding = {};
   /**
-   * ArkUI content over the map, in a `Stack` of its size, from the trailing
-   * closure: by default, `MapDefaultOverlay`. `content` is what the map draws
-   * itself.
+   * How the user moves the map: which camera movements input makes, and what
+   * the app does as each starts. Every movement is on by default.
    */
-  @BuilderParam overlays: () => void = defaultOverlay;
+  @Param interactions: MapInteractionOptions = {};
   /**
    * The user's location, which the map shows as a dot in a circle of its
    * `accuracy`, with an arrow for `userHeading`, or for the course while it
@@ -133,69 +144,89 @@ export struct MapLibreMap {
   /**
    * The style has loaded, so its layers and sources exist, and the map has
    * added `content` to it. Each style starts from its own document, without
-   * what the app added through `controller.map`.
+   * what the app added through `controller.withFfiMap()`. Called on the UI
+   * thread; the map logs what it throws.
    */
   @Event onStyleLoaded: () => void = () => {
   };
-  /** The camera has come to rest, after a jump or once an animation ends. */
-  @Event onCameraIdle: (camera: CameraPosition) => void = (camera: CameraPosition) => {
+  /**
+   * The camera has come to rest, after a jump or once an animation or a
+   * gesture ends. Called on the UI thread; the map logs what it throws.
+   */
+  @Event onCameraIdle: (event: CameraIdleEvent) => void = (event: CameraIdleEvent) => {
   };
   /**
-   * The style failed to load, the map failed to render, it rejected part of
-   * `content`, or a side of `viewportInsets` is invalid.
+   * Something failed while the map runs, such as a style that fails to load,
+   * a frame that fails to render, part of `content` that the map rejects, or
+   * an invalid `viewportInsets` or `cameraBounds`. See `MapError` for its
+   * kinds. The map also logs each. Called on the UI thread; the map logs what
+   * it throws.
    */
-  @Event onMapError: (error: Error) => void = (error: Error) => {
+  @Event onError: (error: MapError) => void = (error: MapError) => {
   };
   /**
    * The user started to move the camera. `interactions` tells which way, such
-   * as a pan that stops following the user's location.
+   * as a pan that stops following the user's location. Called on the UI
+   * thread; the map logs what it throws, and the gesture goes on.
    */
   @Event onGestureStart: () => void = () => {
   };
   /**
    * The user's input stopped moving the camera, after any momentum. A rotation
-   * that ends near north may still ease to it.
+   * that ends near north may still ease to it. Called on the UI thread; the
+   * map logs what it throws.
    */
   @Event onGestureEnd: () => void = () => {
   };
   /**
    * The user clicked the map, before the layers of `content` get the click.
    * Return `true` to consume it, so they don't, or `false` to pass it on.
+   * Called on the UI thread; the map logs what it throws, and passes the
+   * click on.
    */
   @Event onMapClick: (event: MapClickEvent) => boolean = (event: MapClickEvent) => false;
   /**
    * The user long pressed or right clicked the map, before the layers of
-   * `content` get the long click. Return `true` to consume it.
+   * `content` get the long click. Return `true` to consume it. Called on the
+   * UI thread; the map logs what it throws, and passes the long click on.
    */
   @Event onMapLongClick: (event: MapClickEvent) => boolean = (event: MapClickEvent) => false;
   /**
    * Neither `onMapClick` nor a layer consumed a click, such as one beside the
-   * app's features, which may clear a selection.
+   * app's features, which may clear a selection. Called on the UI thread; the
+   * map logs what it throws.
    */
   @Event onUnhandledClick: (event: MapClickEvent) => void = (event: MapClickEvent) => {
   };
+  /**
+   * ArkUI content over the map, in a `Stack` of its size, from the trailing
+   * closure: by default, `MapDefaultOverlay`. `content` is what the map draws
+   * itself.
+   */
+  @BuilderParam overlays: () => void = defaultOverlay;
 
   // What the controls and placements in the overlay find the map by.
   private scope: MapScope = openScope();
 
+  // The app's handlers, which never throw into the view.
   private view: MapView = new MapView(this.getUIContext(), {
-    onStyleLoaded: () => this.onStyleLoaded(),
-    onCameraIdle: (camera: CameraPosition) => this.onCameraIdle(camera),
-    onMapError: (error: Error) => this.onMapError(error),
+    onStyleLoaded: () => callHandler('onStyleLoaded', () => this.onStyleLoaded()),
+    onCameraIdle: (event: CameraIdleEvent) => callHandler('onCameraIdle', () => this.onCameraIdle(event)),
+    onError: (error: MapError) => callHandler('onError', () => this.onError(error)),
     onViewportInsets: (insets: Insets) => {
       this.scope.insets = insets;
     },
     onGestureStart: () => {
       this.scope.gesturing = true;
-      this.onGestureStart();
+      callHandler('onGestureStart', () => this.onGestureStart());
     },
     onGestureEnd: () => {
       this.scope.gesturing = false;
-      this.onGestureEnd();
+      callHandler('onGestureEnd', () => this.onGestureEnd());
     },
-    onMapClick: (event: MapClickEvent): boolean => this.onMapClick(event),
-    onMapLongClick: (event: MapClickEvent): boolean => this.onMapLongClick(event),
-    onUnhandledClick: (event: MapClickEvent) => this.onUnhandledClick(event),
+    onMapClick: (event: MapClickEvent): boolean => consumes('onMapClick', () => this.onMapClick(event)),
+    onMapLongClick: (event: MapClickEvent): boolean => consumes('onMapLongClick', () => this.onMapLongClick(event)),
+    onUnhandledClick: (event: MapClickEvent) => callHandler('onUnhandledClick', () => this.onUnhandledClick(event)),
   });
 
   aboutToAppear(): void {
@@ -205,7 +236,7 @@ export struct MapLibreMap {
     this.view.setUserLocation(this.userLocation);
     this.view.setUserHeading(this.userHeading);
     this.view.setViewportInsets(this.viewportInsets);
-    this.view.start(this.controller, this.runtime, this.style, this.content, this.cameraBounds);
+    this.view.start(controllerState(this.controller), this.runtime, this.style, this.content, this.cameraBounds);
   }
 
   aboutToDisappear(): void {

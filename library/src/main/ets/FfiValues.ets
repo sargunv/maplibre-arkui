@@ -159,7 +159,10 @@ export function checkFit(options: FitCameraOptions | undefined): CheckedFit {
   };
 }
 
-export function checkBounds(bounds: LatLngBounds): void {
+// Each check returns a copy of what it checked, so a move that waits for a map
+// uses the values the app passed, even if the app changes them meanwhile.
+export function checkBounds(input: LatLngBounds): LatLngBounds {
+  const bounds: LatLngBounds = { southwest: copyLatLng(input.southwest), northeast: copyLatLng(input.northeast) };
   checkLatLng(bounds.southwest, 'The bounds\' southwest');
   checkLatLng(bounds.northeast, 'The bounds\' northeast');
   if (bounds.southwest.latitude > bounds.northeast.latitude ||
@@ -168,18 +171,26 @@ export function checkBounds(bounds: LatLngBounds): void {
       `${bounds.southwest.latitude}, ${bounds.southwest.longitude} and ` +
       `${bounds.northeast.latitude}, ${bounds.northeast.longitude}`);
   }
+  return bounds;
 }
 
-export function checkCoordinates(coordinates: LatLng[]): void {
+export function checkCoordinates(input: LatLng[]): LatLng[] {
+  const coordinates = input.map(copyLatLng);
   if (coordinates.length === 0) {
     throw new Error('The coordinates to fit must not be empty');
   }
   coordinates.forEach((coordinate: LatLng) => checkLatLng(coordinate, 'Each coordinate to fit'));
+  return coordinates;
+}
+
+function copyLatLng(coordinate: LatLng): LatLng {
+  return { latitude: coordinate.latitude, longitude: coordinate.longitude };
 }
 
 // Throws unless `geometry` has a position, each with a finite longitude and a
 // latitude from -90 to 90.
-export function checkGeometry(geometry: GeoJsonGeometry): void {
+export function checkGeometry(input: GeoJsonGeometry): GeoJsonGeometry {
+  const geometry = JSON.parse(JSON.stringify(input)) as GeoJsonGeometry;
   const positions: GeoJsonPosition[] = [];
   collectPositions(geometry, positions);
   if (positions.length === 0) {
@@ -191,6 +202,7 @@ export function checkGeometry(geometry: GeoJsonGeometry): void {
     }
     checkLatLng({ latitude: position[1], longitude: position[0] }, 'Each position of the geometry to fit');
   }
+  return geometry;
 }
 
 function append(positions: GeoJsonPosition[], into: GeoJsonPosition[]): void {

@@ -3,8 +3,9 @@ import {
   LatLng,
   LatLngBounds,
   MapController,
+  MapError,
   MapFullOverlay,
-  MapLibreMap,
+  MaplibreMap,
   MapPlacedAt,
   MapPointerPinButton,
 } from '@maplibre/arkui';
@@ -55,11 +56,11 @@ struct Index {
     Navigation(this.stack) {
       Stack({ alignContent: Alignment.Bottom }) {
         if (this.showMap) {
-          MapLibreMap({
-            controller: this.map,
+          MaplibreMap({
             style: LIBERTY,
+            controller: this.map,
             viewportInsets: { bottom: this.panelHeight },
-            onMapError: (error: Error) => {
+            onError: (error: MapError) => {
               this.message = error.message;
             },
             onGestureStart: () => {
@@ -111,9 +112,7 @@ struct Index {
             Button('Fit').margin(4).onClick(() => this.fit())
             Button('Europe').margin(4).onClick(() => this.flyOverEurope())
             Button('Rotate').margin(4).onClick(() => this.turn())
-            Button('Cancel').margin(4).onClick(() => {
-              this.map.cancelCameraTransitions().catch((error: Error) => this.message = error.message);
-            })
+            Button('Cancel').margin(4).onClick(() => this.map.cancelCameraTransitions())
             Button(this.showMap ? 'Hide map' : 'Show map').margin(4).onClick(() => {
               this.showMap = !this.showMap;
             })
@@ -199,9 +198,6 @@ struct Index {
   // rest.
   private describeCamera(): string {
     const camera = this.map.camera;
-    if (camera === undefined) {
-      return 'Loading…';
-    }
     return `${camera.center.latitude.toFixed(4)}, ${camera.center.longitude.toFixed(4)} ` +
       `at zoom ${camera.zoom.toFixed(2)}`;
   }
@@ -250,8 +246,7 @@ struct Index {
 
   // Turns the map, which shows the compass. Tapping it turns the map north.
   private turn(): void {
-    const camera = this.map.getCamera();
-    this.report(this.map.updateCamera({ bearing: (camera?.bearing ?? 0) + 45 },
+    this.report(this.map.updateCamera({ bearing: this.map.camera.bearing + 45 },
       { mode: CameraTransitionMode.EASE, durationMs: 1000 }));
   }
 

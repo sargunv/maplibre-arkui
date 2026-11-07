@@ -12,17 +12,29 @@ import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw"
 <Api of="MapController" /> reads and moves the camera from anywhere, as a
 `Scroller` does for a list. Create one, pass it to one map, and keep it; when
 the map leaves the screen and comes back, the new map starts where the old one
-left the camera. `camera`, `styleLoaded`, `attributions`, and
-`followingUserLocation` are observable, so a component that reads them updates
-when they change:
+left the camera. Its getters are observable, so a component that reads them
+updates when they change.
+
+## Where the camera is
+
+<Api of="MapController.camera" display="camera" /> is where the camera is, and
+changes with every frame of a move or a gesture. It's always there: before a map
+shows the controller, it's the camera that the controller starts with. The
+map's `onCameraIdle` tells you where the camera comes to rest.
+<Api of="MapController.viewport" display="viewport" /> is the latest frame that
+the map drew, a <Api of="Viewport" />, with the same camera:
 
 <Code code={region(examples, "camera-observable")} lang="ts" />
 
-`camera` changes when the camera comes to rest;
-<Api of="MapController.getCamera" display="getCamera()" /> reads where it is
-now. <Api of="MapController.updateCamera" display="updateCamera()" /> changes
-the fields of the camera that you give it, and its options choose whether it
-jumps, eases, or flies (<Api of="CameraTransitionMode" />):
+A viewport also converts between the frame's screen points and coordinates, as
+the library's controls and markers do. It changes every frame, so read it in
+`@Computed` getters of the components that need it.
+
+## Move the camera
+
+<Api of="MapController.updateCamera" display="updateCamera()" /> changes the
+fields of the camera that you give it, and its options choose whether it jumps,
+eases, or flies (<Api of="CameraTransitionMode" />):
 
 <Code code={region(examples, "camera-move")} lang="ts" />
 
@@ -31,6 +43,11 @@ fit an area, coordinates, or a GeoJSON geometry. Each move resolves `true` when
 the camera got there, and `false` when something stopped it first:
 
 <Code code={region(examples, "camera-fit")} lang="ts" />
+
+A move that the app makes before a map shows the controller waits: the map
+makes it once it shows its first frame at its size, so a fit fits the map's real
+size. Moves wait while no map shows the controller, and go in the order the app
+made them; `cancelCameraTransitions()` stops them.
 
 ## Padding
 
@@ -73,11 +90,8 @@ The system keeps that state only while the app is in the background. To reopen
 where the user left the camera after they close the app, keep the saved camera
 in `PersistenceV2` instead.
 
-## The frame on screen
+## What the library doesn't cover
 
-`frameCamera`, `pixelForLatLng()`, `latLngForPixel()`, and
-`metersPerPixelAtLatitude()` follow the frame on screen, and are observable too,
-so content placed with them moves with the map. They change every frame, so read
-them in `@Computed` getters of the components that need them. The controller
-also exposes the FFI `runtime`, `map`, and `renderSession`, for what this
-library doesn't wrap.
+<Api of="MapController.withFfiMap" display="withFfiMap()" /> lends the FFI map
+and its render session to a callback, for what the library doesn't cover yet.
+See [The style API](/maplibre-arkui/style/).

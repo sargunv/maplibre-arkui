@@ -1,26 +1,16 @@
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
 import image from '@ohos.multimedia.image';
 import {
-  ConstrainMode,
-  FeatureStateSelector,
-  GeoJsonFeature,
   GeoJsonFeatureCollection,
-  ImageContent,
-  latLngForProjectedMeters,
-  MapDebugFlag,
-  MapHandle,
-  NorthOrientation,
-  PremultipliedRgba8Image,
-  projectedMetersForLatLng,
+  MapController,
   readPixelMap,
   RenderedFeature,
   ScreenPoint,
-  StyleImageTextFit,
-  TileLodMode,
 } from '@maplibre/arkui';
+import { CommandCompletion, FeatureStateSelector, MapHandle } from '@maplibre/native-ffi';
 
 import { backgroundStyle, testMap } from '../testability/TestMaps';
-import { eventually, expectNear, pixelFor, requireMap, setStyle, until } from './helpers';
+import { eventually, pixelFor, setStyle, withMap } from './helpers';
 
 const PLACES: GeoJsonFeatureCollection = {
   type: 'FeatureCollection',
@@ -32,14 +22,18 @@ const PLACES: GeoJsonFeatureCollection = {
 
 const ONE: FeatureStateSelector = { sourceId: 'places', featureId: { kind: 'doubleValue', value: 1 } };
 
+// Adds a circle layer of `color` that draws the places, through the FFI map.
+function addCircles(id: string, color: string = '#ffffff'): Promise<CommandCompletion> {
+  const paint: Record<string, Object> = { 'circle-radius': 12, 'circle-color': color };
+  const layer: Record<string, Object> = { 'id': id, 'type': 'circle', 'source': 'places', 'paint': paint };
+  return withMap((ffi: MapHandle) => ffi.addStyleLayerJson(layer));
+}
+
 // Adds the places as a GeoJSON source from the object itself, and a circle
-// layer that draws them.
-async function addPlaces(map: MapHandle): Promise<void> {
+// layer that draws them. The map runs the commands in order.
+function addPlaces(): Promise<CommandCompletion[]> {
   const source: Record<string, Object> = { 'type': 'geojson', 'data': PLACES };
-  const paint: Record<string, Object> = { 'circle-radius': 12, 'circle-color': '#ffffff' };
-  const layer: Record<string, Object> = { 'id': 'circles', 'type': 'circle', 'source': 'places', 'paint': paint };
-  await map.addStyleSourceJson('places', source);
-  await map.addStyleLayerJson(layer);
+  return Promise.all([withMap((ffi: MapHandle) => ffi.addStyleSourceJson('places', source)), addCircles('circles')]);
 }
 
 function bytes(pixels: Uint8Array): string {
@@ -50,15 +44,11 @@ function bytes(pixels: Uint8Array): string {
   return values.join(',');
 }
 
-// Queries the circles at `point` once a frame until it finds one.
-function queryCircles(point: ScreenPoint): Promise<readonly RenderedFeature[]> {
-  return eventually('the query finds a feature', async () => {
-    const session = testMap.controller.renderSession;
-    if (session === undefined) {
-      return undefined;
-    }
-    const hits = await session.queryRenderedFeatures({ kind: 'point', value: point }, { layerIds: ['circles'] });
-    return hits.length > 0 ? hits : undefined;
+// Queries `layers` at `point` once a frame until it finds `count` features.
+function queryAt(point: ScreenPoint, layers: string[], count: number = 1): Promise<RenderedFeature[]> {
+  return eventually('the query finds the features', async () => {
+    const hits = await testMap.controller.queryRenderedFeatures(point, { layers: layers });
+    return hits !== undefined && hits.length >= count ? hits : undefined;
   });
 }
 
@@ -119,79 +109,53 @@ export default function styleTest(): void {
       expect(threw).assertTrue();
     });
 
-    it('takes the options that the re-exported FFI enums name', 0, async () => {
-      const map = requireMap();
-      const debug = MapDebugFlag.tileBorders | MapDebugFlag.collision;
-      await map.setDebugFlags(debug);
-      await until('the debug flags apply', () => map.getSnapshot().debugFlags === debug);
-      await map.setDebugFlags(0);
 
-      const lodMode = map.getSnapshot().tile.lodMode;
-      await map.setTileOptions({ lodMode: TileLodMode.distance });
-      await until('the tile options apply', () => map.getSnapshot().tile.lodMode === TileLodMode.distance);
-      await map.setTileOptions({ lodMode: lodMode });
-
-      const viewport = map.getSnapshot().view.viewport;
-      await map.setViewportOptions({ constrainMode: ConstrainMode.screen, northOrientation: NorthOrientation.up });
-      await until('the viewport options apply',
-        () => map.getSnapshot().view.viewport.constrainMode === ConstrainMode.screen);
-      expect(map.getSnapshot().view.viewport.northOrientation).assertEqual(NorthOrientation.up);
-      await map.setViewportOptions({ constrainMode: viewport.constrainMode });
-
-      // An opaque white pixel, whose content box text fits proportionally.
-      const pixel: PremultipliedRgba8Image = {
-        width: 1, height: 1, stride: 4, pixels: new Uint8Array([255, 255, 255, 255]),
-      };
-      const content: ImageContent = { left: 0, top: 0, right: 1, bottom: 1 };
-      await map.setStyleImage('label', pixel, {
-        content: content,
-        textFitWidth: StyleImageTextFit.proportional,
-        textFitHeight: StyleImageTextFit.stretchOnly,
-      });
-      const stored = await map.getStyleImage('label');
-      expect(stored?.content?.right).assertEqual(1);
-      expect(stored?.textFitWidth).assertEqual(StyleImageTextFit.proportional);
-      expect(stored?.textFitHeight).assertEqual(StyleImageTextFit.stretchOnly);
-      await map.removeStyleImage('label');
-
-      const meters = projectedMetersForLatLng({ latitude: 10, longitude: 20 });
-      expect(meters.easting).assertLarger(0);
-      const back = latLngForProjectedMeters(meters);
-      expectNear(back.latitude, 10, 1e-9);
-      expectNear(back.longitude, 20, 1e-9);
+    it('gives a feature without state an empty state', 0, async () => {
+      await addPlaces();
+      const hits = await queryAt(pixelFor({ latitude: 10, longitude: 20 }), ['circles']);
+      expect(JSON.stringify(hits[0].state)).assertEqual('{}');
     });
 
     it('finds the feature at its screen point, with its state', 0, async () => {
-      const map = requireMap();
-      await addPlaces(map);
+      await addPlaces();
       const selected: Record<string, Object> = { 'selected': true };
-      await map.setFeatureState(ONE, selected);
+      await withMap((ffi: MapHandle) => ffi.setFeatureState(ONE, selected));
       const point = pixelFor({ latitude: 10, longitude: 20 });
 
-      const hits = await queryCircles(point);
+      const hits = await queryAt(point, ['circles']);
       expect(hits.length).assertEqual(1);
       expect(hits[0].layerId).assertEqual('circles');
       expect(hits[0].sourceId).assertEqual('places');
-      const feature = hits[0].feature as GeoJsonFeature;
-      expect(feature.id).assertEqual(1);
-      expect(feature.properties?.['name']).assertEqual('One');
+      expect(hits[0].sourceLayer).assertUndefined();
+      expect(hits[0].feature.id).assertEqual(1);
+      expect(hits[0].feature.properties?.['name']).assertEqual('One');
       expect(JSON.stringify(hits[0].state)).assertEqual('{"selected":true}');
 
-      const session = testMap.controller.renderSession;
-      const beside = await session?.queryRenderedFeatures(
-        { kind: 'point', value: { x: point.x + 60, y: point.y } }, { layerIds: ['circles'] });
+      const beside = await testMap.controller.queryRenderedFeatures({ x: point.x + 60, y: point.y },
+        { layers: ['circles'] });
       expect(beside?.length).assertEqual(0);
+      // Within the hit padding of the point.
+      const padded = await testMap.controller.queryRenderedFeatures({ x: point.x + 60, y: point.y },
+        { layers: ['circles'], hitPadding: 60 });
+      expect(padded?.length).assertEqual(1);
+      expect(() => testMap.controller.queryRenderedFeatures(point, { hitPadding: -1 })).assertThrowError('-1');
     });
 
     it('starts each style without what the app added, which it adds again', 0, async () => {
-      const map = requireMap();
-      await addPlaces(map);
+      await addPlaces();
       await setStyle(backgroundStyle('#4ad94a'));
-      expect(await map.getStyleLayer('circles')).assertUndefined();
-      expect(await map.getStyleSource('places')).assertUndefined();
+      expect(await withMap((ffi: MapHandle) => ffi.getStyleLayer('circles'))).assertUndefined();
+      expect(await withMap((ffi: MapHandle) => ffi.getStyleSource('places'))).assertUndefined();
 
-      await addPlaces(map);
-      expect((await map.getStyleLayer('circles'))?.id).assertEqual('circles');
+      await addPlaces();
+      expect((await withMap((ffi: MapHandle) => ffi.getStyleLayer('circles')))?.id).assertEqual('circles');
+    });
+
+    it('answers queries with undefined while no map shows the controller', 0, async () => {
+      const unused = new MapController();
+      expect(await unused.queryRenderedFeatures({ x: 0, y: 0 })).assertUndefined();
+      expect(await unused.querySourceFeatures('places')).assertUndefined();
+      expect(unused.withFfiMap((map: MapHandle) => map.id)).assertUndefined();
     });
   });
 }

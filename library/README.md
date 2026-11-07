@@ -3,7 +3,7 @@
 ArkUI components for [MapLibre Native] maps on HarmonyOS and OpenHarmony, built
 on [MapLibre Native FFI]:
 
-- `MapLibreMap`, a map that moves with touch, mouse, touchpad, and keyboard
+- `MaplibreMap`, a map that moves with touch, mouse, touchpad, and keyboard
   gestures, with localized controls that follow dark mode: a compass, scale bar,
   attribution, logo, and zoom buttons, in presets or placed by the app
 - `MapController`, which reads and moves the camera, with observable state
@@ -13,7 +13,8 @@ on [MapLibre Native FFI]:
 - Map content (sources, layers, and images) declared as data from the app's
   state, and functions that build style expressions
 - `snapshot()`, a still image of a map
-- MapLibre Native FFI's style API, request handlers, offline regions, and logs
+- Feature queries, and MapLibre Native FFI's map for the rest of its style API
+- MapLibre Native FFI's request handlers, offline regions, and logs
 
 This is a preview. It uses state management V2 (`@ComponentV2`) and needs API 20
 or later.
@@ -37,7 +38,7 @@ connectivity.
 ## Quick start
 
 ```ets
-import { CameraTransitionMode, MapController, MapLibreMap } from '@maplibre/arkui';
+import { CameraTransitionMode, MapController, MapError, MaplibreMap } from '@maplibre/arkui';
 
 @Entry
 @ComponentV2
@@ -48,10 +49,10 @@ struct MapPage {
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
-      MapLibreMap({
-        controller: this.controller,
+      MaplibreMap({
         style: 'https://tiles.openfreemap.org/styles/liberty',
-        onMapError: (error: Error) => console.error(error.message),
+        controller: this.controller,
+        onError: (error: MapError) => console.error(error.message),
       })
       Button('Fly to New York')
         .margin(64)

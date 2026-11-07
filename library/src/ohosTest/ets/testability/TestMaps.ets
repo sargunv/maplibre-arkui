@@ -2,12 +2,13 @@
 // waits that poll it once a frame.
 
 import {
-  BoundOptions,
+  CameraBoundsOptions,
   CameraPosition,
   LatLng,
   MapClickEvent,
   MapContent,
   MapController,
+  MapError,
   MapInteractionOptions,
   RuntimeHandle,
   UserLocationIndicatorOptions,
@@ -20,13 +21,30 @@ import window from '@ohos.window';
 // How long a wait polls before it fails.
 export const WAIT_MS = 15000;
 
-// A style without network requests: a background of `color`.
-export function backgroundStyle(color: string): string {
+// A style document from its JSON text, as a map takes it.
+export function styleDocument(json: string): Record<string, Object> {
+  return JSON.parse(json) as Record<string, Object>;
+}
+
+// A style without network requests, a background of `color`, as JSON text,
+// which a snapshot takes.
+export function backgroundStyleJson(color: string): string {
   return '{"version":8,"sources":{},"layers":[{"id":"background","type":"background",' +
     `"paint":{"background-color":"${color}"}}]}`;
 }
 
-export const STYLE = backgroundStyle('#4a90d9');
+// That style as a map takes it.
+export function backgroundStyle(color: string): Record<string, Object> {
+  return styleDocument(backgroundStyleJson(color));
+}
+
+export const STYLE_JSON = backgroundStyleJson('#4a90d9');
+export const STYLE = styleDocument(STYLE_JSON);
+
+// Whether a map shows the controller.
+export function showsMap(controller: MapController): boolean {
+  return controller.withFfiMap(() => true) ?? false;
+}
 
 export const NO_INSETS: Padding = { top: 0, left: 0, bottom: 0, right: 0 };
 
@@ -41,8 +59,8 @@ export class TestMap {
   // The map is on the page while this is true. The suites that need no map
   // leave it off.
   @Trace shown: boolean = false;
-  @Trace style: string = STYLE;
-  @Trace cameraBounds: BoundOptions | undefined = undefined;
+  @Trace style: string | Record<string, Object> = STYLE;
+  @Trace cameraBounds: CameraBoundsOptions = {};
   // Which overlay the map draws: none of its own but what the flags below
   // add, a preset in its block besides them, or, with 'omitted', no trailing
   // closure at all. Content that moves with the camera makes the emulator's
@@ -86,15 +104,17 @@ export class TestMap {
   // first shows.
   @Trace secondMap: boolean = false;
   @Trace firstMap: boolean = true;
-  @Trace content: MapContent | undefined = undefined;
+  @Trace content: MapContent = {};
   // The runtime that the map takes as it appears, or the default one.
   @Trace runtime: RuntimeHandle | undefined = undefined;
   // What the map's events reported.
   styleLoads: number = 0;
   errors: string[] = [];
+  failures: MapError[] = [];
   cameraIdles: CameraPosition[] = [];
-  // Whether onMapError throws after it records the error.
+  // Whether onError and onCameraIdle throw after they record what they got.
   throwOnError: boolean = false;
+  throwOnCameraIdle: boolean = false;
   gestureStarts: number = 0;
   gestureEnds: number = 0;
   // What a case does as a gesture starts or ends, as an app would.
@@ -107,6 +127,8 @@ export class TestMap {
   clickEvents: MapClickEvent[] = [];
   consumeClicks: boolean = false;
   controller: MapController = new MapController({ camera: { zoom: 1 } });
+  // Counts the styles that reset() loads, to name each.
+  private resets: number = 0;
   scroller: Scroller = new Scroller();
   // The page's UI context, once the page appears, and the test ability's
   // window stage, which sets the page's density.
@@ -118,7 +140,7 @@ export class TestMap {
    * flag off. The style loads afresh, without what a case added to it, and the
    * camera rests at the origin at zoom 1, facing north.
    */
-  async reset(style: string = STYLE, inScroll: boolean = false): Promise<void> {
+  async reset(style: Record<string, Object> = STYLE, inScroll: boolean = false): Promise<void> {
     const controller = this.controller;
     controller.stopFollowingUserLocation();
     // A map that took another runtime, or that another map shared the page
@@ -126,7 +148,7 @@ export class TestMap {
     if (this.runtime !== undefined || this.secondMap || !this.firstMap || this.height !== '100%' ||
       this.overlay === 'omitted') {
       this.shown = false;
-      await until('the map leaves', () => controller.map === undefined);
+      await until('the map leaves', () => !showsMap(controller));
       this.runtime = undefined;
       this.secondMap = false;
       this.firstMap = true;
@@ -136,7 +158,8 @@ export class TestMap {
     this.onGestureEnd = noop;
     this.consumeClicks = false;
     this.throwOnError = false;
-    this.cameraBounds = undefined;
+    this.throwOnCameraIdle = false;
+    this.cameraBounds = {};
     this.overlay = 'none';
     this.scaleBar = undefined;
     this.scaleBarMaxWidth = undefined;
@@ -158,15 +181,18 @@ export class TestMap {
     this.userLocation = undefined;
     this.userHeading = undefined;
     this.userLocationIndicator = {};
-    this.content = undefined;
+    this.content = {};
     const loads = this.styleLoads;
     this.shown = true;
     this.inScroll = inScroll;
-    // The map loads a style that differs from the one it shows, and JSON
-    // doesn't mind the space.
-    this.style = this.style === style ? `${style} ` : style;
+    // The map loads a style whose JSON differs from the one it shows: the
+    // same style with another name.
+    const named = JSON.parse(JSON.stringify(style)) as Record<string, Object>;
+    named['name'] = `reset ${++this.resets}`;
+    this.style = named;
     await until('the map loads the style', () => this.styleLoads > loads && controller.styleLoaded);
     this.errors = [];
+    this.failures = [];
     this.cameraIdles = [];
     this.clicks = [];
     this.clickEvents = [];
