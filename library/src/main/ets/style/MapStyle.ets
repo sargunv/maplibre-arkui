@@ -1,7 +1,7 @@
 import { StyleImage } from '../content/StyleImage';
 import { StyleSource } from '../content/StyleSource';
 import { LayerHandle } from './LayerHandle';
-import { GeoJsonSourceHandle, ImageSourceHandle, SourceHandle } from './SourceHandle';
+import { GeoJsonSourceHandle, ImageSourceHandle, SourceHandle, VectorSourceHandle } from './SourceHandle';
 
 /**
  * Reads and changes the style that the map has loaded: its sources, layers,
@@ -59,6 +59,9 @@ export interface MapStyle {
 
   /** The image source with `id`, or undefined when the style has no image source with it. */
   getImageSource(id: string): Promise<ImageSourceHandle | undefined>;
+
+  /** The vector tile source with `id`, or undefined when the style has no vector tile source with it. */
+  getVectorSource(id: string): Promise<VectorSourceHandle | undefined>;
 
   /** The style's sources, in the order that the style lists them. */
   getSources(): Promise<SourceHandle[] | undefined>;

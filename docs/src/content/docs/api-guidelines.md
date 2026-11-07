@@ -361,6 +361,8 @@ get map(): MapHandle | undefined;
   [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#10-units-and-value-types)
 - Don't use number types for identifiers.
   [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#10-units-and-value-types)
+- Where a data format allows a number as an identifier, take what the format
+  allows: a feature ID is `number | string`, as GeoJSON's is.
 
 | Quantity                       | Type                                       |
 | ------------------------------ | ------------------------------------------ |

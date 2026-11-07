@@ -302,9 +302,9 @@ export class MapController {
   /**
    * Lends `block` the MapLibre Native FFI map that shows the controller, and
    * its render session while it has a surface, for what this library doesn't
-   * cover, such as feature state or debug overlays. It returns what `block`
-   * returns, or undefined without calling it when no map shows the controller.
-   * What `block` throws reaches the caller.
+   * cover, such as debug overlays. It returns what `block` returns, or
+   * undefined without calling it when no map shows the controller. What
+   * `block` throws reaches the caller.
    *
    * ```ets
    * controller.withFfiMap((map: MapHandle) => map.discarding.setDebugFlags(MapDebugFlag.tileBorders));

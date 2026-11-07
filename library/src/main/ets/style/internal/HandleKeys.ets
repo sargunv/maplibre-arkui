@@ -61,6 +61,16 @@ export class SourceKey {
       return Promise.resolve(false);
     }
     checkOwned(this.style.reconciler.ownsSource(this.id), 'source', this.id);
+    return this.change(what, command, declined);
+  }
+
+  // Sends a write to the source while the handle holds, also to a source of
+  // the content, as feature state does.
+  change(what: string, command: (map: MapHandle) => Promise<CommandCompletion>,
+    declined?: (error: Error) => boolean): Promise<boolean> {
+    if (!this.holds()) {
+      return Promise.resolve(false);
+    }
     return write(() => this.holds(), what, () => command(this.style.map), declined);
   }
 }

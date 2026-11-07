@@ -1,11 +1,19 @@
-import { CommandCompletion } from '@maplibre/native-ffi';
+import { CommandCompletion, RenderSessionHandle } from '@maplibre/native-ffi';
 import image from '@ohos.multimedia.image';
 
 import { readPixelMap } from '../content/internal/PixelMaps';
-import { GeoJsonObject } from '../geometry/GeoJson';
+import { GeoJsonFeature, GeoJsonFeatureCollection, GeoJsonObject } from '../geometry/GeoJson';
 import { LatLng } from '../geometry/Geometry';
 import { checkLatLng } from '../geometry/internal/FfiGeometry';
 import { registerSourceKey, SourceKey, sourceKeyOf } from './internal/HandleKeys';
+import {
+  checkCount,
+  checkSourceLayer,
+  getState,
+  queryCluster,
+  removeState,
+  setState,
+} from './internal/SourceFeatures';
 import { replaced } from './internal/StyleCommands';
 
 /**
@@ -13,12 +21,28 @@ import { replaced } from './internal/StyleCommands';
  *
  * A handle belongs to one style. It expires when that style goes, as
  * `MapStyle` describes, and when its source leaves the style: by `remove()`,
- * or as the content removes or replaces it. Then its writes resolve `false`.
- * Get a new handle for the source of a new style. Its writes throw an `Error`
- * for a source of the content, as `MapStyle` describes.
+ * or as the content removes or replaces it. Then its reads resolve undefined,
+ * and its writes `false`. Get a new handle for the source of a new style. Its
+ * writes throw an `Error` for a source of the content, as `MapStyle`
+ * describes, except those of feature state.
  *
- * A GeoJSON source's handle is a `GeoJsonSourceHandle`, and an image source's
- * an `ImageSourceHandle`; match them with `instanceof`. Subclasses for other
+ * Feature state is a set of values by name for each feature of a source,
+ * which the `featureState()` expressions of paint properties read, such as to
+ * highlight a selected feature. It works on every source, those of the base
+ * style and the content too, and lasts until the app removes it or the
+ * source leaves the style. Until MapLibre Native FFI fixes
+ * [maplibre-native-ffi#1746](https://github.com/maplibre/maplibre-native-ffi/issues/1746),
+ * it can carry over to a later source with the same ID, in this style or a
+ * later one; an app that needs a source to start without feature state calls
+ * `resetFeatureStates()` on it, such as in `onStyleLoaded`. A change draws on
+ * the next frame, even on a map that's idle. A feature state method takes
+ * the feature's `id`, a number or a string. The map compares IDs as text, so 7
+ * and '7' name one feature. It throws an `Error` for a state that
+ * `JSON.stringify()` can't write.
+ *
+ * A GeoJSON source's handle is a `GeoJsonSourceHandle`, a vector tile
+ * source's a `VectorSourceHandle`, and an image source's an
+ * `ImageSourceHandle`; match them with `instanceof`. Subclasses for other
  * types and members may be added in later releases. The map creates handles;
  * apps can't.
  */
@@ -69,7 +93,19 @@ export class SourceHandle {
   }
 }
 
-/** A GeoJSON source of the style, as `SourceHandle` describes. */
+/**
+ * A GeoJSON source of the style, as `SourceHandle` describes.
+ *
+ * The cluster queries read the source's clusters, from a feature of the
+ * source with the `cluster_id` property, such as a feature that a click or a
+ * query found in a layer that draws the source. They read the data that the
+ * map last drew, and resolve undefined for a feature without a `cluster_id`
+ * that's a whole number from 0 to 4294967295, for a cluster that isn't in
+ * that data, for a source that doesn't cluster, while no map shows a frame,
+ * and once the handle expires. A cluster's ID belongs to one version of the
+ * data: after the data changes, find the cluster again. They reject when the
+ * map rejects the query for another reason.
+ */
 export class GeoJsonSourceHandle extends SourceHandle {
   /**
    * Replaces the source's data with a GeoJSON object, or with the GeoJSON at
@@ -80,6 +116,93 @@ export class GeoJsonSourceHandle extends SourceHandle {
   setData(data: GeoJsonObject | string): Promise<boolean> {
     return sourceKeyOf(this).send(`setting the data of source ${this.id}`, (map) => typeof data === 'string' ?
       map.setGeoJsonSourceUrl(this.id, data) : map.setGeoJsonSourceData(this.id, data), replaced);
+  }
+
+  /**
+   * Merges `state` into the state of the feature with the ID `featureId`: its
+   * values replace those with the same names, and the others stay.
+   */
+  setFeatureState(featureId: number | string, state: Record<string, Object>): Promise<boolean> {
+    return setState(sourceKeyOf(this), undefined, featureId, state);
+  }
+
+  /** The state of the feature with the ID `featureId`, which is empty when it has none. */
+  getFeatureState(featureId: number | string): Promise<Record<string, Object> | undefined> {
+    return getState(sourceKeyOf(this), undefined, featureId);
+  }
+
+  /** Removes the value `key` from the state of the feature with the ID `featureId`, or its whole state without `key`. */
+  removeFeatureState(featureId: number | string, key?: string): Promise<boolean> {
+    return removeState(sourceKeyOf(this), undefined, featureId, key);
+  }
+
+  /** Removes the state of every feature of the source. */
+  resetFeatureStates(): Promise<boolean> {
+    return removeState(sourceKeyOf(this), undefined, undefined, undefined);
+  }
+
+  /** The zoom level at which `cluster` splits into two or more clusters or points. */
+  getClusterExpansionZoom(cluster: GeoJsonFeature): Promise<number | undefined> {
+    return queryCluster(sourceKeyOf(this), cluster, 'expansion zoom',
+      (session: RenderSessionHandle, id: number) => session.getClusterExpansionZoom(this.id, id));
+  }
+
+  /** The clusters and points that `cluster` splits into at the next zoom level. */
+  getClusterChildren(cluster: GeoJsonFeature): Promise<GeoJsonFeatureCollection | undefined> {
+    return queryCluster(sourceKeyOf(this), cluster, 'children', (session: RenderSessionHandle, id: number) =>
+      session.getClusterChildren(this.id, id) as Promise<GeoJsonFeatureCollection>);
+  }
+
+  /**
+   * The points in `cluster`, also those in the clusters within it: up to
+   * `limit` of them, after the first `offset`. A `limit` of 0 gives none. It
+   * throws an `Error` for a `limit` or `offset` that isn't a whole number of 0
+   * or more.
+   */
+  getClusterLeaves(cluster: GeoJsonFeature, limit: number, offset: number):
+    Promise<GeoJsonFeatureCollection | undefined> {
+    const most = checkCount('limit', limit);
+    const skipped = checkCount('offset', offset);
+    return queryCluster(sourceKeyOf(this), cluster, 'leaves', (session: RenderSessionHandle, id: number) =>
+      session.getClusterLeaves(this.id, id, most, skipped) as Promise<GeoJsonFeatureCollection>);
+  }
+}
+
+/**
+ * A vector tile source of the style, as `SourceHandle` describes. Its
+ * features are in source layers, so the feature state methods take the name
+ * of one, and throw an `Error` for an empty name.
+ */
+export class VectorSourceHandle extends SourceHandle {
+  /**
+   * Merges `state` into the state of the feature with the ID `featureId` in
+   * the source layer `sourceLayer`: its values replace those with the same
+   * names, and the others stay.
+   */
+  setFeatureState(sourceLayer: string, featureId: number | string, state: Record<string, Object>): Promise<boolean> {
+    return setState(sourceKeyOf(this), checkSourceLayer(sourceLayer), featureId, state);
+  }
+
+  /**
+   * The state of the feature with the ID `featureId` in the source layer
+   * `sourceLayer`, which is empty when it has none.
+   */
+  getFeatureState(sourceLayer: string, featureId: number | string): Promise<Record<string, Object> | undefined> {
+    return getState(sourceKeyOf(this), checkSourceLayer(sourceLayer), featureId);
+  }
+
+  /**
+   * Removes the value `key` from the state of the feature with the ID
+   * `featureId` in the source layer `sourceLayer`, or its whole state without
+   * `key`.
+   */
+  removeFeatureState(sourceLayer: string, featureId: number | string, key?: string): Promise<boolean> {
+    return removeState(sourceKeyOf(this), checkSourceLayer(sourceLayer), featureId, key);
+  }
+
+  /** Removes the state of every feature in the source layer `sourceLayer`. */
+  resetFeatureStates(sourceLayer: string): Promise<boolean> {
+    return removeState(sourceKeyOf(this), checkSourceLayer(sourceLayer), undefined, undefined);
   }
 }
 
