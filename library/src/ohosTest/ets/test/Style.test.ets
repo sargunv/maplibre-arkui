@@ -392,6 +392,7 @@ export default function styleTest(): void {
       await until('the map rejects the layer', () => contentFailed('dots'));
       const added = await mapStyle().addSource({ id: 'app-places', json: geoJson(PLACES) });
       expect(added?.type).assertEqual('geojson');
+      expect((await mapStyle().getLayer('dots'))?.source).assertEqual('app-places');
       await queryAt(pixelFor({ latitude: 10, longitude: 20 }), ['dots']);
 
       expect(await rejection(added?.remove() ?? Promise.resolve(false))).assertContain('app-places');

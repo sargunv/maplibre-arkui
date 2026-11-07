@@ -168,12 +168,18 @@ export class ContentReconciler {
 
   /**
    * The app added a source through the style API. A content layer that waits
-   * for a source with its ID tries again.
+   * for a source with its ID tries again, on the pass that this settles after.
+   * A source that the content declared while the app added it is the
+   * content's.
    */
-  appSourceAdded(id: string): void {
-    this.appSources.add(id);
+  appSourceAdded(id: string): Promise<void> {
+    if (this.ownsSource(id)) {
+      this.displaced.add(id);
+    } else {
+      this.appSources.add(id);
+    }
     bump(this.sourceVersions, id);
-    this.schedule();
+    return this.schedule();
   }
 
   /** The app removed a source through the style API. */

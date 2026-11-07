@@ -146,12 +146,23 @@ export class StyleApi implements MapStyle {
     }
     checkOwned(style.reconciler.ownsSource(source.id), 'source', source.id);
     const holds = (): boolean => this.current() === style;
-    return write(holds, `adding source ${source.id}`, () => style.map.addStyleSourceJson(source.id, source.json))
-      .then((added: boolean): Promise<SourceHandle | undefined> | undefined => {
-        if (!added || !holds()) {
+    // The content's layers that draw the source go in before the handle, and
+    // the source's version changes before a read sent after the add makes a
+    // handle.
+    let applied: Promise<void> | undefined = undefined;
+    const add = (): Promise<CommandCompletion> => style.map.addStyleSourceJson(source.id, source.json)
+      .then((done: CommandCompletion): CommandCompletion => {
+        if (holds()) {
+          applied = style.reconciler.appSourceAdded(source.id);
+        }
+        return done;
+      });
+    return write(holds, `adding source ${source.id}`, add)
+      .then(async (added: boolean): Promise<SourceHandle | undefined> => {
+        if (!added || applied === undefined) {
           return undefined;
         }
-        style.reconciler.appSourceAdded(source.id);
+        await applied;
         return this.findSource(source.id);
       });
   }
@@ -327,14 +338,16 @@ class SourceRef implements SourceHandle {
     this.version = style.reconciler.sourceVersion(info.id);
   }
 
+  // The source's version changes before a read sent after the removal makes
+  // a handle.
   remove(): Promise<boolean> {
-    return this.send(`removing source ${this.id}`, () => this.style.map.removeStyleSource(this.id))
-      .then((removed: boolean): boolean => {
-        if (removed && this.holds()) {
+    return this.send(`removing source ${this.id}`, () => this.style.map.removeStyleSource(this.id)
+      .then((done: CommandCompletion): CommandCompletion => {
+        if (this.holds()) {
           this.style.reconciler.sourceRemoved(this.id);
         }
-        return removed;
-      });
+        return done;
+      }));
   }
 
   protected holds(): boolean {

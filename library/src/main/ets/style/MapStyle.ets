@@ -65,7 +65,7 @@ export interface MapStyle {
 
   /**
    * Adds `source` to the style, and resolves its handle once the map has added
-   * it. A content layer that draws a source with its ID draws from then on.
+   * it, and with it the content's layers that draw a source with its ID.
    *
    * It throws an `Error` for an ID of the content or the library. It rejects
    * when the map rejects the source, such as for an ID that the style already
