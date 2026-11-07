@@ -16,7 +16,7 @@
     "type": "entry",
     "description": "$string:label",
     "mainElement": "EntryAbility",
-    "deviceTypes": ["default"],
+    "deviceTypes": ["default", "tablet"],
     "deliveryWithInstall": true,
     "installationFree": false,
     "virtualMachine": "ark",
