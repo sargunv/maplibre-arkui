@@ -81,6 +81,9 @@ touch "$work/finished"
 tally=$(grep -o 'Tests run: [0-9]*, Failure: [0-9]*, Error: [0-9]*, Pass: [0-9]*, Ignore: [0-9]*' "$report" | tail -1 || true)
 if [[ -z $tally ]]; then
   echo "error: hypium didn't report a tally; the suite didn't finish" >&2
+  "${hdc[@]}" shell ps -A -o PID,ARGS >&2 || true
+  "${hdc[@]}" shell power-shell dump -s >&2 || true
+  "${hdc[@]}" shell 'uitest dumpLayout -p /data/local/tmp/test-failure-layout.json >/dev/null && cat /data/local/tmp/test-failure-layout.json' >&2 || true
   # The device's newest app freeze and crash reports say why. The device's
   # shell expands these commands, not this one.
   # shellcheck disable=SC2016
