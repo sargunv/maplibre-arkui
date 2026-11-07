@@ -16,20 +16,21 @@ Read these when the task needs them:
 
 ## Priorities
 
-The project is prerelease. Make breaking changes instead of adding compatibility
-shims.
+The published library is the product. What matters most there is correct
+behavior and a clear API. Until 1.0, a release may break the API to reach a
+better one; users upgrade by following the migration notes in PR descriptions.
 
 Simple, clear code comes first: a map that behaves well with simple code beats
-one that matches Compose or any other reference exactly. Follow ArkUI's idioms
-where Compose's shape would surprise an ArkUI developer, and use only state
-management V2 and current APIs. Wrap FFI only where ArkUI apps need more than
-FFI's types; otherwise re-export them and expose FFI's handles. Every
-declarative feature sits on imperative operations that apps can also call. Avoid
-native code.
+one that matches Compose or any other reference exactly. Avoid native code.
+
+Everything else serves maintainers: the demo app, tests, docs-site tooling, and
+CI scripts. The demo also shows users how to call the library, so its library
+usage should be idiomatic.
 
 FFI's behavior is whatever FFI does at the commit `vars.ffi_commit` in
-`mise.toml` pins. Report FFI gaps and bugs upstream instead of working around
-them with complex code.
+`mise.toml` pins. Answer questions about engine behavior from that source, and
+report FFI gaps and bugs upstream instead of working around them with complex
+code.
 
 ## Pitfalls
 
@@ -47,7 +48,8 @@ them with complex code.
   (`import { A as B }`) from one. It omits some built-in components, such as
   `NodeContainer` and `ContentSlot`. In a `ForEach` item, a custom component's
   trailing closure is silently dropped; have the item call a `@Builder`.
-- ArkUI reserves the name `Camera`, so import FFI's as `CameraPosition`.
+- ArkUI reserves its components' names, such as `Camera`, so import an FFI
+  declaration that takes one under another name.
 - OpenHarmony's main thread can lose a timer's wakeup and hang a `setTimeout`
   poll. Wait for frame callbacks or events instead.
 - hypium's `assertClose` compares the difference relative to the actual value,
