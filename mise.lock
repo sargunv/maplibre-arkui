@@ -2,23 +2,6 @@
 
 lockfile_version = 3
 
-[[tools."aqua:cli/cli"]]
-version = "2.103.3"
-backend = "aqua:cli/cli"
-specifiers = ["2.103.3"]
-
-[tools."aqua:cli/cli"."platforms.linux-x64"]
-checksum = "sha256:4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d"
-url = "https://github.com/cli/cli/releases/download/v2.103.3/gh_2.103.3_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/cli/cli/releases/assets/679195621"
-provenance = "github-attestations"
-
-[tools."aqua:cli/cli"."platforms.macos-arm64"]
-checksum = "sha256:d700207eae9ae98fe2b89535c2c087c07823d4628c56364695a5a07ef311c062"
-url = "https://github.com/cli/cli/releases/download/v2.103.3/gh_2.103.3_macOS_arm64.zip"
-url_api = "https://api.github.com/repos/cli/cli/releases/assets/679195704"
-provenance = "github-attestations"
-
 [[tools."aqua:dprint/dprint"]]
 version = "0.64.3"
 backend = "aqua:dprint/dprint"
@@ -162,6 +145,42 @@ url = "https://ohpm.openharmony.cn/ohpm/@ohos/hypium/-/hypium-1.0.29.har"
 [tools."http:hypium"."platforms.macos-arm64"]
 checksum = "blake3:d77c94d404dea749286821e051bfd9c7c2b43a236d22967b6b52ee456d33a0d9"
 url = "https://ohpm.openharmony.cn/ohpm/@ohos/hypium/-/hypium-1.0.29.har"
+
+[[tools."http:maplibre-native-ffi"]]
+version = "0.202611.0"
+backend = "http:maplibre-native-ffi"
+specifiers = ["0.202611.0"]
+
+[tools."http:maplibre-native-ffi".options]
+format = "tar.gz"
+
+[tools."http:maplibre-native-ffi"."platforms.linux-x64"]
+checksum = "blake3:1c1adfdaf00467e4c8d0e1c0b1b7d0a95626401b9a3116f46ad4dc92f829e638"
+url = "https://ohpm.openharmony.cn/ohpm/@maplibre/native-ffi/-/native-ffi-0.202611.0.har"
+
+[[tools."http:maplibre-native-ffi-opengl"]]
+version = "0.202611.0"
+backend = "http:maplibre-native-ffi-opengl"
+specifiers = ["0.202611.0"]
+
+[tools."http:maplibre-native-ffi-opengl".options]
+format = "tar.gz"
+
+[tools."http:maplibre-native-ffi-opengl"."platforms.linux-x64"]
+checksum = "blake3:852f47cf4c5c003248f519fdccabe37461ba1ec2d1c496c08a3e03f75a3d705f"
+url = "https://ohpm.openharmony.cn/ohpm/@maplibre/native-ffi-opengl/-/native-ffi-opengl-0.202611.0.har"
+
+[[tools."http:maplibre-native-ffi-vulkan"]]
+version = "0.202611.0"
+backend = "http:maplibre-native-ffi-vulkan"
+specifiers = ["0.202611.0"]
+
+[tools."http:maplibre-native-ffi-vulkan".options]
+format = "tar.gz"
+
+[tools."http:maplibre-native-ffi-vulkan"."platforms.linux-x64"]
+checksum = "blake3:16f309526a3e2077704d4c940052a34c6d785d5cb2aa8c17009ce218d8b64b76"
+url = "https://ohpm.openharmony.cn/ohpm/@maplibre/native-ffi-vulkan/-/native-ffi-vulkan-0.202611.0.har"
 
 [[tools."http:oniro-emulator"]]
 version = "7.0"

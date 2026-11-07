@@ -27,16 +27,13 @@ Everything else serves maintainers: the demo app, tests, docs-site tooling, and
 CI scripts. The demo also shows users how to call the library, so its library
 usage should be idiomatic.
 
-FFI's behavior is whatever FFI does at the commit `vars.ffi_commit` in
-`mise.toml` pins. Answer questions about engine behavior from that source, and
-report FFI gaps and bugs upstream instead of working around them with complex
-code.
+FFI's behavior is whatever the FFI release that `vars.ffi_version` in
+`mise.toml` pins does. Answer questions about engine behavior from that source,
+and report FFI gaps and bugs upstream instead of working around them with
+complex code.
 
 ## Pitfalls
 
-- FFI's CI keeps the packages `mise run ffi:download` fetches for 30 days. Move
-  the pin to a newer FFI main commit whose CI run has them before then, or CI
-  breaks.
 - A test run that ends without hypium's tally didn't finish. Don't retry it:
   inspect the device's freeze reports (`/data/log/eventlog/`) and crash logs
   (`/data/log/faultlog/faultlogger/`).

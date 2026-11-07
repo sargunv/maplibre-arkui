@@ -13,6 +13,6 @@
   "compatibleSdkVersion": 20,
   "obfuscated": false,
   "dependencies": {
-    "@maplibre/native-ffi": "file:../build/ffi/native-ffi.har"
+    "@maplibre/native-ffi": "0.202611.0"
   }
 }
