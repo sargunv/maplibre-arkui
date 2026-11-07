@@ -110,14 +110,18 @@ export default function styleTest(): void {
     });
 
 
+    it('gives a feature without state an empty state', 0, async () => {
+      await addPlaces();
+      const hits = await queryAt(pixelFor({ latitude: 10, longitude: 20 }), ['circles']);
+      expect(JSON.stringify(hits[0].state)).assertEqual('{}');
+    });
+
     it('finds the feature at its screen point, with its state', 0, async () => {
       await addPlaces();
-      const point = pixelFor({ latitude: 10, longitude: 20 });
-      const stateless = await queryAt(point, ['circles']);
-      expect(JSON.stringify(stateless[0].state)).assertEqual('{}');
-
       const selected: Record<string, Object> = { 'selected': true };
       await withMap((ffi: MapHandle) => ffi.setFeatureState(ONE, selected));
+      const point = pixelFor({ latitude: 10, longitude: 20 });
+
       const hits = await queryAt(point, ['circles']);
       expect(hits.length).assertEqual(1);
       expect(hits[0].layerId).assertEqual('circles');
