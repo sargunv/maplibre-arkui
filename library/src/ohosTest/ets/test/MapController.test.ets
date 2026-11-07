@@ -366,6 +366,20 @@ export default function mapControllerTest(): void {
       expectNear(camera().center.longitude, 20, 0.001);
     });
 
+    it('fits what the app passed when the fit waits for a map, though the app changes it', 0, async () => {
+      await hideMap();
+      const points: LatLng[] = SWISS_POINTS.map((point: LatLng): LatLng => ({
+        latitude: point.latitude,
+        longitude: point.longitude,
+      }));
+      const fit = map.fitCameraToCoordinates(points);
+      points[0].latitude = -60;
+      points.length = 0;
+      testMap.shown = true;
+      expect(await fit).assertTrue();
+      expectInSwitzerland();
+    });
+
     it('keeps the camera padding that a move or a fit sets', 0, async () => {
       const padding: Padding = { top: 0, left: 50, bottom: 0, right: 0 };
       await map.updateCamera({ padding: padding });

@@ -172,9 +172,9 @@ export class MapController {
    * `updateCamera()` does, and also rejects when the padding leaves no room.
    */
   fitCameraToBounds(bounds: LatLngBounds, options?: FitCameraOptions): Promise<boolean> {
-    checkBounds(bounds);
+    const checked = checkBounds(bounds);
     return this.state.fit(checkFit(options),
-      (map: MapHandle, fit: CameraFitOptions) => map.cameraForLatLngBounds(bounds, fit));
+      (map: MapHandle, fit: CameraFitOptions) => map.cameraForLatLngBounds(checked, fit));
   }
 
   /**
@@ -183,9 +183,9 @@ export class MapController {
    * would throw for as a `center`.
    */
   fitCameraToCoordinates(coordinates: LatLng[], options?: FitCameraOptions): Promise<boolean> {
-    checkCoordinates(coordinates);
+    const checked = checkCoordinates(coordinates);
     return this.state.fit(checkFit(options),
-      (map: MapHandle, fit: CameraFitOptions) => map.cameraForLatLngs(coordinates, fit));
+      (map: MapHandle, fit: CameraFitOptions) => map.cameraForLatLngs(checked, fit));
   }
 
   /**
@@ -194,9 +194,9 @@ export class MapController {
    * whose longitude isn't finite or whose latitude is outside -90 to 90.
    */
   fitCameraToGeometry(geometry: GeoJsonGeometry, options?: FitCameraOptions): Promise<boolean> {
-    checkGeometry(geometry);
+    const checked = checkGeometry(geometry);
     return this.state.fit(checkFit(options),
-      (map: MapHandle, fit: CameraFitOptions): Promise<CameraOptions> => map.cameraForGeometry(geometry, fit));
+      (map: MapHandle, fit: CameraFitOptions): Promise<CameraOptions> => map.cameraForGeometry(checked, fit));
   }
 
   /**
