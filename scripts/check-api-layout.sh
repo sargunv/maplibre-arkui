@@ -34,7 +34,7 @@ if (/^\s*export\s+(type\s+)?\*/m.test(indexText)) {
 }
 const exported = new Set();
 for (const match of indexText.matchAll(
-  /^export\s+(?:type\s+)?\{([^}]*)\}\s*from\s*'([^']+)'/gm,
+  /^export\s+(?:type\s+)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/gm,
 )) {
   const from = match[2];
   if (from === "@maplibre/native-ffi" || from.startsWith("@maplibre/native-ffi/")) {
@@ -63,6 +63,9 @@ for (const entry of fs.readdirSync(sources, { withFileTypes: true })) {
       continue;
     }
     const text = fs.readFileSync(path.join(where, file), "utf8");
+    if (/^\s*export\s+(type\s+)?\*/m.test(text)) {
+      errors.push(`${path.join(where, file)}: export * hides what the file exports; list each name`);
+    }
     const names = [
       ...text.matchAll(
         /^export\s+(?:declare\s+)?(?:abstract\s+)?(?:async\s+)?(?:function|const|let|var|class|interface|type|enum|struct)\s+(\w+)/gm,
