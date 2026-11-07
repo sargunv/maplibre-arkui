@@ -39,8 +39,13 @@ code.
   breaks.
 - On the Oniro emulator, Mesa's llvmpipe crashes the app during most full test
   runs (maplibre-native-ffi#1692). A run that ends without hypium's tally
-  crashed; don't retry it. DevEco Studio's emulator has a GPU and finishes the
-  suite.
+  crashed; don't retry it.
+- On DevEco Studio's emulator, the OpenGL driver crashes the app during some
+  full test runs (maplibre-native-ffi#1728). It corrupts memory when a map's
+  surface goes away while the emulator still shows it, so the app dies later,
+  often in `Style::Impl::loadJSON` on FFI's runtime thread. The app's hilog then
+  has DGLES's `null gpu context` and `program_data_len is 0`. Such a crash isn't
+  a bug in the change under test.
 - Don't run `power-shell suspend` on the emulator: `hdc shell` hangs until it's
   released.
 - The webpack build that compiles ArkTS doesn't rewrite `@kit.*` imports, so
