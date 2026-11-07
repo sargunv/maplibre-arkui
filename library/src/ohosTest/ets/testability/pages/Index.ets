@@ -3,10 +3,12 @@ import {
   AttributionControls,
   AttributionText,
   CameraIdleEvent,
+  CameraMoveEvent,
   CompassButton,
   DefaultControls,
   DisappearingCompassButton,
   DisappearingScaleBar,
+  FrameRenderedEvent,
   FullControls,
   MapClickEvent,
   MapError,
@@ -18,6 +20,8 @@ import {
   PointerPinButton,
   ScaleBar,
   ScaleBarUnits,
+  StyleImage,
+  StyleImageMissingEvent,
   ZoomButtons,
 } from '@maplibre/arkui';
 
@@ -271,9 +275,15 @@ struct Index {
         viewportInsets: testMap.viewportInsets,
         onStyleLoaded: () => {
           testMap.styleLoads++;
+          testMap.events.push('style loaded');
         },
+        onStyleImageMissing: (event: StyleImageMissingEvent): Promise<StyleImage | undefined> =>
+          testMap.imageMissing(event),
+        onMapIdle: () => testMap.mapIdled(),
+        onFrameRendered: (event: FrameRenderedEvent) => testMap.frameRendered(event),
+        onCameraMoveStart: (event: CameraMoveEvent) => testMap.cameraMoveStarted(event),
         onCameraIdle: (event: CameraIdleEvent) => {
-          testMap.cameraIdles.push(event.camera);
+          testMap.cameraIdled(event.camera);
           if (testMap.throwOnCameraIdle) {
             throw new Error('the app handler failed');
           }
@@ -287,10 +297,12 @@ struct Index {
         },
         onGestureStart: () => {
           testMap.gestureStarts++;
+          testMap.events.push('gesture start');
           testMap.onGestureStart();
         },
         onGestureEnd: () => {
           testMap.gestureEnds++;
+          testMap.events.push('gesture end');
           testMap.onGestureEnd();
         },
         onMapClick: (event: MapClickEvent): boolean => testMap.click('click', event, testMap.consumeClicks),

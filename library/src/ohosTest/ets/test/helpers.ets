@@ -220,9 +220,6 @@ export async function gesture(act: () => Promise<void>): Promise<void> {
   const starts = testMap.gestureStarts;
   await act();
   await until('a gesture starts', () => testMap.gestureStarts > starts);
-  await until('the camera rests', () => {
-    const snapshot = testMap.controller.withFfiMap((map: MapHandle) => map.getSnapshot());
-    return testMap.gestureEnds === testMap.gestureStarts && snapshot !== undefined &&
-      !snapshot.transitionInProgress && !snapshot.gestureInProgress;
-  });
+  await until('the camera rests', () =>
+    testMap.gestureEnds === testMap.gestureStarts && !testMap.controller.cameraMoving);
 }

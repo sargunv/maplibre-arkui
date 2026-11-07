@@ -30,6 +30,18 @@ A viewport also converts between the frame's screen points and coordinates, as
 the library's controls and markers do. It changes every frame, so read it in
 `@Computed` getters of the components that need it.
 
+## While the camera moves
+
+<Api of="MapController.cameraMoving" display="cameraMoving" /> is true while
+the camera moves, from the map's `onCameraMoveStart` until its `onCameraIdle`,
+and <Api of="MapController.cameraMoveReason" display="cameraMoveReason" />
+says what moved it last: `CameraMoveReason.GESTURE` for the user's input on
+the map, and `CameraMoveReason.PROGRAMMATIC` for the app, such as a move, a
+control, or following the user's location. Both are observable, so a panel can
+step aside while the user moves the map, and stay while the app moves it:
+
+<Code code={region(examples, "camera-moving")} lang="ts" />
+
 ## Move the camera
 
 <Api of="MapController.updateCamera" display="updateCamera()" /> changes the

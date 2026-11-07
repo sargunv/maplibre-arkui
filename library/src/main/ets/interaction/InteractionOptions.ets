@@ -20,7 +20,14 @@
  * - Each `onGestureStart` is followed by exactly one `onGestureEnd` before the
  *   next `onGestureStart`.
  * - `onGestureStart` comes before any movement's `onStart`.
- * - `onGestureEnd` comes before that gesture's `onCameraIdle`.
+ * - The map's `onCameraMoveStart`, with `CameraMoveReason.GESTURE`, comes
+ *   after `onGestureStart` and before any movement's `onStart`, when the
+ *   camera was at rest. A gesture that starts while the camera moves, such as
+ *   during an animation, takes the move over: `cameraMoveReason` becomes
+ *   `GESTURE`, without another `onCameraMoveStart`.
+ * - `onGestureEnd` comes before that gesture's `onCameraIdle`, and the
+ *   controller's `cameraMoving` stays true until then, through the momentum
+ *   and the snap.
  * - The end of a gesture that rotated the map can come a frame or more after
  *   the last input: once the map reports where the rotation left the bearing,
  *   and once the ease to a bearing of `snapBearings` ends, when there is one.

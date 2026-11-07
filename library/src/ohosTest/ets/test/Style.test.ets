@@ -17,10 +17,14 @@ import {
   MapContent,
   MapController,
   MapError,
+  MapLogRecord,
+  MapRuntime,
   MapStyle,
   RenderedFeature,
   ScreenPoint,
   SourceHandle,
+  StyleImage,
+  StyleImageMissingEvent,
   StyleLayer,
   toBoolean,
 } from '@maplibre/arkui';
@@ -29,7 +33,7 @@ import { USER_LOCATION_LAYER } from '@maplibre/arkui/src/main/ets/location/inter
 import { CommandCompletion, FeatureStateSelector, LatLng as FfiLatLng, MapHandle } from '@maplibre/native-ffi';
 
 import { backgroundStyle, showsMap, styleDocument, testMap } from '../testability/TestMaps';
-import { eventually, mapBounds, pixelFor, screenPixel, setStyle, until, vp2px, withMap } from './helpers';
+import { eventually, frames, mapBounds, pixelFor, screenPixel, setStyle, until, vp2px, withMap } from './helpers';
 
 const PLACES: GeoJsonFeatureCollection = {
   type: 'FeatureCollection',
@@ -81,6 +85,37 @@ function pixel(): image.PixelMap {
     srcPixelFormat: image.PixelMapFormat.RGBA_8888,
     pixelFormat: image.PixelMapFormat.RGBA_8888,
   });
+}
+
+// An opaque red square, `size` px on each side.
+function square(size: number): image.PixelMap {
+  const pixels = new Uint8Array(size * size * 4);
+  for (let i = 0; i < pixels.length; i += 4) {
+    pixels[i] = 255;
+    pixels[i + 3] = 255;
+  }
+  return image.createPixelMapSync(pixels.buffer, {
+    size: { width: size, height: size },
+    srcPixelFormat: image.PixelMapFormat.RGBA_8888,
+    pixelFormat: image.PixelMapFormat.RGBA_8888,
+  });
+}
+
+// The places as content, in symbol layers that show the image of each ID
+// alone, with the images.
+function icons(ids: string[], images: StyleImage[] = []): MapContent {
+  const layers = ids.map((id: string): StyleLayer => ({
+    id: `icons-${id}`, type: 'symbol', source: 'places',
+    layout: { 'icon-image': id, 'icon-allow-overlap': true },
+  }));
+  return { sources: [{ id: 'places', json: geoJson(PLACES) }], layers: layers, images: images };
+}
+
+// Lays the symbols out again, in new tiles, which would ask for their images
+// again, and waits a while.
+async function layOutAgain(): Promise<void> {
+  await testMap.controller.updateCamera({ zoom: 3 });
+  await frames(30);
 }
 
 // Fails unless `block` throws an Error whose message has `text`.
@@ -662,6 +697,59 @@ export default function styleTest(): void {
       expect(await source.getClusterLeaves(unknown, 10, 0)).assertUndefined();
       await queryAt(pixelFor({ latitude: 10, longitude: 20 }), ['plain-dots']);
       expect(await (await geoJsonNamed('plain')).getClusterExpansionZoom(cluster)).assertUndefined();
+    });
+
+    it('asks onStyleImageMissing once for an image that the style lacks, and draws the image', 0, async () => {
+      const pin = square(16);
+      testMap.resolveImage = (event: StyleImageMissingEvent): Promise<StyleImage | undefined> =>
+        Promise.resolve({ id: event.id, image: pin });
+      testMap.content = icons(['pin']);
+      await queryAt(pixelFor({ latitude: 10, longitude: 20 }), ['icons-pin']);
+      pin.release();
+      await layOutAgain();
+      expect(testMap.missingImages.join()).assertEqual('pin');
+      expect(testMap.errors.length).assertEqual(0);
+    });
+
+    it('asks for an image again only in the next style once the app gives none', 0, async () => {
+      testMap.content = icons(['pin']);
+      await until('the map asks for the image', () => testMap.missingImages.length > 0);
+      await layOutAgain();
+      expect(testMap.missingImages.join()).assertEqual('pin');
+
+      await setStyle(backgroundStyle('#d94a4a'));
+      await until('the next style asks for it', () => testMap.missingImages.length > 1);
+      expect(testMap.missingImages.join()).assertEqual('pin,pin');
+    });
+
+    it('logs a handler that throws, and takes it as no image', 0, async () => {
+      const logs: string[] = [];
+      MapRuntime.setLogHandler((record: MapLogRecord) => {
+        logs.push(record.message);
+      });
+      try {
+        testMap.resolveImage = (event: StyleImageMissingEvent): Promise<StyleImage | undefined> => {
+          throw new Error('no image here');
+        };
+        testMap.content = icons(['pin']);
+        await until('the map logs the throw', () => logs.some((message: string) => message.includes('no image here')));
+        await layOutAgain();
+        expect(testMap.missingImages.join()).assertEqual('pin');
+        expect(testMap.errors.length).assertEqual(0);
+      } finally {
+        MapRuntime.setLogHandler(undefined);
+      }
+    });
+
+    it('never asks for the images of the content or the library', 0, async () => {
+      const pin = square(16);
+      testMap.content = icons(['pin', 'maplibre-arkui-pin', 'other'], [{ id: 'pin', image: pin }]);
+      await until('the map asks for the other image', () => testMap.missingImages.includes('other'));
+      await layOutAgain();
+      expect(testMap.missingImages.join()).assertEqual('other');
+      testMap.content = {};
+      await frames(10);
+      pin.release();
     });
 
     it('reads back the transition and the light that it sets', 0, async () => {

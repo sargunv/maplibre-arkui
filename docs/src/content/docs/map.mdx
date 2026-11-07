@@ -18,12 +18,38 @@ JSON changes, so the map doesn't load it again on each build.
 
 ## Events
 
-Its events tell the app when the style has loaded (`onStyleLoaded`), the camera
-has come to rest (`onCameraIdle`), the user starts and ends a gesture, which
-ends after its momentum and its snap (`onGestureStart`, `onGestureEnd`; see
-[Gestures](/maplibre-arkui/gestures/)), the user clicks it (see
-[Clicks](/maplibre-arkui/gestures/#clicks)), and something failed (`onError`;
-see [Errors](/maplibre-arkui/errors/)).
+The map's events tell the app what happens on it:
+
+- `onStyleLoaded`: the style has loaded, with the map's content (see
+  [The style API](/maplibre-arkui/style/)).
+- `onStyleImageMissing`: the style names an image that it lacks, which the app
+  can give (see [Images the style lacks](/maplibre-arkui/style/#images-the-style-lacks)).
+- `onMapIdle`: the map has drawn everything that the view needs, and has
+  nothing left to load or animate, such as once a style and its tiles load.
+- `onFrameRendered`: the map drew a frame, with how long it took.
+- `onCameraMoveStart` and `onCameraIdle`: the camera left rest, and came to
+  rest again.
+- `onGestureStart` and `onGestureEnd`: the user started and ended a gesture,
+  which ends after its momentum and its snap (see
+  [Gestures](/maplibre-arkui/gestures/)).
+- The clicks (see [Clicks](/maplibre-arkui/gestures/#clicks)).
+- `onError`: something failed (see [Errors](/maplibre-arkui/errors/)).
+
+The controller shows the camera's state too: `cameraMoving` is true from
+`onCameraMoveStart` until `onCameraIdle`, and `cameraMoveReason` says what
+moved the camera last, the user's gesture or the app (see
+[The camera](/maplibre-arkui/camera/#while-the-camera-moves)). The camera's
+events keep to these rules:
+
+- The controller's state changes first, and then the event runs.
+- Each `onCameraMoveStart` is followed by exactly one `onCameraIdle` before
+  the next, unless the map leaves in the middle of the move. Then
+  `cameraMoving` turns false without an `onCameraIdle`.
+- A jump is a move that starts and ends at once, as is the camera that a map
+  starts with.
+- A gesture's move starts after its `onGestureStart`, and ends after its
+  `onGestureEnd`. A gesture that starts while the camera moves takes the move
+  over, without another `onCameraMoveStart`.
 
 The map calls each event on the UI thread, so a handler can change the page's
 state. When a handler throws, the map logs the exception and goes on: the other

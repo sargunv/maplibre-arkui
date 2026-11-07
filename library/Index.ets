@@ -4,6 +4,7 @@
 
 // Map
 export type { CameraBoundsOptions } from './src/main/ets/map/CameraBoundsOptions';
+export type { FrameRenderedEvent } from './src/main/ets/map/FrameRenderedEvent';
 export type { MapClickEvent } from './src/main/ets/map/MapClickEvent';
 export { MapController } from './src/main/ets/map/MapController';
 export type {
@@ -15,9 +16,12 @@ export type {
 } from './src/main/ets/map/MapController';
 export { ContentError, MapError, StyleLoadError } from './src/main/ets/map/MapError';
 export { MaplibreMap } from './src/main/ets/map/MaplibreMap';
+export type { StyleImageMissingEvent } from './src/main/ets/map/StyleImageMissingEvent';
 
 // Camera
 export type { CameraIdleEvent } from './src/main/ets/camera/CameraIdleEvent';
+export { CameraMoveReason } from './src/main/ets/camera/CameraMoveEvent';
+export type { CameraMoveEvent } from './src/main/ets/camera/CameraMoveEvent';
 export type { CameraPosition, CameraUpdate } from './src/main/ets/camera/CameraPosition';
 export { CameraTransitionMode } from './src/main/ets/camera/CameraTransitionOptions';
 export type { CameraTransitionOptions, FitCameraOptions } from './src/main/ets/camera/CameraTransitionOptions';
