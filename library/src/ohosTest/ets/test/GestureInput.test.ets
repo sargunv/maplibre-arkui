@@ -19,6 +19,7 @@ import {
   mapBounds,
   mapCenter,
   offset,
+  oneFinger,
   pixelFor,
   speed,
   twist,
@@ -62,12 +63,15 @@ export default function gestureInputTest(): void {
       await start();
     });
 
-    it('pans with a slow drag, without momentum', 0, async () => {
+    it('pans with a drag that stops before it lifts, without momentum', 0, async () => {
       const c = await mapCenter();
       const from = offset(c, 100, 0);
       const to = offset(c, -100, 0);
-      // Under the speed that flings.
-      await gesture(() => driver.swipe(from.x, from.y, to.x, to.y, speed(200)));
+      // The finger holds still for longer than the release measures its speed
+      // over.
+      await gesture(async () => {
+        await driver.injectMultiPointerAction(oneFinger(from, to, 20, 40), speed(200));
+      });
       // The drag less the claim's few vp.
       expect(moved().x).assertLess(-170);
       expect(moved().x).assertLargerOrEqual(-200);
@@ -113,6 +117,27 @@ export default function gestureInputTest(): void {
         .assertEqual('gesture start,start gesture,pan,gesture end,idle');
       expect(movingAtEnd).assertTrue();
       expect(map.cameraMoveReason).assertEqual(CameraMoveReason.GESTURE);
+    });
+
+    it('stops the glide when the app moves the camera, and ends the gesture first', 0, async () => {
+      const map = testMap.controller;
+      let moving = false;
+      testMap.onGestureEnd = () => {
+        moving = map.cameraMoving;
+      };
+      const ends = testMap.gestureEnds;
+      const c = await mapCenter();
+      await driver.fling(offset(c, 100, 0), offset(c, -100, 0), speed(20), speed(2000));
+      await until('the camera glides past the drag', () => moved().x < -250);
+      map.cancelCameraTransitions();
+      expect(testMap.gestureEnds - ends).assertEqual(1);
+      expect(moving).assertTrue();
+      await until('the camera rests', () => !map.cameraMoving);
+      const stopped = moved().x;
+      await frames(30);
+      expectNear(moved().x, stopped, 1e-6);
+      // A glide of 2000 vp/s that ran to its end would go some 900 vp.
+      expect(stopped).assertLarger(-800);
     });
 
     it('takes over an animation as a gesture, without another start', 0, async () => {
@@ -185,7 +210,7 @@ export default function gestureInputTest(): void {
     it('snaps to the bearings that the options give, or not at all', 0, async () => {
       const c = await mapCenter();
       testMap.compass = true;
-      testMap.interactions = { rotate: { snapBearings: [90] } };
+      testMap.interactions = { rotate: { snap: { offset: 90 } } };
       await testMap.controller.updateCamera({ bearing: 90 });
       await gesture(async () => {
         await driver.injectMultiPointerAction(twist(c, 100, 10, 10, STILL_TWIST_HOLD), speed(200));
@@ -194,11 +219,11 @@ export default function gestureInputTest(): void {
 
       await start();
       testMap.compass = true;
-      testMap.interactions = { rotate: { snapBearings: [] } };
+      testMap.interactions = { rotate: { snap: { enabled: false } } };
       await gesture(async () => {
         await driver.injectMultiPointerAction(twist(c, 100, 10, 10, STILL_TWIST_HOLD), speed(200));
       });
-      // A snap would start once the map reports the bearing; give it time.
+      // Give a snap that shouldn't happen time to start.
       await frames(30);
       expect(Math.abs(wrap(camera().bearing))).assertLarger(1);
     });

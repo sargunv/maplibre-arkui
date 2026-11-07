@@ -193,6 +193,22 @@ export function twoFingers(from: Point[], to: Point[], steps: number): PointerMa
   return pointers;
 }
 
+// One finger that moves from `from` to `to`, in px, and then stays there for
+// `hold` steps. Steps take time only if the finger moves, so it moves 1 vp up
+// and back down.
+export function oneFinger(from: Point, to: Point, steps: number, hold: number = 0): PointerMatrix {
+  const pointers = PointerMatrix.create(1, steps + hold);
+  for (let step = 0; step < steps + hold; step++) {
+    const t = Math.min(1, step / (steps - 1));
+    const lift = step >= steps && (step - steps) % 2 === 0 ? vp2px(1) : 0;
+    pointers.setPoint(0, step, {
+      x: Math.round(from.x + (to.x - from.x) * t),
+      y: Math.round(from.y + (to.y - from.y) * t - lift),
+    });
+  }
+  return pointers;
+}
+
 // Two fingers on a circle of `radius` vp about `c`, `degrees` around it. Then
 // they stay at that angle for `hold` steps, which take time only if the
 // fingers move, so they move 1 vp in and out.

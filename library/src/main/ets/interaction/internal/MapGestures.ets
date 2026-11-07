@@ -6,14 +6,29 @@
 // Compose and MapLibre GL JS recognize them. Distances are in vp, which are the
 // map's logical pixels, and times in milliseconds.
 
-import { CameraDelta, GesturePhase, ScreenPoint } from '@maplibre/native-ffi';
+import {
+  AnchoredMomentum,
+  AnimationOptions,
+  CameraDelta,
+  GestureMomentum,
+  GesturePhase,
+  MomentumSnap,
+  ScreenPoint,
+} from '@maplibre/native-ffi';
 import displaySync from '@ohos.graphics.displaySync';
 import { KeyCode } from '@ohos.multimodalInput.keyCode';
 
 import { callHandler } from '../../runtime/internal/Log';
-import { InteractionOptions, MovementOptions, WheelAction } from '../InteractionOptions';
-import { BearingNotches, snapBearing, wrap } from './BearingNotches';
-import { Momentum, Velocity, VELOCITY_WINDOW_MS } from './Momentum';
+import {
+  BearingIntervalOptions,
+  InteractionOptions,
+  MovementOptions,
+  RotationOptions,
+  RotationSnapOptions,
+  WheelAction,
+} from '../InteractionOptions';
+import { BearingNotches, wrap } from './BearingNotches';
+import { panMomentum, Velocity, VELOCITY_WINDOW_MS } from './Fling';
 
 /** A touch that is down, in the map's vp. */
 export interface TouchPoint {
@@ -31,17 +46,14 @@ export interface GestureTarget {
   clicked(point: ScreenPoint, long: boolean): void;
   /** The camera's bearing, as the map last applied the changes. */
   getBearing(): number;
-  /**
-   * Reads the camera's bearing once the map has applied the changes before
-   * the call, and passes it to `read`, or undefined when the map can't say.
-   */
-  readBearing(read: (bearing: number | undefined) => void): void;
+  /** The display's px per vp, which ArkUI's fling thresholds are in. */
+  density(): number;
   /** The user started to move the camera. */
   gestureStarted(): void;
   /**
    * The user's input pans, rotates, or zooms the camera, with the change it
    * just applied. Each comes before `gestureStarted()` and the movement's
-   * `onStart`. Momentum and a snap don't call them.
+   * `onStart`. Momentum and a snap, which FFI runs, don't call them.
    */
   panned(): void;
   rotated(): void;
@@ -90,9 +102,10 @@ const QUICK_ZOOM_SLOP = 60;
 const QUICK_ZOOM_LEVELS = 4;
 // A tap, and each tap of a double tap, may move this far.
 export const TAP_SLOP = 10;
-// Taps, a key's step, and the snap take this long.
+// Taps and a key's step take this long.
 export const GESTURE_ANIMATION_MS = 300;
-// The ID of the animated steps' camera transitions, which stops them.
+// The ID of the animated steps' camera transitions, and of the momentum and
+// snap that a gesture's end starts, which stops them.
 const STEP_TRANSITION = BigInt('0x6d61706c69627265');
 // Zoom levels and vp per unit of the wheel's axis value, 15 to a notch. A
 // touchpad's axis values are vp.
@@ -138,8 +151,7 @@ class HeldKey {
 export class MapGestures {
   private currentOptions: InteractionOptions = {};
   // The rotation's snap and haptic bearings, as the options give them.
-  private readonly snapBearings: Bearings = new Bearings('snapBearings');
-  private readonly hapticBearings: Bearings = new Bearings('hapticBearings');
+  private readonly rotation: RotationSettings = new RotationSettings();
   /** The map's height, which a quick zoom measures its drag against. */
   height: number = 0;
   private readonly target: GestureTarget;
@@ -154,8 +166,7 @@ export class MapGestures {
   set options(options: InteractionOptions) {
     const before = this.currentOptions;
     this.currentOptions = options;
-    this.snapBearings.set(options.rotate?.snapBearings, this.target);
-    if (this.hapticBearings.set(options.rotate?.hapticBearings, this.target)) {
+    if (this.rotation.set(options.rotate, this.target)) {
       // A rotation under way ticks at the new bearings.
       this.notches = undefined;
     }
@@ -184,14 +195,17 @@ export class MapGestures {
   private quickZooming: boolean = false;
   private zoomBase: number = 0;
   private minSpan: number = 0;
-  // How far the fingers turned, and a quick zoom zoomed, for their velocity.
+  // How far the fingers turned and tilted, and a quick zoom zoomed, for their
+  // velocity, and the point that zoom and rotation keep in place.
   private turned: number = 0;
+  private tilted: number = 0;
   private quickZoom: number = 0;
   private anchor: ScreenPoint | undefined = undefined;
   private readonly panX: Velocity = new Velocity();
   private readonly panY: Velocity = new Velocity();
   private readonly zoom: Velocity = new Velocity();
   private readonly turn: Velocity = new Velocity();
+  private readonly tilt: Velocity = new Velocity();
   // Taps, for clicks and a double tap and drag.
   private down: TouchPoint | undefined = undefined;
   private tap: boolean = false;
@@ -211,14 +225,14 @@ export class MapGestures {
   private started: number = 0;
   // The haptic notches of the rotation by the pointer that's under way.
   private notches: BearingNotches | undefined = undefined;
-  // An animated step's number, so a step that something replaced doesn't end
-  // the next one.
+  // An animated step's number, or that of a gesture's momentum and snap, so
+  // a step that something replaced doesn't end the next one.
   private step: number = 0;
-  private momentum: Momentum | undefined = undefined;
-  private staged: Momentum | undefined = undefined;
+  // The momentum of a pair whose fingers lift one at a time, which waits for
+  // the last one, and when the first lifted.
+  private staged: GestureMomentum | undefined = undefined;
   private stagedTime: number = 0;
-  private momentumStart: number = -1;
-  // Frames run while momentum or held keys move the camera.
+  // Frames run while held keys move the camera, and while a tap waits.
   private frames: displaySync.DisplaySync | undefined = undefined;
   private framesRunning: boolean = false;
   // Where the mouse or a touchpad pinch last was.
@@ -678,17 +692,12 @@ export class MapGestures {
       }
     });
     this.keysStopped();
-    if (this.momentum !== undefined) {
-      this.stopMomentum();
-      this.finish();
-    }
-    // A snap that the end of the momentum or keys started goes too.
+    // So do the momentum and snap that the end of the input started.
     this.endStep();
   }
 
   /** The system took the touches back: end without momentum, a snap, or a click. */
   cancel(): void {
-    this.stopMomentum();
     this.touches = [];
     this.claimed = false;
     this.tap = false;
@@ -753,6 +762,7 @@ export class MapGestures {
     this.panY.clear();
     this.zoom.clear();
     this.turn.clear();
+    this.tilt.clear();
     this.notches = undefined;
     if (touches.length >= 2) {
       this.zoomBase = distance(touches[0], touches[1]);
@@ -833,6 +843,8 @@ export class MapGestures {
     }
     if (this.pitching && this.canPitch()) {
       delta.pitch = ((a.y - a0.y) + (b.y - b0.y)) / 2 * PITCH_PER_VP;
+      this.tilted += delta.pitch;
+      this.tilt.add(time, this.tilted);
       movements |= PITCH;
     }
     if ((movements & (ZOOM | ROTATE)) !== 0) {
@@ -894,8 +906,8 @@ export class MapGestures {
     }
   }
 
-  // The last finger lifted: coast with the motion's momentum, then end. A tap
-  // clicks, after the time for a second tap while zoom is on.
+  // The last finger lifted: end with the motion's momentum, which FFI runs. A
+  // tap clicks, after the time for a second tap while zoom is on.
   private release(time: number, previous: TouchPoint[]): void {
     const claimed = this.claimed;
     this.claimed = false;
@@ -923,50 +935,48 @@ export class MapGestures {
       momentum = this.staged;
     }
     this.staged = undefined;
-    if (momentum === undefined) {
-      this.finish();
-      return;
-    }
-    this.momentum = momentum;
-    this.momentumStart = -1;
-    this.syncFrames();
+    this.finish(momentum);
   }
 
-  // The momentum of the motion so far, if the last finger lifted at `time`.
-  private plan(time: number): Momentum | undefined {
-    const pan = this.panning && this.canPan();
-    const zoom = (this.zooming || this.quickZooming) && this.canZoom();
-    const rotate = this.rotating && this.canRotate();
-    return Momentum.plan(
-      pan ? this.panX.perSecond(time) : 0,
-      pan ? this.panY.perSecond(time) : 0,
-      zoom ? this.zoom.perSecond(time) : 0,
-      rotate ? this.turn.perSecond(time) : 0,
-      this.anchor);
+  // The release velocities of the motion so far, if the last finger lifted at
+  // `time`, or undefined if it was still. FFI decides which parts are fast
+  // enough to glide.
+  private plan(time: number): GestureMomentum | undefined {
+    const momentum: GestureMomentum = {};
+    let moving = false;
+    if (this.panning && this.canPan()) {
+      const x = this.panX.perSecond(time);
+      const y = this.panY.perSecond(time);
+      if (x !== 0 || y !== 0) {
+        momentum.pan = panMomentum(x, y, this.target.density());
+        moving = true;
+      }
+    }
+    const zoom = (this.zooming || this.quickZooming) && this.canZoom() ? this.zoom.perSecond(time) : 0;
+    if (zoom !== 0) {
+      momentum.zoom = this.anchored(zoom);
+      moving = true;
+    }
+    const bearing = this.rotating && this.canRotate() ? this.turn.perSecond(time) : 0;
+    if (bearing !== 0) {
+      momentum.bearing = this.anchored(bearing);
+      moving = true;
+    }
+    const pitch = this.pitching && this.canPitch() ? this.tilt.perSecond(time) : 0;
+    if (pitch !== 0) {
+      momentum.pitch = { velocity: pitch };
+      moving = true;
+    }
+    return moving ? momentum : undefined;
   }
 
-  private coast(time: number): void {
-    const momentum = this.momentum;
-    if (momentum === undefined) {
-      return;
+  // A zoom or rotation that goes on at `velocity` about the motion's anchor.
+  private anchored(velocity: number): AnchoredMomentum {
+    const part: AnchoredMomentum = { velocity: velocity };
+    if (this.anchor !== undefined) {
+      part.anchor = this.anchor;
     }
-    if (this.momentumStart < 0) {
-      this.momentumStart = time;
-    }
-    for (const delta of momentum.advance(time - this.momentumStart)) {
-      this.move(delta, 0);
-    }
-    if (momentum.done) {
-      this.stopMomentum();
-      this.finish();
-    }
-  }
-
-  private stopMomentum(): void {
-    if (this.momentum !== undefined) {
-      this.momentum = undefined;
-      this.syncFrames();
-    }
+    return part;
   }
 
   // The key's step, if it's one that moves the camera in a way that's on.
@@ -1085,10 +1095,10 @@ export class MapGestures {
     this.syncFrames();
   }
 
-  // Frames run while momentum or keys move the camera, and while a tap waits
-  // for a second one.
+  // Frames run while keys move the camera, and while a tap waits for a second
+  // one.
   private syncFrames(): void {
-    const run = this.momentum !== undefined || this.keysMoving() || this.pendingTap !== undefined;
+    const run = this.keysMoving() || this.pendingTap !== undefined;
     if (run === this.framesRunning) {
       return;
     }
@@ -1107,7 +1117,6 @@ export class MapGestures {
   }
 
   private frame(time: number): void {
-    this.coast(time);
     this.holdKeys(time);
     const pending = this.pendingTap;
     if (pending === undefined) {
@@ -1131,7 +1140,7 @@ export class MapGestures {
     if (delta.bearing !== undefined) {
       let notches = this.notches;
       if (notches === undefined) {
-        notches = new BearingNotches(this.hapticBearings.values, this.target.getBearing());
+        notches = new BearingNotches(this.rotation.hapticBearings, this.target.getBearing());
         this.notches = notches;
       }
       tick = notches.turn(delta.bearing, time);
@@ -1216,9 +1225,10 @@ export class MapGestures {
     }
   }
 
-  // Ends the gesture's input. A rotation goes on to snap to a bearing near
-  // where it ends.
-  private finish(): void {
+  // Ends the gesture's input with its momentum. A rotation goes on to snap to
+  // a bearing near where it ends. FFI runs both, and the gesture ends when
+  // they do.
+  private finish(momentum?: GestureMomentum): void {
     this.axisOwned = false;
     this.keysOwned = false;
     this.notches = undefined;
@@ -1226,31 +1236,21 @@ export class MapGestures {
       return;
     }
     this.phaseOpen = false;
-    this.target.applyCameraDelta({ gesturePhase: GesturePhase.end });
-    if (this.rotated && this.canRotate() && this.snapBearings.values.length > 0) {
-      this.snap();
-    } else {
+    const snap = this.rotation.snap;
+    let settling = momentum;
+    if (this.rotated && this.canRotate() && snap !== undefined) {
+      settling = momentum ?? {};
+      const bearing: AnchoredMomentum = settling.bearing ?? {};
+      bearing.snap = snap;
+      settling.bearing = bearing;
+    }
+    if (settling === undefined) {
+      this.target.applyCameraDelta({ gesturePhase: GesturePhase.end });
       this.moving = false;
       this.target.gestureEnded();
+      return;
     }
-  }
-
-  // The last step of a rotation, which the gesture ends with. Once the map
-  // reports where the rotation left the bearing, the camera eases to the
-  // nearest snap bearing.
-  private snap(): void {
-    const step = ++this.step;
-    this.target.readBearing((bearing: number | undefined) => {
-      if (this.step !== step) {
-        return;
-      }
-      const snapped = bearing === undefined ? undefined : snapBearing(bearing, this.snapBearings.values);
-      if (bearing === undefined || snapped === undefined) {
-        this.endStep();
-      } else {
-        this.animateStep({ bearing: snapped - bearing }, step);
-      }
-    });
+    this.animateStep({ gesturePhase: GesturePhase.end, momentum: settling }, ++this.step);
   }
 
   // Where zoom and rotation at `point` keep the content: there, or at the
@@ -1278,7 +1278,6 @@ export class MapGestures {
   // A gesture of one step that animates on its own, such as a double tap's
   // zoom.
   private animate(delta: CameraDelta, movements: number): void {
-    this.stopMomentum();
     this.finish();
     this.endStep();
     const step = ++this.step;
@@ -1291,10 +1290,10 @@ export class MapGestures {
   }
 
   // Animates the camera by `delta` as the step numbered `step`, which ends
-  // when the animation does, unless other input or the app ended it first.
+  // when the animation, or the momentum that the delta carries, does, unless
+  // other input or the app ended it first.
   private animateStep(delta: CameraDelta, step: number): void {
-    delta.animation = {
-      durationMs: GESTURE_ANIMATION_MS,
+    const animation: AnimationOptions = {
       transitionId: STEP_TRANSITION,
       endHandler: {
         callback: () => {
@@ -1304,6 +1303,11 @@ export class MapGestures {
         },
       },
     };
+    // Momentum takes no duration.
+    if (delta.momentum === undefined) {
+      animation.durationMs = GESTURE_ANIMATION_MS;
+    }
+    delta.animation = animation;
     this.target.applyCameraDelta(delta);
   }
 
@@ -1319,35 +1323,84 @@ export class MapGestures {
   }
 }
 
-// The bearings of a rotation option, each modulo 360. One that isn't finite
-// is reported, once for each new value of the option, and left out.
-class Bearings {
-  values: number[] = [0];
-  private readonly name: string;
-  private given: string = '0';
+// The rotation's snap and haptic bearings, as the options give them. A value
+// outside its range is reported, once for each new value of the options, and
+// its default takes its place.
+class RotationSettings {
+  // FFI's snap, or undefined while snapping is off.
+  snap: MomentumSnap | undefined = {};
+  hapticBearings: number[] = [0];
+  private snapGiven: string = snapKey(undefined);
+  private hapticsGiven: string = intervalKey(undefined);
 
-  constructor(name: string) {
-    this.name = name;
-  }
-
-  // Returns whether the bearings changed.
-  set(bearings: number[] | undefined, target: GestureTarget): boolean {
-    const given = bearings ?? [0];
+  // Returns whether the haptic bearings changed.
+  set(rotate: RotationOptions | undefined, target: GestureTarget): boolean {
     // Options that an app writes in `build()` are a new value each time.
-    if (given.join() === this.given) {
+    const snap = rotate?.snap;
+    if (snapKey(snap) !== this.snapGiven) {
+      this.snapGiven = snapKey(snap);
+      this.snap = checkSnap(snap, target);
+    }
+    const haptics = rotate?.haptics;
+    if (intervalKey(haptics) === this.hapticsGiven) {
       return false;
     }
-    this.given = given.join();
-    this.values = [];
-    for (const bearing of given) {
-      if (Number.isFinite(bearing)) {
-        this.values.push((bearing % 360 + 360) % 360);
-      } else {
-        target.fail(new Error(`interactions.rotate.${this.name} has a bearing that isn't finite: ${bearing}`));
+    this.hapticsGiven = intervalKey(haptics);
+    this.hapticBearings = [];
+    if (haptics?.enabled !== false) {
+      const spacing = checked('haptics.spacing', haptics?.spacing, target, 1) ?? 360;
+      const offset = checked('haptics.offset', haptics?.offset, target) ?? 0;
+      for (let i = 0; i * spacing < 360; i++) {
+        this.hapticBearings.push(((offset + i * spacing) % 360 + 360) % 360);
       }
     }
     return true;
   }
+}
+
+function intervalKey(options: BearingIntervalOptions | undefined): string {
+  return `${options?.enabled},${options?.spacing},${options?.offset}`;
+}
+
+function snapKey(options: RotationSnapOptions | undefined): string {
+  return `${intervalKey(options)},${options?.tolerance},${options?.durationMs}`;
+}
+
+// FFI's snap for the options, which takes FFI's defaults, the same as the
+// options', for the settings that they leave out.
+function checkSnap(options: RotationSnapOptions | undefined, target: GestureTarget): MomentumSnap | undefined {
+  if (options?.enabled === false) {
+    return undefined;
+  }
+  const snap: MomentumSnap = {};
+  const spacing = checked('snap.spacing', options?.spacing, target, 1);
+  if (spacing !== undefined) {
+    snap.spacing = spacing;
+  }
+  const offset = checked('snap.offset', options?.offset, target);
+  if (offset !== undefined) {
+    snap.offset = offset;
+  }
+  const tolerance = checked('snap.tolerance', options?.tolerance, target, 0);
+  if (tolerance !== undefined) {
+    snap.tolerance = tolerance;
+  }
+  const durationMs = checked('snap.durationMs', options?.durationMs, target, 0);
+  if (durationMs !== undefined) {
+    snap.durationMs = durationMs;
+  }
+  return snap;
+}
+
+// A rotation option's value, or undefined, after it's reported, when it
+// isn't finite or is less than `min`.
+function checked(name: string, value: number | undefined, target: GestureTarget, min?: number): number | undefined {
+  if (value === undefined || (Number.isFinite(value) && (min === undefined || value >= min))) {
+    return value;
+  }
+  const range = min === undefined ? 'finite' : `finite and at least ${min}`;
+  target.fail(new Error(`interactions.rotate.${name} must be ${range}: ${value}`));
+  return undefined;
 }
 
 // Runs the onStart of a movement's options, which logs what it throws.

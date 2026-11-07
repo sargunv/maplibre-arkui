@@ -56,15 +56,24 @@ A map in a `Scroll` or `List` can leave the page's gestures to it: with
 The map moves with two fingers. With Ctrl held, the wheel does what `wheel`
 says, and a touchpad swipe pans.
 
+## Momentum
+
+A drag that lifts while it moves keeps the map gliding, and the glide slows the
+way a `Scroll` or `List` slows after a fling. A pinch, twist, or tilt that lifts
+while it moves glides briefly too. A touch, a wheel, a key, or a camera move by
+the app stops the glide, and the gesture ends with `onGestureEnd` once the
+camera stops.
+
 ## Snap and tick rotation
 
-A rotation that ends within 7° of north eases to it, and its gesture ends, with
-`onGestureEnd`, once the camera gets there. `snapBearings` chooses the bearings
-to snap to, and `[]` turns snapping off.
+A rotation that ends within 7° of north eases to it after its glide, and its
+gesture ends, with `onGestureEnd`, once the camera gets there. `snap` chooses
+the bearings to snap to, every `spacing` degrees from `offset`, and how near one
+the rotation has to end. `{ enabled: false }` turns snapping off.
 
 As a twist or a right-button drag turns the map across north, the device plays
-a soft tick. `hapticBearings` chooses where it ticks, and `[]` turns the ticks
-off. Ticks follow the system's touch feedback setting, and they need the
+a soft tick. `haptics` chooses where it ticks, in the same way, and
+`{ enabled: false }` turns the ticks off. Ticks follow the system's touch feedback setting, and they need the
 vibrator permission, which the library can't declare for its apps. An app that
 wants them declares it in its `module.json5`:
 
