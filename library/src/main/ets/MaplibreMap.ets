@@ -4,7 +4,7 @@ import geoLocationManager from '@ohos.geoLocationManager';
 import { CameraBoundsOptions } from './CameraBounds';
 import { CameraIdleEvent } from './CameraIdleEvent';
 import { MapContent } from './Content';
-import { MapInteractionOptions, TAP_SLOP } from './gestures';
+import { InteractionOptions, TAP_SLOP } from './gestures';
 import { callHandler, consumes } from './log';
 import { MapClickEvent } from './MapClickEvent';
 import { controllerState, MapController } from './MapController';
@@ -26,7 +26,7 @@ import { closeScope, MapScope, openScope } from './scope';
  * A tap is a click, and a long press or a right click is a long click.
  * `onMapClick` gets a click first, then the layers of `content` that handle
  * it, from the top layer down, then `onUnhandledClick`, until one of them
- * consumes it. While `gestures.zoom` is on, a tap clicks once 300 ms pass
+ * consumes it. While `interactions.zoom` is on, a tap clicks once 300 ms pass
  * without a second tap, so a double tap zooms without clicking.
  *
  * ```ets
@@ -118,7 +118,7 @@ export struct MaplibreMap {
    * How the user moves the map: which camera movements input makes, and what
    * the app does as each starts. Every movement is on by default.
    */
-  @Param interactions: MapInteractionOptions = {};
+  @Param interactions: InteractionOptions = {};
   /**
    * The user's location, which the map shows as a dot in a circle of its
    * `accuracy`, with an arrow for `userHeading`, or for the course while it
@@ -158,22 +158,26 @@ export struct MaplibreMap {
   /**
    * Something failed while the map runs, such as a style that fails to load,
    * a frame that fails to render, part of `content` that the map rejects, or
-   * an invalid `viewportInsets` or `cameraBounds`. See `MapError` for its
-   * kinds. The map also logs each. Called on the UI thread; the map logs what
-   * it throws.
+   * an invalid `viewportInsets`, `cameraBounds`, or bearing of `interactions`.
+   * See `MapError` for its kinds. The map also logs each. Called on the UI
+   * thread; the map logs what it throws.
    */
   @Event onError: (error: MapError) => void = (error: MapError) => {
   };
   /**
-   * The user started to move the camera. `interactions` tells which way, such
-   * as a pan that stops following the user's location. Called on the UI
-   * thread; the map logs what it throws, and the gesture goes on.
+   * The user started a gesture, which moves the camera. The `onStart` of
+   * `interactions` tells which way, such as a pan that stops following the
+   * user's location. `InteractionOptions` describes what a gesture is and the
+   * order of the gesture events. Called on the UI thread; the map logs what
+   * it throws, and the gesture goes on.
    */
   @Event onGestureStart: () => void = () => {
   };
   /**
-   * The user's input stopped moving the camera, after any momentum. A rotation
-   * that ends near north may still ease to it. Called on the UI thread; the
+   * The user's gesture stopped moving the camera, after its momentum and its
+   * snap to a bearing of `interactions.rotate.snapBearings`, so the camera
+   * comes to rest unless something else moves it. `InteractionOptions`
+   * describes the order of the gesture events. Called on the UI thread; the
    * map logs what it throws.
    */
   @Event onGestureEnd: () => void = () => {

@@ -51,7 +51,7 @@ import {
   toLatLng,
 } from './FfiValues';
 import { fontScaleOf } from './fontScale';
-import { GESTURE_ANIMATION_MS, GestureTarget, MapGestures, snapBearing } from './gestures';
+import { GestureTarget, MapGestures } from './gestures';
 import { playTick } from './haptics';
 import { FOLLOW_MS, UserLocationIndicatorOptions, UserLocationLayer } from './location';
 import { consumes, logError } from './log';
@@ -443,18 +443,35 @@ export class MapView extends XComponentController implements GestureTarget {
   }
 
   // Gestures move the map once it's ready; input before then is dropped, and
-  // an animated step ends at once, so the gestures don't wait for it.
+  // an animated step ends as the map would end it, after the call, so the
+  // gestures don't wait for it.
   applyCameraDelta(delta: CameraDelta): void {
     const map = this.map;
     if (map === undefined) {
-      delta.animation?.endHandler?.callback?.({
-        outcome: CameraTransitionOutcome.closed,
-        generation: BigInt(0),
-        velocity: { pan: { x: 0, y: 0 }, zoom: 0, bearing: 0, pitch: 0 },
-      });
+      const ended = delta.animation?.endHandler?.callback;
+      if (ended !== undefined) {
+        Promise.resolve().then(() => ended({
+          outcome: CameraTransitionOutcome.closed,
+          generation: BigInt(0),
+          velocity: { pan: { x: 0, y: 0 }, zoom: 0, bearing: 0, pitch: 0 },
+        }));
+      }
       return;
     }
     map.discarding.applyCameraDelta(delta);
+  }
+
+  readBearing(read: (bearing: number | undefined) => void): void {
+    const map = this.map;
+    if (map === undefined) {
+      read(undefined);
+      return;
+    }
+    map.getCamera().then((result: CameraQueryResult) => read(this.map === map ? result.camera.bearing : undefined),
+      (error: Error) => {
+        this.fail(error);
+        read(undefined);
+      });
   }
 
   /** The app moves the camera, which takes over from the gestures. */
@@ -483,18 +500,27 @@ export class MapView extends XComponentController implements GestureTarget {
     return state !== undefined && state.view === this && state.followingUserLocation;
   }
 
+  // While the camera follows a location that it has, which it moves to once
+  // the input ends.
+  catchesUp(): boolean {
+    return this.map !== undefined && this.userLocation !== undefined && this.keepsCenter() &&
+      this.state?.ready === true;
+  }
+
   // FFI raises no event as a gesture ends, so the view reads where the camera
-  // came to rest, after the gesture's changes. A rotation that ends near a
-  // snap bearing eases to it first, unless input or the app moves the camera
-  // again: then the camera rests when that ends. A camera that follows the
-  // location catches up with it, as it waited for the gesture.
-  gestureEnded(snapBearings: number[]): void {
+  // came to rest, after the gesture's changes. A camera that follows the
+  // location catches up with it, as it waited for the gesture, and turns to
+  // the gesture's snap bearing. A map that leaves reports no end.
+  gestureEnded(snapBearing: number | undefined): void {
+    if (this.disposed) {
+      return;
+    }
     // The app may move the camera as the gesture ends; then that move reports
-    // where the camera rests, and nothing snaps it.
+    // where the camera rests.
     const takeovers = this.cameraTakeovers;
     this.events.onGestureEnd();
     const map = this.map;
-    if (map === undefined || this.disposed) {
+    if (map === undefined) {
       return;
     }
     map.getCamera().then((result: CameraQueryResult) => {
@@ -502,17 +528,7 @@ export class MapView extends XComponentController implements GestureTarget {
         map.getSnapshot().transitionInProgress) {
         return;
       }
-      const bearing = snapBearing(result.camera.bearing, snapBearings);
-      if (this.followUserLocation(false, bearing)) {
-        return;
-      }
-      if (bearing !== undefined) {
-        map.discarding.updateCamera({
-          mode: CameraUpdateMode.ease,
-          camera: { bearing: bearing },
-          animation: { durationMs: GESTURE_ANIMATION_MS },
-        });
-      } else {
+      if (!this.followUserLocation(false, snapBearing)) {
         this.cameraIdle(result.camera);
       }
     }).catch((error: Error) => this.fail(error));
@@ -897,7 +913,7 @@ export class MapView extends XComponentController implements GestureTarget {
   }
 
   // Each failure reaches the app as a MapError.
-  private fail(error: Error): void {
+  fail(error: Error): void {
     logError(error.message);
     if (!this.disposed) {
       this.events.onError(error instanceof MapError ? error : new MapError(error.message));

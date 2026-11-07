@@ -519,7 +519,7 @@ struct InteractionExample {
           },
         },
         // The wheel pans, and zooms with Ctrl.
-        wheel: WheelAction.pan,
+        wheel: WheelAction.PAN,
         // A rotation settles on, and ticks at, north, east, south, and west.
         rotate: { snapBearings: [0, 90, 180, 270], hapticBearings: [0, 90, 180, 270] },
       },

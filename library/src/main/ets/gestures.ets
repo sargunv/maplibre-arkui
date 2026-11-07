@@ -10,14 +10,13 @@ import displaySync from '@ohos.graphics.displaySync';
 import { KeyCode } from '@ohos.multimodalInput.keyCode';
 import { CameraDelta, GesturePhase, ScreenPoint } from '@maplibre/native-ffi';
 
+import { callHandler } from './log';
+
 /**
  * How the user moves the map: which camera movements input makes, what the app
  * does as each starts, and what the wheel, rotation, and haptics do. Fields
  * that it leaves out keep their defaults, so every movement is on. Clicks reach
- * the map's handlers whichever movements are on. While the camera follows the
- * user's location, zoom and rotation keep the location at the center, and two
- * fingers don't pan; the input stops following only where an `onStart` stops
- * it.
+ * the map's handlers whichever movements are on.
  *
  * ```ets
  * MaplibreMap({
@@ -26,16 +25,44 @@ import { CameraDelta, GesturePhase, ScreenPoint } from '@maplibre/native-ffi';
  *   interactions: { rotate: { enabled: false }, pitch: { enabled: false } },
  * })
  * ```
+ *
+ * A gesture is input on the map that moves the camera, as `interactions`
+ * allows, until it and its momentum stop. The overlay's `MapZoomButtons` and
+ * `MapCompassButton` move the camera through the controller, so they don't
+ * count. The map's `onGestureStart` and `onGestureEnd` bracket each gesture:
+ *
+ * - Each `onGestureStart` is followed by exactly one `onGestureEnd` before the
+ *   next `onGestureStart`.
+ * - `onGestureStart` comes before any movement's `onStart`.
+ * - `onGestureEnd` comes before that gesture's `onCameraIdle`.
+ * - The end of a gesture that rotated the map can come a frame or more after
+ *   the last input: once the map reports where the rotation left the bearing,
+ *   and once the ease to a bearing of `snapBearings` ends, when there is one.
+ * - A camera change by the app that stops momentum or held keys ends the
+ *   gesture, and `onGestureEnd` runs before that call returns.
+ * - A touch sequence that the system cancels (`TouchType.Cancel`) ends with no
+ *   momentum and no snap, and still fires `onGestureEnd`.
+ *
+ * A change of the options applies at once. A movement that is turned off
+ * stops at once, even in the middle of a gesture. Any such change also ends
+ * momentum and held keys, and fingers that are down keep making the movements
+ * that are still on.
+ *
+ * While the camera follows the user's location, as
+ * `MapController.followUserLocation()` describes, zoom and rotation keep the
+ * location at the center, and two fingers pan only after they drag 400 vp.
  */
-export interface MapInteractionOptions {
+export interface InteractionOptions {
   /**
    * Drag with one finger or the mouse, or with two fingers; swipe two fingers
-   * on a touchpad; and the arrow keys.
+   * on a touchpad; and the arrow keys. Turning it off lets a scrolling parent
+   * have one-finger drags, and turns off double tap and drag.
    */
   pan?: MovementOptions;
   /**
    * Pinch, double tap, tap with two fingers, the wheel, a touchpad pinch, and
-   * the plus and minus keys, and double tap and drag while `pan` is on.
+   * the plus and minus keys, and double tap and drag while `pan` is on. While
+   * it's on, a tap waits 300 ms for a second tap before it clicks.
    */
   zoom?: MovementOptions;
   /**
@@ -49,16 +76,23 @@ export interface MapInteractionOptions {
    */
   pitch?: MovementOptions;
   /**
-   * What the mouse wheel does: `WheelAction.zoom` at the pointer, the default,
-   * or `WheelAction.pan`. With Ctrl held, it does the other. A two-finger
-   * swipe on a touchpad pans, and zooms with Ctrl.
+   * What the mouse wheel does: `WheelAction.ZOOM` at the pointer, the default,
+   * or `WheelAction.PAN`. With Ctrl held, it does the other, except in
+   * cooperative mode. A touchpad swipe pans, or zooms with Ctrl held.
    */
   wheel?: WheelAction;
   /**
-   * Whether the map leaves one-finger drags, the wheel, and touchpad swipes to
-   * a scrolling parent, so a map in a `Scroll` or `List` moves only with two
-   * fingers, or with Ctrl held, when the wheel and the touchpad do what they
-   * would otherwise. Off by default.
+   * Whether the map leaves the input that scrolls a page to a scrolling
+   * parent, such as a `Scroll` or `List`. Off by default. While it's on:
+   *
+   * - One-finger drags, the wheel, and touchpad swipes go to the scrolling
+   *   parent.
+   * - Two fingers move the map.
+   * - With Ctrl held, the wheel does what `wheel` says, and a touchpad swipe
+   *   pans.
+   * - A touchpad pinch, keys, right-button drags, and double and two-finger
+   *   taps work as usual.
+   * - Double tap and drag doesn't zoom.
    */
   cooperative?: boolean;
 }
@@ -68,8 +102,18 @@ export interface MovementOptions {
   /** Whether the user's input makes this movement. On by default. */
   enabled?: boolean;
   /**
-   * The user started this movement, such as a pan: once in each gesture, as
-   * the gesture first moves the camera this way. It runs after `onGestureStart`.
+   * The user started this movement, such as a pan. It runs each time a
+   * gesture starts to move the camera this way, which can be more than once in
+   * a gesture: a finger that goes down or lifts starts the movements again. It
+   * runs after `onGestureStart`. Momentum, a held key's repeats, and a snap to
+   * `snapBearings` never call it.
+   *
+   * Fingers that are down keep moving the camera from where the app puts it
+   * here. A camera change, including `followUserLocation()`, ends held keys
+   * and an animated step, such as a double tap's zoom.
+   *
+   * Called on the UI thread. When it throws, the map logs the exception, and
+   * the other movements' `onStart` still run.
    */
   onStart?: () => void;
 }
@@ -78,7 +122,11 @@ export interface MovementOptions {
 export interface RotationOptions extends MovementOptions {
   /**
    * The bearings that a rotation eases to when it ends within 7° of one,
-   * after its momentum. `[0]`, north, by default; `[]` turns snapping off.
+   * after its momentum, as the last part of the gesture. `[0]`, north, by
+   * default; `[]` turns snapping off.
+   *
+   * Each bearing is in degrees, taken modulo 360. A bearing that isn't finite
+   * is reported to the map's `onError` and left out.
    */
   snapBearings?: number[];
   /**
@@ -86,16 +134,22 @@ export interface RotationOptions extends MovementOptions {
    * turns the map across one. `[0]`, north, by default; `[]` turns the ticks
    * off. Ticks need the app to declare `ohos.permission.VIBRATE`, and play
    * only when the system's touch feedback is on.
+   *
+   * Each bearing is in degrees, taken modulo 360. A bearing that isn't finite
+   * is reported to the map's `onError` and left out.
    */
   hapticBearings?: number[];
 }
 
-/** What the mouse wheel does to the camera. */
+/**
+ * What the mouse wheel does to the camera. Values may be added in later
+ * releases; give a `switch` over it a `default` branch.
+ */
 export enum WheelAction {
   /** Zoom at the pointer. */
-  zoom,
+  ZOOM,
   /** Pan up and down, or sideways with a wheel that tilts. */
-  pan,
+  PAN,
 }
 
 /** A touch that is down, in the map's vp. */
@@ -112,6 +166,11 @@ export interface GestureTarget {
   clicked(point: ScreenPoint, long: boolean): void;
   /** The camera's bearing, as the map last applied the changes. */
   getBearing(): number;
+  /**
+   * Reads the camera's bearing once the map has applied the changes before
+   * the call, and passes it to `read`, or undefined when the map can't say.
+   */
+  readBearing(read: (bearing: number | undefined) => void): void;
   /** The user started to move the camera. */
   gestureStarted(): void;
   /**
@@ -120,12 +179,19 @@ export interface GestureTarget {
    */
   keepsCenter(): boolean;
   /**
-   * The camera stopped moving from the user's input. It may ease to the
-   * nearest of `snapBearings` within 7°; they're empty unless it rotated.
+   * Whether the camera catches up with the user's location as a gesture ends.
+   * The catch-up then turns it to the gesture's snap bearing.
    */
-  gestureEnded(snapBearings: number[]): void;
+  catchesUp(): boolean;
+  /**
+   * The camera stopped moving from the user's input. A camera that catches up
+   * with the location turns to `snapBearing`, when there is one.
+   */
+  gestureEnded(snapBearing: number | undefined): void;
   /** A rotation by the user crossed a haptic notch. */
   hapticTick(): void;
+  /** An option was invalid. */
+  fail(error: Error): void;
 }
 
 // Thresholds, after MapLibre Compose's GestureMath, which follows MapLibre
@@ -217,21 +283,26 @@ class HeldKey {
  * from a `Pan`, `Pinch`, or `Rotation` gesture starting.
  */
 export class MapGestures {
-  private currentOptions: MapInteractionOptions = {};
+  private currentOptions: InteractionOptions = {};
+  // The rotation's snap and haptic bearings, as the options give them.
+  private readonly snapBearings: Bearings = new Bearings('snapBearings');
+  private readonly hapticBearings: Bearings = new Bearings('hapticBearings');
   /** The map's height, which a quick zoom measures its drag against. */
   height: number = 0;
   private readonly target: GestureTarget;
 
-  get options(): MapInteractionOptions {
+  get options(): InteractionOptions {
     return this.currentOptions;
   }
 
   // Momentum, running or waiting for the last finger, and held keys may be for
   // a movement that's now off, so they go. Options that an app writes in
   // `build()` are a new value each time, so the rest carries on.
-  set options(options: MapInteractionOptions) {
+  set options(options: InteractionOptions) {
     const before = this.currentOptions;
     this.currentOptions = options;
+    this.snapBearings.set(options.rotate?.snapBearings, this.target);
+    this.hapticBearings.set(options.rotate?.hapticBearings, this.target);
     if ((enabled(before.pan) && !enabled(options.pan)) || (enabled(before.zoom) && !enabled(options.zoom)) ||
       (enabled(before.rotate) && !enabled(options.rotate)) || (enabled(before.pitch) && !enabled(options.pitch))) {
       this.stop();
@@ -494,7 +565,7 @@ export class MapGestures {
     }
     // Ctrl swaps panning and zooming, except in cooperative mode, where it's
     // what lets the axis move the map.
-    const pans = (touchpad || options.wheel === WheelAction.pan) !== (ctrl && !cooperative);
+    const pans = (touchpad || options.wheel === WheelAction.PAN) !== (ctrl && !cooperative);
     if (pans) {
       if ((x === 0 && y === 0) || !this.canPan()) {
         return;
@@ -736,8 +807,8 @@ export class MapGestures {
   }
 
   /**
-   * Stops momentum and held keys, and ends the gesture they belong to.
-   * Fingers that are down keep moving the camera.
+   * Stops momentum, held keys, and an animated step, such as a snap, and ends
+   * the gesture they belong to. Fingers that are down keep moving the camera.
    */
   stop(): void {
     // Momentum that waits for the last finger goes too.
@@ -755,9 +826,11 @@ export class MapGestures {
       this.stopMomentum();
       this.finish();
     }
+    // A snap that the end of the momentum or keys started goes too.
+    this.endStep();
   }
 
-  /** The system took the touches back: end without momentum or a click. */
+  /** The system took the touches back: end without momentum, a snap, or a click. */
   cancel(): void {
     this.stopMomentum();
     this.touches = [];
@@ -771,14 +844,13 @@ export class MapGestures {
       this.phaseOpen = false;
       this.moving = false;
       this.target.applyCameraDelta({ gesturePhase: GesturePhase.cancel });
-      this.target.gestureEnded([]);
+      this.target.gestureEnded(undefined);
     }
   }
 
   /** Stops input for good, as the map leaves, and ends what it started. */
   dispose(): void {
     this.keys.clear();
-    this.keysStopped();
     this.cancel();
     this.endStep();
     this.frames?.off('frame');
@@ -808,12 +880,14 @@ export class MapGestures {
     }
   }
 
-  // Recognition starts again from the touches that are down. Once the map
-  // claims one touch, it pans at once, or quick-zooms after a tap when the
-  // claim's motion is mostly vertical.
+  // Recognition starts again from the touches that are down, and the
+  // movements that they start run their onStart again. Once the map claims one
+  // touch, it pans at once, or quick-zooms after a tap when the claim's motion
+  // is mostly vertical.
   private restart(claimed: boolean): void {
     const touches = this.touches;
     this.origin = touches;
+    this.started = 0;
     this.panning = false;
     this.zooming = false;
     this.rotating = false;
@@ -1201,7 +1275,7 @@ export class MapGestures {
     if (delta.bearing !== undefined) {
       let notches = this.notches;
       if (notches === undefined) {
-        notches = new BearingNotches(this.options.rotate?.hapticBearings ?? [0], this.target.getBearing());
+        notches = new BearingNotches(this.hapticBearings.values, this.target.getBearing());
         this.notches = notches;
       }
       tick = notches.turn(delta.bearing, time);
@@ -1258,31 +1332,57 @@ export class MapGestures {
     this.started |= movements;
     const options = this.options;
     if ((fresh & PAN) !== 0) {
-      options.pan?.onStart?.();
+      runOnStart('pan', options.pan);
     }
     if ((fresh & ZOOM) !== 0) {
-      options.zoom?.onStart?.();
+      runOnStart('zoom', options.zoom);
     }
     if ((fresh & ROTATE) !== 0) {
-      options.rotate?.onStart?.();
+      runOnStart('rotate', options.rotate);
     }
     if ((fresh & PITCH) !== 0) {
-      options.pitch?.onStart?.();
+      runOnStart('pitch', options.pitch);
     }
   }
 
-  // Ends the gesture. A rotation may snap to a bearing near where it ends.
+  // Ends the gesture's input. A rotation goes on to snap to a bearing near
+  // where it ends.
   private finish(): void {
     this.axisOwned = false;
     this.keysOwned = false;
     this.notches = undefined;
-    if (this.phaseOpen) {
-      this.phaseOpen = false;
-      this.moving = false;
-      this.target.applyCameraDelta({ gesturePhase: GesturePhase.end });
-      const snaps = this.rotated && this.canRotate();
-      this.target.gestureEnded(snaps ? this.options.rotate?.snapBearings ?? [0] : []);
+    if (!this.phaseOpen) {
+      return;
     }
+    this.phaseOpen = false;
+    this.target.applyCameraDelta({ gesturePhase: GesturePhase.end });
+    if (this.rotated && this.canRotate() && this.snapBearings.values.length > 0) {
+      this.snap();
+    } else {
+      this.moving = false;
+      this.target.gestureEnded(undefined);
+    }
+  }
+
+  // The last step of a rotation, which the gesture ends with. Once the map
+  // reports where the rotation left the bearing, the camera eases to the
+  // nearest snap bearing, or turns to it as it catches up with the user's
+  // location after the gesture.
+  private snap(): void {
+    const step = ++this.step;
+    this.target.readBearing((bearing: number | undefined) => {
+      if (this.step !== step) {
+        return;
+      }
+      const snapped = bearing === undefined ? undefined : snapBearing(bearing, this.snapBearings.values);
+      if (bearing === undefined || snapped === undefined) {
+        this.endStep();
+      } else if (this.target.catchesUp()) {
+        this.endStep(snapped);
+      } else {
+        this.animateStep({ bearing: snapped - bearing }, step);
+      }
+    });
   }
 
   // Where zoom and rotation at `point` keep the content: there, or at the
@@ -1307,14 +1407,23 @@ export class MapGestures {
     return enabled(this.options.pitch);
   }
 
-  // A step that animates on its own, such as a double tap's zoom. It ends when
-  // the animation does, unless other input replaced it.
+  // A gesture of one step that animates on its own, such as a double tap's
+  // zoom.
   private animate(delta: CameraDelta, movements: number): void {
     this.stopMomentum();
     this.finish();
     this.endStep();
     const step = ++this.step;
     this.moving = true;
+    this.animateStep(delta, step);
+    this.target.gestureStarted();
+    this.started = 0;
+    this.began(delta, movements);
+  }
+
+  // Animates the camera by `delta` as the step numbered `step`, which ends
+  // when the animation does, unless other input or the app ended it first.
+  private animateStep(delta: CameraDelta, step: number): void {
     delta.animation = {
       durationMs: GESTURE_ANIMATION_MS,
       endHandler: {
@@ -1326,17 +1435,52 @@ export class MapGestures {
       },
     };
     this.target.applyCameraDelta(delta);
-    this.target.gestureStarted();
-    this.started = 0;
-    this.began(delta, movements);
   }
 
-  private endStep(): void {
+  // Ends the animated step, if one is under way, and the gesture with it.
+  private endStep(snapBearing?: number): void {
+    this.step++;
     if (this.moving && !this.phaseOpen) {
       this.moving = false;
-      this.target.gestureEnded([]);
+      this.target.gestureEnded(snapBearing);
     }
-    this.step++;
+  }
+}
+
+// The bearings of a rotation option, each modulo 360. One that isn't finite
+// is reported, once for each new value of the option, and left out.
+class Bearings {
+  values: number[] = [0];
+  private readonly name: string;
+  private given: string = '0';
+
+  constructor(name: string) {
+    this.name = name;
+  }
+
+  set(bearings: number[] | undefined, target: GestureTarget): void {
+    const given = bearings ?? [0];
+    // Options that an app writes in `build()` are a new value each time.
+    if (given.join() === this.given) {
+      return;
+    }
+    this.given = given.join();
+    this.values = [];
+    for (const bearing of given) {
+      if (Number.isFinite(bearing)) {
+        this.values.push((bearing % 360 + 360) % 360);
+      } else {
+        target.fail(new Error(`interactions.rotate.${this.name} has a bearing that isn't finite: ${bearing}`));
+      }
+    }
+  }
+}
+
+// Runs the onStart of a movement's options, which logs what it throws.
+function runOnStart(movement: string, options: MovementOptions | undefined): void {
+  const onStart = options?.onStart;
+  if (onStart !== undefined) {
+    callHandler(`interactions.${movement}.onStart`, onStart);
   }
 }
 
