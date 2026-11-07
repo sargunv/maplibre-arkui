@@ -23,9 +23,9 @@ export class LayerHandle implements LayerSummary {
   /** The layer's style-spec type, such as `'fill'` or `'symbol'`. Open identity. */
   readonly type: string;
   /** The ID of the source that the layer draws, or undefined for a layer without one. */
-  readonly source?: string;
+  readonly source: string | undefined;
   /** The layer of a vector source that the layer draws, or undefined for a source without layers. */
-  readonly sourceLayer?: string;
+  readonly sourceLayer: string | undefined;
   /**
    * Whether the layer is one of the map's content, when the map made the
    * handle. `setProperty()` throws for a layer of the content.

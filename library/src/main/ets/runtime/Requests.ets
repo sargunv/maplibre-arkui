@@ -1,14 +1,14 @@
 /** A request that MapLibre makes, which the library creates; fields may be added in later releases. */
 export interface MapResourceRequest {
   /** The URL to load, after MapLibre expands its shorthands, such as `maplibre://`. */
-  url: string;
+  readonly url: string;
   /**
    * What the resource is: `'style'`, `'source'` (a TileJSON document),
    * `'tile'`, `'glyphs'`, `'spriteImage'`, `'spriteJson'`, or `'image'`, or
    * undefined when MapLibre doesn't say. Values may be added in later
    * releases.
    */
-  kind: string | undefined;
+  readonly kind: string | undefined;
 }
 
 /**
@@ -72,9 +72,9 @@ export interface MapResourceLoadRequest extends MapResourceRequest {
 /** The bytes from `start` to `end` of a resource, both included. */
 export interface MapResourceRange {
   /** The offset of the first byte. */
-  start: number;
+  readonly start: number;
   /** The offset of the last byte. */
-  end: number;
+  readonly end: number;
 }
 
 /**

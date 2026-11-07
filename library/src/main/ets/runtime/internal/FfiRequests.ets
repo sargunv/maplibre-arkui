@@ -120,8 +120,8 @@ export function toFfiProvider(provider: MapResourceProvider): ResourceProvider |
 // The request that a provider loads. MapLibre can cancel it until the
 // provider answers.
 class LoadRequest implements MapResourceLoadRequest {
-  url: string;
-  kind: string | undefined;
+  readonly url: string;
+  readonly kind: string | undefined;
   readonly requestedUrl: string;
   readonly range: MapResourceRange | undefined;
   readonly priorData: Uint8Array | undefined;

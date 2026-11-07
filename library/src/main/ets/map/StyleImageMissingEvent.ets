@@ -6,5 +6,5 @@
  */
 export interface StyleImageMissingEvent {
   /** The ID that the style names the image by, such as in a symbol layer's `icon-image`. */
-  id: string;
+  readonly id: string;
 }

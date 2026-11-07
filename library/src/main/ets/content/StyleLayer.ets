@@ -11,13 +11,13 @@ import { MapClickEvent } from '../map/MapClickEvent';
  */
 export interface LayerSummary {
   /** The layer's ID. */
-  id: string;
+  readonly id: string;
   /** The layer's style-spec type, such as `'fill'` or `'symbol'`. Open identity. */
-  type: string;
+  readonly type: string;
   /** The ID of the source that the layer draws, or undefined for a layer without one. */
-  source?: string;
+  readonly source: string | undefined;
   /** The layer of a vector source that the layer draws, or undefined for a source without layers. */
-  sourceLayer?: string;
+  readonly sourceLayer: string | undefined;
 }
 
 /**
@@ -38,7 +38,7 @@ export interface FeatureClickEvent extends MapClickEvent {
    * The layer's features within its `hitPadding` of the click, front first,
    * as the layer drew them, with the geometry as it drew them. Never empty.
    */
-  features: GeoJsonFeature[];
+  readonly features: GeoJsonFeature[];
 }
 
 /**

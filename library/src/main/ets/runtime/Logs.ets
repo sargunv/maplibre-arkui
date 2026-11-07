@@ -16,15 +16,15 @@ export enum MapLogLevel {
 /** One message of the log, which the library creates; fields may be added in later releases. */
 export interface MapLogRecord {
   /** How severe the message is. */
-  level: MapLogLevel;
+  readonly level: MapLogLevel;
   /** The message, without the library's `MapLibre:` hilog prefix. */
-  message: string;
+  readonly message: string;
   /**
    * MapLibre Native's category for the message, such as `'database'` or
    * `'httpRequest'`, or undefined for the library's own messages. Values may
    * be added in later releases.
    */
-  category: string | undefined;
+  readonly category: string | undefined;
 }
 
 /** Takes each record of the log; see `MapRuntime.setLogHandler()`. */
