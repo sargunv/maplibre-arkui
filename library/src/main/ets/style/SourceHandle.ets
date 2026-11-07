@@ -5,6 +5,7 @@ import { GeoJsonObject } from '../geometry/GeoJson';
 import { LatLng } from '../geometry/Geometry';
 import { checkLatLng } from '../geometry/internal/FfiGeometry';
 import { registerSourceKey, SourceKey, sourceKeyOf } from './internal/HandleKeys';
+import { replaced } from './internal/StyleCommands';
 
 /**
  * A source of the style that `MapStyle` reads.
@@ -70,11 +71,12 @@ export class GeoJsonSourceHandle extends SourceHandle {
   /**
    * Replaces the source's data with a GeoJSON object, or with the GeoJSON at
    * the URL `data`, and keeps the source's options, such as its clustering. It
+   * resolves `false` when newer data replaces it before the source has it, and
    * rejects for data that the map can't read.
    */
   setData(data: GeoJsonObject | string): Promise<boolean> {
     return sourceKeyOf(this).send(`setting the data of source ${this.id}`, (map) => typeof data === 'string' ?
-      map.setGeoJsonSourceUrl(this.id, data) : map.setGeoJsonSourceData(this.id, data));
+      map.setGeoJsonSourceUrl(this.id, data) : map.setGeoJsonSourceData(this.id, data), replaced);
   }
 }
 

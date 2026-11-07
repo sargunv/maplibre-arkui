@@ -43,6 +43,12 @@ export function failedWith(error: Error, status: Status): boolean {
   return error instanceof MaplibreError && (error as MaplibreError).status === status;
 }
 
+// Whether the map cancelled a command because a newer one replaced it, as
+// newer GeoJSON data does.
+export function replaced(error: Error): boolean {
+  return failedWith(error, Status.cancelled);
+}
+
 // Sends a write, which resolves true once the map applies it. A write that
 // fails once `holds` no longer does, or with a failure that `declined` takes,
 // resolves false; another failure rejects with what failed.

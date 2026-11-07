@@ -423,6 +423,16 @@ export default function styleTest(): void {
         await layerNamed('dots');
         expect(await source.setData(PLACES)).assertTrue();
         await untilFeatures('app-places', 2);
+        // Data that waits behind the data that the source prepares, and that
+        // newer data replaces, resolves false instead of rejecting.
+        const preparing = source.setData(PLACES);
+        const waiting = source.setData(PLACES);
+        expect(await source.setData(FIRST_PLACE)).assertTrue();
+        expect(typeof await preparing).assertEqual('boolean');
+        expect(typeof await waiting).assertEqual('boolean');
+        await untilFeatures('app-places', 1);
+        expect(await source.setData(PLACES)).assertTrue();
+        await untilFeatures('app-places', 2);
         expect(await source.setData(`file://${path}`)).assertTrue();
         await untilFeatures('app-places', 1);
       } finally {

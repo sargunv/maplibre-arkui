@@ -54,13 +54,14 @@ export class SourceKey {
   }
 
   // Sends a write to the source while the handle holds, and throws for a
-  // source of the content.
-  send(what: string, command: (map: MapHandle) => Promise<CommandCompletion>): Promise<boolean> {
+  // source of the content. A failure that `declined` takes resolves false.
+  send(what: string, command: (map: MapHandle) => Promise<CommandCompletion>,
+    declined?: (error: Error) => boolean): Promise<boolean> {
     if (!this.holds()) {
       return Promise.resolve(false);
     }
     checkOwned(this.style.reconciler.ownsSource(this.id), 'source', this.id);
-    return write(() => this.holds(), what, () => command(this.style.map));
+    return write(() => this.holds(), what, () => command(this.style.map), declined);
   }
 }
 
