@@ -112,10 +112,12 @@ export default function styleTest(): void {
 
     it('finds the feature at its screen point, with its state', 0, async () => {
       await addPlaces();
+      const point = pixelFor({ latitude: 10, longitude: 20 });
+      const stateless = await queryAt(point, ['circles']);
+      expect(JSON.stringify(stateless[0].state)).assertEqual('{}');
+
       const selected: Record<string, Object> = { 'selected': true };
       await withMap((ffi: MapHandle) => ffi.setFeatureState(ONE, selected));
-      const point = pixelFor({ latitude: 10, longitude: 20 });
-
       const hits = await queryAt(point, ['circles']);
       expect(hits.length).assertEqual(1);
       expect(hits[0].layerId).assertEqual('circles');
@@ -133,13 +135,6 @@ export default function styleTest(): void {
         { layers: ['circles'], hitPadding: 60 });
       expect(padded?.length).assertEqual(1);
       expect(() => testMap.controller.queryRenderedFeatures(point, { hitPadding: -1 })).assertThrowError('-1');
-    });
-
-    it('lists the features of a query front first', 0, async () => {
-      await addPlaces();
-      await addCircles('front');
-      const hits = await queryAt(pixelFor({ latitude: 10, longitude: 20 }), ['circles', 'front'], 2);
-      expect(hits.map((hit: RenderedFeature) => hit.layerId).join(',')).assertEqual('front,circles');
     });
 
     it('starts each style without what the app added, which it adds again', 0, async () => {

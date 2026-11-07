@@ -423,7 +423,7 @@ export class MapView extends XComponentController implements GestureTarget {
     const location = this.userLocation;
     const state = this.state;
     if (map === undefined || location === undefined || state === undefined || state.view !== this ||
-      !state.ready || !this.gestures.idle) {
+      !state.followReady || !this.gestures.idle) {
       return false;
     }
     const camera = state.followCamera(location, this.userHeading, headingChanged);

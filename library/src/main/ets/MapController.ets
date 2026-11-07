@@ -248,8 +248,9 @@ export class MapController {
 
   /**
    * Finds the features that the map drew at `point` of its latest frame, or
-   * within `options.hitPadding` of it, front first, as the map draws them: a
-   * feature that several layers draw comes once for each. Resolves undefined
+   * within `options.hitPadding` of it: each layer's features front first, as
+   * the map draws them, and the layers in no set order. A feature that several
+   * layers draw comes once for each. Resolves undefined
    * while no map shows a frame, and when the map leaves before it answers.
    *
    * It throws an `Error` for a `hitPadding` below 0 or that isn't finite. It

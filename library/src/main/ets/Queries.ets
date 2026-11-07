@@ -71,8 +71,8 @@ export function checkHitPadding(hitPadding: number | undefined): number {
 }
 
 // The features that `session` drew within `hitPadding` vp of `point`, in the
-// layers that `layers` names, or in all, front first. MapLibre Native lists
-// them from the bottom layer up.
+// layers that `layers` names, or in all. MapLibre Native lists each layer's
+// features front first, but the layers in no set order.
 export async function queryRendered(session: RenderSessionHandle, point: ScreenPoint, hitPadding: number,
   layers: string[] | undefined, filter: Expression | undefined): Promise<RenderedFeature[]> {
   const geometry: RenderedQueryGeometry = hitPadding === 0 ?
@@ -85,7 +85,7 @@ export async function queryRendered(session: RenderSessionHandle, point: ScreenP
       },
     };
   const found = await session.queryRenderedFeatures(geometry, { layerIds: layers, filter: filter });
-  return found.map(toRenderedFeature).reverse();
+  return found.map(toRenderedFeature);
 }
 
 export async function querySource(session: RenderSessionHandle, sourceId: string,
@@ -104,6 +104,7 @@ function toRenderedFeature(feature: FfiRenderedFeature): RenderedFeature {
     layerId: feature.layerId,
     sourceId: feature.sourceId,
     sourceLayer: feature.sourceLayerId === '' ? undefined : feature.sourceLayerId,
-    state: feature.state as Record<string, Object>,
+    // FFI gives no state object for a feature without state.
+    state: (feature.state as Record<string, Object> | undefined) ?? {},
   };
 }

@@ -12,8 +12,8 @@ import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw"
 ## Query features
 
 The controller's <Api of="MapController.queryRenderedFeatures" display="queryRenderedFeatures()" />
-finds the features that the map drew at a point, front first, such as the base
-style's features near a click. A click's `point` is on the map, as queries take
+finds the features that the map drew at a point, such as the base style's
+features near a click. A click's `point` is on the map, as queries take
 it, and `hitPadding` widens the query to a square around it. The content's own
 layers take [clicks](/maplibre-arkui/gestures/#clicks) without a query.
 

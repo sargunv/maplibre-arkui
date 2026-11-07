@@ -231,7 +231,6 @@ struct QueryExample {
       // The map left before it answered.
       return;
     }
-    // Front first, as the map draws them.
     const layers = new Set<string>(hits.map((hit: RenderedFeature) => hit.layerId));
     this.found = `${hits.length} features in ${Array.from(layers).join(', ')}`;
   }

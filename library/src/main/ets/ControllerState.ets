@@ -47,6 +47,10 @@ export class ControllerState {
   // size, from which camera moves go to it.
   view: MapView | undefined = undefined;
   private sized: boolean = false;
+  // Counts the batches of moves that waited for a map, and whether the latest
+  // is still running, which holds the camera's following until it ends.
+  private settles: number = 0;
+  private settling: boolean = false;
   private waiting: WaitingMove[] = [];
   private followOptions: FollowUserLocationOptions = {};
   // The zoom that the next move to follow the location takes.
@@ -64,10 +68,18 @@ export class ControllerState {
     return this.view !== undefined && this.sized;
   }
 
+  // Whether the camera may move to follow the user's location now: once the
+  // moves that waited for the map end.
+  get followReady(): boolean {
+    return this.ready && !this.settling;
+  }
+
   // A map takes the controller from any map that had it.
   attach(view: MapView): void {
     this.view = view;
     this.sized = false;
+    this.settles++;
+    this.settling = false;
     this.styleLoaded = false;
     this.attributions = [];
     this.showFrame(undefined);
@@ -83,6 +95,8 @@ export class ControllerState {
     }
     this.view = undefined;
     this.sized = false;
+    this.settles++;
+    this.settling = false;
     this.styleLoaded = false;
     this.attributions = [];
     this.showFrame(undefined);
@@ -107,9 +121,15 @@ export class ControllerState {
     }
     // Following starts once the moves that waited for the map end, so a fit
     // that's still finding its camera can't move it away afterwards.
+    const settle = ++this.settles;
+    this.settling = true;
     const ended = waiting.map((move: WaitingMove) => this.start(view, move.start).then(
       (completed: boolean) => move.resolve(completed), (error: Error) => move.reject(error)));
     Promise.all(ended).then(() => {
+      if (this.settles !== settle) {
+        return;
+      }
+      this.settling = false;
       if (this.view === view) {
         view.followUserLocation();
       }
