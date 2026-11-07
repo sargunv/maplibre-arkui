@@ -1,3 +1,4 @@
+import { CommandCompletion } from '@maplibre/native-ffi';
 import image from '@ohos.multimedia.image';
 
 import { readPixelMap } from '../content/internal/PixelMaps';
@@ -56,13 +57,15 @@ export class SourceHandle {
    */
   remove(): Promise<boolean> {
     const key = sourceKeyOf(this);
-    return key.send(`removing source ${this.id}`, (map) => map.removeStyleSource(this.id))
-      .then((removed: boolean): boolean => {
-        if (removed && key.holds()) {
+    // The handle expires as the removal lands, before any later command's
+    // answer, so a write sent after it resolves false.
+    return key.send(`removing source ${this.id}`, (map) => map.removeStyleSource(this.id)
+      .then((completion: CommandCompletion): CommandCompletion => {
+        if (key.holds()) {
           key.style.reconciler.sourceRemoved(this.id);
         }
-        return removed;
-      });
+        return completion;
+      }));
   }
 }
 

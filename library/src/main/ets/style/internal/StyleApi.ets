@@ -154,7 +154,8 @@ export class StyleApi implements MapStyle {
     }
     return read(() => this.current() === style, `reading global state ${name}`,
       () => style.map.getGlobalState() as Promise<Object>,
-      (value: Object): Object | undefined => (value as Record<string, Object | null>)[name] ?? undefined);
+      (value: Object): Object | undefined => Object.keys(value).includes(name) ?
+        (value as Record<string, Object | null>)[name] ?? undefined : undefined);
   }
 
   setGlobalStateProperty(name: string, value: Object | null): Promise<boolean> {
