@@ -123,9 +123,16 @@ export default function mapControllerTest(): void {
       await until('the observed camera follows', () => Math.abs((map.camera?.zoom ?? 0) - 5) < 0.001);
     });
 
-    it('eases a move that has a duration, and resolves once it completes', 0, async () => {
+    it('jumps a move without a mode, even one with a duration', 0, async () => {
+      const move = map.updateCamera({ zoom: 5 }, { durationMs: 10000 });
+      await map.cancelCameraTransitions();
+      expect(await move).assertTrue();
+      expectNear(camera().zoom, 5, 0.001);
+    });
+
+    it('eases a move, and resolves once it completes', 0, async () => {
       let done = false;
-      const move = map.updateCamera({ zoom: 6 }, { durationMs: 300 }).then((completed: boolean) => {
+      const move = map.updateCamera({ zoom: 6 }, { mode: CameraTransitionMode.EASE }).then((completed: boolean) => {
         done = true;
         return completed;
       });

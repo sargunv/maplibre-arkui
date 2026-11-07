@@ -6,7 +6,7 @@ description: How the camera methods, the map, and snapshots report failures.
 import Api from "../../components/Api.astro";
 
 - Camera methods throw an `Error` for an invalid argument, such as a zoom that
-  isn't a number. Otherwise they return promises that resolve with whether the
+  isn't finite. Otherwise they return promises that resolve with whether the
   camera got there, and reject when no map is on screen or the map rejects the
   change. FFI's style and query methods reject with a
   <Api of="MaplibreError" />.

@@ -89,7 +89,9 @@ export struct MapLibreMap {
    * middle of what they leave. None by default.
    *
    * Each side is a length of at least 0, not a percentage; a side left out is
-   * 0. An invalid side is reported to `onMapError` and taken as 0.
+   * 0. An invalid side is reported to `onMapError` and taken as 0. A
+   * `LocalizedPadding`'s `start` and `end` follow the app's language, not an
+   * ancestor's `.direction()`.
    *
    * ```ets
    * MapLibreMap({

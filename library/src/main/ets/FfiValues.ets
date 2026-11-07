@@ -128,16 +128,14 @@ export function toFfiCamera(camera: CheckedCamera, padding: Insets | undefined):
   };
 }
 
-// The mode and duration of a move. Without a mode, a move with a duration
-// eases and one without jumps; a duration of 0 jumps.
+// The mode and duration of a move. Without a mode, a move jumps; an ease
+// without a duration takes EASE_MS, and a fly without one takes FFI's time.
 export function checkTransition(options: CameraTransitionOptions | undefined): CheckedTransition {
   const durationMs = options?.durationMs;
   if (durationMs !== undefined && !(Number.isFinite(durationMs) && durationMs >= 0)) {
     throw new Error(`A camera transition's durationMs must be finite and at least 0: ${durationMs}`);
   }
-  const mode = durationMs === 0 ? CameraTransitionMode.JUMP :
-    options?.mode ?? (durationMs === undefined ? CameraTransitionMode.JUMP : CameraTransitionMode.EASE);
-  switch (mode) {
+  switch (options?.mode ?? CameraTransitionMode.JUMP) {
     case CameraTransitionMode.EASE:
       return { mode: CameraUpdateMode.ease, durationMs: durationMs ?? EASE_MS };
     case CameraTransitionMode.FLY:
