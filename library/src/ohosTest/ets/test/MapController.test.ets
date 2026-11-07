@@ -524,7 +524,8 @@ export default function mapControllerTest(): void {
       expect(moving.slice(0, -1).every((value: boolean) => value)).assertTrue();
       expect(moving[moving.length - 1]).assertFalse();
       expect(cameraEvents()).assertEqual('start programmatic,idle');
-      expectNear(map.camera.zoom, 5, 0.001);
+      // The idle reports the rest; map.camera catches up with the next frame.
+      expectNear(testMap.cameraIdles[testMap.cameraIdles.length - 1].zoom, 5, 0.001);
     });
 
     it('ends a move without onCameraIdle when the map leaves in the middle of it', 0, async () => {
