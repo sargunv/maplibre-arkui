@@ -1,263 +1,405 @@
 ---
 title: API guidelines
-description: The conventions that the public API of @maplibre/arkui follows.
+description: Rules for the public API of the published library.
 ---
 
-The conventions that `@maplibre/arkui`'s public API follows. The public API is
-what `library/Index.ets` exports. These describe the code as it is; when a rule
-doesn't fit a new case, change the rule in the same change rather than make an
-exception. The priorities behind them: simple code, ArkUI idiom over MapLibre
-Compose's shape, state management V2 only, and FFI's API where it already reads
-as ArkTS.
+Rules for the public API of the published library.
 
-## Naming
+## 1. About this guide
 
-- Components are `@ComponentV2` structs named with nouns that start with `Map`:
-  `MapLibreMap`, `MapCompassButton`, `MapScaleBar`, `MapAttributionButton`,
-  `MapZoomButtons`, `MapLibreLogo`. A control that shows only while it matters
-  starts with `MapDisappearing` (`MapDisappearingScaleBar`), and an overlay
-  preset ends in `Overlay` (`MapDefaultOverlay`), after MapLibre Compose's
-  names. A component that places its content, standing in for one of Compose's
-  placement modifiers, takes the modifier's name: `MapPlacedAt`,
-  `MapPlacedTowards`.
-- A handle that the app creates and passes to a component is a class named
-  `<Thing>Controller`, passed as `controller`, as ArkUI's `Scroller`,
-  `TextController`, and `XComponentController` are: `MapController`.
-- Settings are interfaces named `<Thing>Options`, after what they configure,
-  with optional fields only, and taken as object literals:
-  `MapControllerOptions`, `MapInteractionOptions`, `FollowUserLocationOptions`,
-  `UserLocationIndicatorOptions`, `FitCameraOptions`, `SnapshotOptions`.
-  Settings of one part nest as their own options (`MapInteractionOptions.rotate`
-  is a `RotationOptions`), and a name that ArkUI reserves (`RotateOptions`)
-  takes another word. Data that describes something is a plain noun with the
-  fields it needs: `MapContent`, `MapSource`, `MapLayer`, `MapImage`.
-- Events are `@Event` params named `on` and what happened: `onStyleLoaded`,
-  `onCameraIdle`, `onMapError`, and `onGestureStart` / `onGestureEnd`, as
-  ArkUI's `onScrollStart` / `onScrollStop` pair. A handler that can keep an
-  event from the handlers after it returns `true` to consume it, as ArkUI's
-  `onKeyEvent` does: `onMapClick` and `MapLayer.onClick`. An event of one part
-  of the settings is a function-typed field of its options, named the same way
-  (`MovementOptions.onStart`).
-- A part's on switch in its options ends in `Enabled`
-  (`MovementOptions.enabled`); other flags are adjectives or the names of what
-  they turn on (`cooperative`). The map shows controls through its overlay, not
-  flags. A choice among a few behaviors is an enum named for what it picks
-  (`WheelAction`).
-- Functions are verbs or the noun they make: `snapshot()`, `readPixelMap()`,
-  `getDefaultRuntime()`, `addRuntimeEventListener()`. Expression functions take
-  their operator's name in camelCase (`featureState`), with words for symbols
-  (`eq`, `add`) and `cases` for the reserved `case`; operators without arguments
-  are functions too (`zoom()`). `fp()`, which scales a size by the font scale
-  that the map sets, takes the name of ArkUI's unit.
-- Enum members are lowerCamelCase (`ScaleBarUnits.metric`), as FFI's are
-  (`CameraUpdateMode.fly`), so an app sees one style. Internal constants are
-  UPPER_SNAKE_CASE (`TAP_SLOP`), as the ArkTS style guide says; there are no
-  public constants.
-- Acronyms are words in code (`GeoJsonFeature`, `LatLng`), and spelled as usual
-  in prose (GeoJSON). Where the style spec has a term, use it: `bearing`,
-  `pitch`, `sourceLayer`, `minZoom`. Options that the library turns into a layer
-  take the spec's values: colors as CSS strings, images by the name of a style
-  image, with `''` for none (`UserLocationIndicatorOptions.topImage`).
-- Screen distances are vp, the map's logical pixels, unless a name says
-  otherwise; durations end in `Ms` (`durationMs`); angles are degrees.
-- Re-exported FFI declarations keep FFI's names, except FFI's `Camera`, which is
-  `CameraPosition`: ArkUI reserves `Camera` for a built-in component.
+This guide covers every declaration that `library/Index.ets` exports. It doesn't
+cover internal code, the demo app, or the tests.
 
-## State
+The API is designed for apps written in strict ArkTS with ArkUI's state
+management V2. It should read like ArkUI's own components and options, so that
+an ArkUI developer can guess it.
 
-- Components use state management V2 only: `@Param` for inputs, with a default
-  or `@Require`; `@Once` for the inputs that `MapLibreMap` binds to at creation
-  (`controller`, `runtime`); `@Event` for callbacks, with a no-op default;
-  `@BuilderParam` for trailing-closure content, named for what it holds
-  (`MapLibreMap.overlays`, since `content` is what the map draws, and
-  `MapPlacedAt.content`); `@Local` for the component's own state. No V1
-  decorators, no AppStorage or LocalStorage.
-- Params don't take names that ArkUI's universal attributes and events use,
-  which a custom component can't redeclare: `overlay`, `size`, `onClick`. A
-  pin's tap is `onTap`.
-- The controls and placements in a map's overlay find the map themselves, as
-  Compose's do through `LocalMapState`, so they take no controller. ArkUI's
-  `@Consumer` can't find it: it looks up the components that own it, and the app
-  owns what it writes in the map's trailing closure. So the map tags its root
-  node, and each control walks up the frame nodes from its own root node once
-  that attaches. Outside a map, a control draws nothing.
-- A component follows a `@Param` change with `@Monitor`, which hands the new
-  value to the imperative layer (`MapView`). Every declarative input has an
-  imperative operation under it.
-- Controllers are `@ObservedV2` classes. `@Trace` goes only on state an app
-  shows: `camera` (where the camera rests), `styleLoaded`, `attributions`, and
-  `followingUserLocation`. The map sets them; apps read them.
-- Values that change every frame live in one private traced field, the frame's
-  view, read through `frameCamera` and the projection methods. Components read
-  them in `@Computed` getters (`MapPlacedAt.point`, `MapCompassButton.bearing`),
-  so per-frame work stays in the components that ask for it.
-- The camera that the controller reads, reports, and takes is the app's. Its
-  `padding` is camera state that moves and fits set; the map's `viewportInsets`,
-  which describe the layout, add to it on the FFI map and never show in a camera
-  that the app reads or saves. A fit's `fitPadding` lasts for that fit only.
-- Data passed to a component is a value, not observed inside: `MapContent`,
-  `MapInteractionOptions`, `UserLocationIndicatorOptions`, `userLocation`. A new
-  value is a change; the component compares it with the last one (content by ID,
-  then by JSON or reference), so a literal that `build()` writes anew changes
-  nothing that stayed the same.
+Each section lists rules, then examples. A rule taken from another guide ends
+with a bracketed number, such as [1], that links to the relevant section; the
+guides are also listed under Sources at the end. If a rule doesn't fit a case,
+change the rule in the same PR instead of making an exception in code.
 
-## FFI: wrap or re-export
+Rules enforced deterministically, such as by the ArkTS linter, should be removed
+from this guide.
 
-- Re-export from `Index.ets` every FFI type that the API takes or returns, and
-  the FFI API that apps call directly (the style API's types, request handlers,
-  offline regions, events, and logs), so an app imports only `@maplibre/arkui`.
-- Expose FFI's handles where apps need more than the library wraps:
-  `MapController.runtime`, `map`, and `renderSession`, documented with what not
-  to do to them (release them, change the style through them).
-- Wrap only where ArkUI needs what FFI can't give: a component and its lifecycle
-  (`MapLibreMap`), observable state (`MapController`), camera padding apart from
-  the viewport insets, and fits whose margin doesn't stay in the camera (FFI
-  keeps a fit's padding, as MapLibre Native does), ArkUI and Kit types
-  (`PixelMap` in `readPixelMap()` and `snapshot()`, Location Kit's `Location`),
-  ownership that FFI gives one caller (the runtime's event handler, shared
-  through `addRuntimeEventListener()`; each map's event mask, the union of the
-  map events that the listeners ask for; and the process's network status, which
-  `setConnectivityMode()` and the device's network set), declarative data
-  (`MapContent`), and types that strict ArkTS needs for literals (GeoJSON,
-  expressions).
-- A wrapper names the FFI call it makes and doesn't repeat FFI's docs.
+## 2. Naming
 
-## Errors
+- Name classes, interfaces, and components with nouns, and functions with verbs.
+  Avoid filler words such as `Manager` and `Wrapper`.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#2-naming)
+- Don't repeat the library's name or the word `Map` in a name, because the
+  import already says where it comes from. Add `Map` only when the name would
+  otherwise be a generic word.
+- Don't take a name that ArkUI declares globally, such as a component or a type
+  in scope in every file.
+- Use UpperCamelCase for classes, interfaces, enums, and components, and
+  lowerCamelCase for functions, members, and parameters.
+  [[2]](https://gitee.com/openharmony/docs/blob/master/en/contribute/OpenHarmony-ArkTS-coding-style-guide.md)
+- Use UPPER_SNAKE_CASE for enum members.
+  [[2]](https://gitee.com/openharmony/docs/blob/master/en/contribute/OpenHarmony-ArkTS-coding-style-guide.md)
+- Treat acronyms, initialisms, and MapLibre as words in code: `GeoJson`,
+  `Maplibre`. In prose, use the usual spelling: GeoJSON, MapLibre.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#2-naming)
+- When the MapLibre style spec has a term for something, use it, in camel case.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#2-naming)
+- Name a class that the app creates and passes to a component to read and
+  control it `<Thing>Controller`, as ArkUI's `TextController` is.
+- Name settings `<Thing>Options`, after what they configure.
+- Name events `on` and what happened. When ArkUI's universal events already take
+  the name, add the component's noun.
+- Don't give booleans an `is` prefix or a negative name.
+  [[2]](https://gitee.com/openharmony/docs/blob/master/en/contribute/OpenHarmony-ArkTS-coding-style-guide.md)
+- In the expression DSL, write operators that take no arguments as functions,
+  not constants: `zoom()`, not `ZOOM`.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#2-naming)
+- Start resource names with `maplibre_`, because the library's resources merge
+  into the app's.
 
-- Work that finishes later returns a promise. A camera move resolves with its
-  `CameraTransitionOutcome` however it ends (`completed`, `cancelled`,
-  `replaced`, `closed`), since being stopped is not an error. It rejects when it
-  can't start: no map shows the controller, or the map rejects the change (FFI's
-  `MaplibreError`).
-- A call that correct code never makes throws an `Error` whose message names the
-  rejected value (`readPixelMap()` with an unsupported pixel format).
-- A read that can't answer yet returns `undefined` rather than throwing:
-  `getCamera()`, `frameCamera`, `pixelForLatLng()`, `map`, `renderSession`.
-- Failures while the map runs, which have no caller to reject, go to
-  `onMapError` and to the log with a `MapLibre:` prefix: a style that fails to
-  load, a frame that fails to render, content the map rejects. Rejected content
-  stays out until it changes; the rest applies.
-- A runtime event listener that throws is logged, and the other listeners still
-  get the event. An `onMapError` handler that throws is logged too, and the map
-  goes on.
-- A promise that the library starts and nobody awaits ends in a `.catch()` that
-  logs.
+```ets
+// Do
+CompassButton()
 
-## Async and lifecycle
+interface GeoJsonSourceOptions {}
 
-- A component owns the FFI objects it creates: `MapLibreMap` creates its map and
-  render session as it appears and releases them as it disappears. A controller
-  outlives its maps and keeps the camera between them.
-- The library creates the default runtime on first use and keeps it for the
-  app's life; an app that passes its own runtime owns it. The monitor of the
-  device's network starts as a runtime is first used and lasts as long.
-- FFI's map is usable once its `ready` settles, so the controller exposes it
-  only after that.
-- FFI commands whose order matters are awaited one at a time
-  (`ContentReconciler`), not pipelined. Commands whose result doesn't matter use
-  FFI's `discarding` form.
-- Callbacks and events run on the ArkTS main thread, where FFI delivers them.
+class MapController {}
 
-## Strict ArkTS
+enum ScaleBarUnits {
+  METRIC,
+  FEET_AND_MILES,
+}
 
-- Strict ArkTS takes an object literal only for a declared type, so the API
-  declares an interface for every literal an app writes (options, `MapContent`,
-  GeoJSON). Interfaces for literals have no methods; a callback is a
-  function-typed field (`LayerPredicate`).
-- Style-spec JSON is `Record<string, Object>` with quoted keys, and each nested
-  object goes in a variable of its own type.
-- No structural typing: open unions are matched by a `kind` field (FFI's
-  results) or `instanceof` (`Expression`). An open style-spec name is a `string`
-  (`MapLayer.type`); a closed GeoJSON tag is a string-literal type
-  (`type: 'Feature'`).
-- No spread or destructuring: copy fields by name
-  (`MapController.transition()`).
-- Import `@ohos.*` modules, not `@kit.*`.
+enabled?: boolean;
 
-## Doc comments
+@Event onMapClick: (event: MapClickEvent) => boolean;
 
-- Every export and public member has a `/** */` comment. Its first sentence says
-  what the declaration is or does; the rest states defaults, units, when it's
-  observable, and what rejects or throws.
-- Comments are prose: code in backticks, functions with parentheses
-  (`getCamera()`), no JSDoc tags (`@param`, `@returns`, `{@link}`). Add an
-  ` ```ets ` example where the usage isn't plain from the signature.
-- A public member that only the library should call, because ArkTS has no
-  package-private members, starts its comment with "Internal:".
-- Internal code uses `//` comments that say why.
-- The documentation's examples are regions of the demo's `ets/docs/`, which the
-  demo build compiles and the site build cuts out by name. `mise run check`
-  matches the READMEs' examples against those files.
+// Don't
+MapCompassButton()
 
-## Resources and localization
+interface GeoJSONSourceOptions {}
 
-- Text that the controls show or read out comes from the HAR's resources, in
-  `library/src/main/resources`, through `$r('app.string.maplibre_…')`. The build
-  merges them into the app's, so each name starts with `maplibre_`, and an app's
-  resource of the same name wins, which lets an app change a label.
-- The strings start from MapLibre Compose's translations, in OpenHarmony's
-  qualifier directories (`zh` for Simplified Chinese, `zh_Hant` for
-  Traditional).
-- Numbers with units format with `@ohos.intl` in the app's language, as the
-  scale bar's do, rather than with unit strings.
-- Colors and system icons are `sys.*` resources, so the controls follow dark
-  mode.
+class Controller {}
 
-## Compared with MapLibre Compose
+enum ScaleBarUnits {
+  Metric,
+  FeetAndMiles,
+}
 
-These carry over from the
-[MapLibre Compose API guidelines](https://maplibre.org/maplibre-compose/api-guidelines/):
-nouns for types and verbs for functions; acronyms as words; style-spec terms;
-operators without arguments as functions; the same names for the same things
-across related calls; viewport insets apart from camera padding, and a fit's
-`fitPadding` and `cameraPadding`; no answer as `undefined` (Compose's `null`),
-not an exception; unsurprising behavior over documented surprises; and docs that
-state the contract.
+isDisabled?: boolean;
 
-These don't:
+@Event onClick: (event: MapClickEvent) => boolean; // a universal event
+```
 
-- Constants and enum entries: Compose uses PascalCase; this library follows
-  FFI's lowerCamelCase enums and the ArkTS style guide's UPPER_SNAKE_CASE for
-  internal constants.
-- Types that may grow: Compose picks among enums, value classes, and sealed
-  types with internal subtypes. ArkTS has no value classes, sealed types, or
-  internal constructors, so open names are strings and FFI's results are
-  `kind`-tagged unions.
-- Options: Compose uses data classes with private constructors and builders, so
-  adding an option can't break a constructor. Here options are interfaces of
-  optional fields, where a new optional field breaks nothing.
-- Input: Compose's `MapInteractions` has presets, and its `MapUiOptions` binds
-  each input to an action, so one API fits engines whose input differs. Here the
-  input of one platform maps to fixed actions, and `MapInteractionOptions` keeps
-  Compose's semantics for what apps choose: a switch and an `onStart` for each
-  movement, what the wheel does, and the bearings that rotation snaps and ticks
-  at.
-- Compose's composable rules (`Modifier` first, `remember*`, `XState` holders,
-  `CompositionLocal`, `@Stable`) map to ArkUI's own idioms above: attributes on
-  the component, a controller the app creates, `@Param` / `@Event`, and
-  `@ObservedV2`. ArkUI has no custom modifiers, so Compose's `placedAt` and
-  `placedTowards` are components that wrap their content, and
-  `PlacedTowardsState` is `MapPlacedTowards.onAngleChange`.
-- The controls' styles: Compose's base controls draw in fixed colors, with a
-  Material 3 module for themed ones. Here the controls draw with the system's
-  `sys.*` colors, so they follow dark mode, and take no style params.
-- Compose throws feature exceptions (`MapSnapshotException`); this library
-  rejects promises with FFI's or plain errors, and reports the rest to
-  `onMapError`.
-- Platform prefixes, `@IntroducedAt`, and stability annotations have no use here
-  yet: there is one platform, and the API is a preview.
+## 3. General API design
 
-## Follow-ups from the audit
+- Build on a small set of core operations, and add conveniences that combine
+  them. Give every declarative feature imperative operations that apps can also
+  call.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#3-general-api-design)
+- Keep a type's members to its core concept.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#3-general-api-design)
+- Prefer small pieces that callers combine over more parameters.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#3-general-api-design)
+- Use the same parameter names, types, and order across related functions, from
+  general to specific.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#3-general-api-design)
+- Avoid `boolean` arguments whose meaning isn't clear at the call site.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#3-general-api-design)
+- Choose the failure by whether correct code could have avoided it:
+  - A programming error is a call that correct code never makes, such as an
+    invalid argument. Throw an `Error` whose message describes the problem and
+    includes the rejected value.
+  - Work that finishes later returns a promise, which rejects when the work
+    fails. Being stopped or replaced is an outcome that the promise resolves
+    with, not a failure.
+  - A failure with no caller to reject, such as a style that fails to load, goes
+    to the component's error event and to the log.
+    [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#3-general-api-design)
+- Return `undefined` when data can't be found or computed. Don't use exceptions
+  for control flow.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#3-general-api-design)
+- Make behavior unsurprising instead of documenting a surprise. When behavior is
+  wrong, fix it instead of documenting it.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#3-general-api-design)
+- Don't keep state in global variables or stateful top-level functions. Let
+  callers pass the object in.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#3-general-api-design)
 
-The audit for the first preview fixed small gaps (missing docs on content,
-marker, and control members; `{@link}` tags; `FollowLocationOptions`, now
-`FollowUserLocationOptions`). These are larger:
+```ets
+// Do
+controller.updateCamera({ zoom: 12 }, { mode: CameraTransitionMode.EASE });
 
-- `MapController` has public methods that only the map calls (`attach()`,
-  `detach()`, `showFrame()`, `followCamera()`), marked "Internal:". A
-  module-private registry could hide them.
-- Open names that are plain strings (`MapLayer.type`, `GeoJsonGeometry.type`)
-  could become string-literal unions once static ArkTS is checked
-  ([#28](https://github.com/sargunv/maplibre-arkui/issues/28)).
-- Errors are plain `Error`s with messages; an app can't tell "no map on screen"
-  from other rejections except by message. A named error, if apps need it.
+throw new Error(`Unsupported pixel format: ${format}`);
+
+// Don't
+controller.updateCamera({ zoom: 12 }, true);
+
+throw new Error('Unsupported pixel format');
+```
+
+## 4. Types that may grow
+
+Every enum, union, and set of named values is one of four kinds. Choose the kind
+by what any later release might add, because changing the shape later is a
+breaking change.
+[[1]](https://maplibre.org/maplibre-compose/api-guidelines/#4-types-that-may-grow)
+
+| Kind           | Use when                                                                           | Declare as                                    | Example        |
+| -------------- | ---------------------------------------------------------------------------------- | --------------------------------------------- | -------------- |
+| Closed         | The values can never change, because they describe math or a fixed protocol        | A string-literal type                         | GeoJSON's tags |
+| Open input     | Callers only pass values in                                                        | `enum`                                        | `WheelAction`  |
+| Open identity  | A raw name from the style spec or the engine, possibly one with no named value yet | `string`                                      | A layer's type |
+| Open structure | The library returns it                                                             | A union of classes, matched with `instanceof` | `MapEvent`     |
+
+- State the kind in the doc comment: "Closed." or "Values may be added in later
+  releases; give a `switch` over it a `default` branch."
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#4-types-that-may-grow)
+- When a value means "no answer", use `undefined` instead of a named catch-all
+  such as `UNKNOWN`.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#4-types-that-may-grow)
+
+```ets
+// Open identity: holds a type that a later style spec adds
+type: string;
+
+// Don't: an enum can't hold a value this version doesn't name
+type: LayerType;
+```
+
+## 5. Options and configuration
+
+- Declare settings as interfaces that callers write as object literals, as
+  ArkUI's own options are.
+- Make a field optional when it has a default, and required when it doesn't.
+  State the default in the field's doc comment.
+- Don't give interfaces that callers write methods. Make a callback a
+  function-typed field.
+- Nest the settings of one part of a feature as their own options.
+- When several functions share settings, have one options interface extend
+  another, so the shared fields keep one name and one doc comment.
+- Take style-spec JSON as `Record<string, Object>` with the spec's keys.
+- Don't start rejecting a value that an earlier release accepted.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#5-options-and-configuration)
+
+```ets
+export interface CameraTransitionOptions {
+  /** Whether the camera jumps, eases, or flies. Jumps by default. */
+  mode?: CameraTransitionMode;
+  /** How long the camera takes. */
+  durationMs?: number;
+}
+
+export interface FitCameraOptions extends CameraTransitionOptions {
+  /** Space around what the camera fits. None by default. */
+  fitPadding?: Padding | LocalizedPadding;
+}
+
+controller.fitCameraToBounds(bounds, {
+  mode: CameraTransitionMode.EASE,
+  fitPadding: { top: 24, bottom: 24 },
+});
+```
+
+## 6. Components
+
+### Parameters
+
+- Use state management V2 only. Don't use V1 decorators, AppStorage, or
+  LocalStorage.
+  [[3]](https://gitee.com/openharmony/docs/blob/master/en/application-dev/ui/state-management/arkts-state-management-overview.md)
+- Order parameters: required, then optional, then events, then the builder
+  parameter.
+- Give each `@Param` a default in its initializer or mark it `@Require`, and
+  give each `@Event` a no-op default.
+- Make a parameter `| undefined` only when absence means something, never to
+  mean "use the default".
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#6-composables)
+- Use `@Once` only for what a component binds to as it's created.
+- Name a `@BuilderParam` for what it holds.
+- Don't add a parameter for something an attribute can do, unless it's core to
+  the component.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#6-composables)
+- Take values for data, not observed objects. Compare a new value with the last
+  one, so that a literal that `build()` writes anew changes nothing that stayed
+  the same.
+- A component meant for the map's overlay finds its map itself, and takes no
+  controller.
+
+### State
+
+- Hoist caller-controlled state into an `@ObservedV2` controller that the caller
+  creates and passes as `controller`. Default the parameter to a new controller.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#6-composables)
+- Put `@Trace` only on state that callers show. Expose state that only the
+  library changes through a getter, so callers can't assign it.
+- Keep members that only the library calls off public classes.
+- Expose values that change every frame as one traced value, so per-frame work
+  stays in the components that read it.
+
+```ets
+@ComponentV2
+export struct Marker {
+  /** Where the content goes. */
+  @Require @Param coordinate: LatLng;
+  /** The point of the content that sits on the coordinate. The center by default. */
+  @Param alignment: Alignment = Alignment.Center;
+  /** The content. */
+  @BuilderParam content: () => void = noContent;
+}
+
+@ObservedV2
+export class MapController {
+  @Trace private loaded: boolean = false;
+
+  /** Whether the map's style has loaded. */
+  get styleLoaded(): boolean {
+    return this.loaded;
+  }
+}
+```
+
+## 7. Callbacks
+
+- When a callback receives information from the library, such as an event, pass
+  it as one parameter of a library type, so that the type can gain fields.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#7-callbacks)
+- Name callback types by role: a `<Thing>Handler` handles one event, and a
+  `<Thing>Listener` is added and removed.
+- Return `true` from a handler to consume the event, so the handlers after it
+  don't get it, as ArkUI's `onKeyEvent` does.
+- Make a callback that may wait on I/O return a promise.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#7-callbacks)
+- Document which thread each callback runs on and what happens if it throws.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#7-callbacks)
+- Log an exception from a listener or handler, and keep calling the others.
+
+```ets
+// Do
+export type FeatureClickHandler = (event: FeatureClickEvent) => boolean;
+
+// Don't
+export type FeatureClickHandler = (features: GeoJsonFeature[], x: number, y: number) => boolean;
+```
+
+## 8. Types the library creates
+
+Events, query results, and frame state are created by the library and only read
+by callers.
+
+- Declare them as interfaces, or as classes with a private constructor. Add
+  fields in any release.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#8-types-the-library-creates)
+- When state can change outside the caller's control, and the caller can't check
+  it first without a race, return `undefined` from reads instead of throwing.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#3-general-api-design)
+
+```ets
+export interface MapClickEvent {
+  /** The coordinate under the click. */
+  coordinate: LatLng;
+  /** The click's position on the map. */
+  point: ScreenPoint;
+}
+```
+
+## 9. MapLibre Native FFI
+
+FFI is an implementation detail.
+
+- Declare the library's own types for what the API takes and returns, even where
+  FFI has a type for the same thing. Don't re-export or alias FFI's
+  declarations.
+- Don't expose FFI's objects as properties, parameters, or return values. For
+  what the library doesn't cover yet, lend FFI's map only for the length of a
+  callback, and document that FFI's types may change in any release.
+- When callers commonly need the escape hatch for something, add it to the
+  library's API.
+
+```ets
+// Do
+export interface LatLng {
+  latitude: number;
+  longitude: number;
+}
+
+withFfiMap<T>(block: (map: MapHandle) => T): T | undefined;
+
+// Don't
+export type { LatLng } from '@maplibre/native-ffi';
+
+get map(): MapHandle | undefined;
+```
+
+## 10. Units and value types
+
+- Use a typed value when one exists for the quantity (see the table).
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#10-units-and-value-types)
+- When a plain number's unit isn't the one in the table, end its name with the
+  unit.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#10-units-and-value-types)
+- Don't use number types for identifiers.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#10-units-and-value-types)
+
+| Quantity                       | Type                                       |
+| ------------------------------ | ------------------------------------------ |
+| Geographic position and bounds | The library's `LatLng` and `LatLngBounds`  |
+| Geometry                       | The library's GeoJSON types                |
+| Screen position                | The library's `ScreenPoint`, in vp         |
+| Screen distance                | `number`, in vp                            |
+| Duration                       | `number`, named `…Ms`, in milliseconds     |
+| Angle and bearing              | `number`, in degrees, clockwise from north |
+| Insets                         | ArkUI `Padding` or `LocalizedPadding`      |
+| Color                          | ArkUI `ResourceColor`                      |
+| Image                          | `image.PixelMap`                           |
+| Location from Location Kit     | `geoLocationManager.Location`              |
+
+```ets
+durationMs: number; // Do
+duration: number; // Don't: the unit isn't in the name
+color: ResourceColor; // Do
+color: string; // Don't
+```
+
+## 11. Documentation
+
+- Write a `/** */` comment for every public declaration.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#11-documentation)
+- Write it as the contract: behavior, parameters, return values, lifecycle,
+  threading, and what rejects or throws. Don't describe how it's implemented.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#11-documentation)
+- Start with one sentence that says what the declaration does, without restating
+  the signature.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#11-documentation)
+- State valid input ranges, what happens with invalid input, and every error.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#11-documentation)
+- Add an example only when usage isn't clear from the signature and the comment.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#11-documentation)
+- Write simple English, without idioms, Latin abbreviations, or jargon.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#11-documentation)
+- Keep contracts out of the docs site. Site pages introduce concepts and common
+  tasks, and link to the API reference for details.
+  [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#11-documentation)
+
+```ets
+/**
+ * Shows a button that turns the map back to north.
+ *
+ * Tapping it animates the camera's bearing to 0.
+ */
+```
+
+## 12. Stability and compatibility
+
+Until 1.0, any release may break the API. The PR that breaks it says how to
+migrate.
+
+## Sources
+
+1. [MapLibre Compose API guidelines](https://maplibre.org/maplibre-compose/api-guidelines/):
+   the sibling library's rules for its public API.
+2. [ArkTS coding style guide](https://gitee.com/openharmony/docs/blob/master/en/contribute/OpenHarmony-ArkTS-coding-style-guide.md):
+   naming.
+3. [State management overview](https://gitee.com/openharmony/docs/blob/master/en/application-dev/ui/state-management/arkts-state-management-overview.md):
+   state management V1 and V2.
+
+Each rule taken from one of these guides ends with its number, linked to the
+relevant section. Rules without a citation are this project's own.
