@@ -558,11 +558,12 @@ export class MapView extends XComponentController implements GestureTarget, Runt
 
   // The camera leaves rest as the gesture starts, after onGestureStart, or
   // the gesture takes over the move under way, unless the app's move in
-  // onGestureStart ended the gesture.
+  // onGestureStart ended the gesture. Before the FFI map exists, the input
+  // moves nothing (applyCameraDelta drops it), so no move starts.
   gestureStarted(): void {
     this.gestureStarts++;
     this.events.onGestureStart();
-    if (!this.disposed && !this.gestures.idle) {
+    if (!this.disposed && !this.gestures.idle && this.map !== undefined) {
       this.cameraMovedBy(CameraMoveReason.GESTURE);
     }
   }
