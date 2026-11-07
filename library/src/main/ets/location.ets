@@ -9,37 +9,49 @@ import { LengthMetricsUnit } from '@ohos.arkui.node';
 import geoLocationManager from '@ohos.geoLocationManager';
 import image from '@ohos.multimedia.image';
 
+import { LayerPredicate } from './Content';
+import { resolveColor, StyleColor } from './StyleColor';
 import { readPixelMap } from './StyleImage';
 
 // The `location-indicator` layer that draws `userLocation`. It exists only
 // while the map has a location, so it's internal.
 export const USER_LOCATION_LAYER = 'maplibre-arkui-user-location';
 
-/** Which direction `MapController.followUserLocation()` turns the map to point up. */
+/**
+ * Which direction `MapController.followUserLocation()` turns the map to point
+ * up. Values may be added in later releases; give a `switch` over it a
+ * `default` branch.
+ */
 export enum FollowBearing {
   /** The direction of travel, while the location has one: a `speed` above 0. */
-  course,
+  COURSE,
   /** The map's `userHeading`, the direction that the device faces, while it has one. */
-  heading,
+  HEADING,
 }
 
 /** How `MapController.followUserLocation()` moves the camera. */
 export interface FollowUserLocationOptions {
-  /** The zoom that the camera eases to as it starts to follow. Keeps the zoom by default. */
+  /**
+   * The zoom that the camera eases to with its first move to the location.
+   * Keeps the zoom by default. A zoom by the user or the app before that move
+   * takes its place.
+   */
   zoom?: number;
   /**
-   * The direction that the map turns to point up. While there is none, and
-   * by default, the camera keeps its bearing.
+   * The direction that the map turns to point up, which
+   * `MapController.followedBearing` reports until the user or the app turns
+   * the map. While there is none, and by default, the camera keeps its
+   * bearing.
    */
   bearing?: FollowBearing;
 }
 
 /**
- * How the map draws `userLocation`: the colors of its default images and of
- * its accuracy circle, images of the style's own in their place, and the layer
- * it goes under. Fields that it leaves out keep their defaults. For more, such
- * as transitions or sizes, leave `userLocation` out and draw a
- * `location-indicator` layer in the map's `content`.
+ * How the map draws `userLocation`: whether it draws it, the colors of its
+ * default images and of its accuracy circle, images of the style's own in
+ * their place, and the layer it goes under. Fields that it leaves out keep
+ * their defaults. For more, such as transitions or sizes, set `visible` to
+ * false and draw a `location-indicator` layer in the map's `content`.
  *
  * ```ets
  * MaplibreMap({
@@ -49,17 +61,37 @@ export interface FollowUserLocationOptions {
  *   userLocationIndicator: { color: '#e53935', below: 'road-label' },
  * })
  * ```
+ *
+ * A color that ArkUI can't resolve, such as a missing resource, goes to the
+ * map's `onError` and the log, and its default takes its place. The colors
+ * resolve again when the color mode changes, so a color resource can have a
+ * dark-mode value.
+ *
+ * The map compares the options with the last ones by value, and a predicate
+ * `below` by the layer that it picks, so options that `build()` writes anew
+ * change nothing that stayed the same.
  */
 export interface UserLocationIndicatorOptions {
   /**
-   * The color of the default dot, which has a white border, and of the
-   * default arrow, as a CSS color. `#1e88e5` by default.
+   * Whether the map draws the indicator. True by default; false draws nothing,
+   * while the camera still follows `userLocation`.
    */
-  color?: string;
-  /** The fill of the circle that shows the location's `accuracy`, as a CSS color. */
-  accuracyColor?: string;
-  /** The border of the circle that shows the location's `accuracy`, as a CSS color. */
-  accuracyBorderColor?: string;
+  visible?: boolean;
+  /**
+   * The color of the default dot, which has a white border, and of the
+   * default arrow. `'#1e88e5'` by default.
+   */
+  color?: ResourceColor;
+  /**
+   * The fill of the circle that shows the location's `accuracy`. By default,
+   * `color` at 15% of its own alpha.
+   */
+  accuracyColor?: ResourceColor;
+  /**
+   * The border of the circle that shows the location's `accuracy`. By
+   * default, `color` at 50% of its own alpha.
+   */
+  accuracyBorderColor?: ResourceColor;
   /**
    * The name of the image that marks the location, in place of the default
    * dot: one of the style's, or of the map's `content.images`. `''` draws none.
@@ -77,12 +109,14 @@ export interface UserLocationIndicatorOptions {
    */
   shadowImage?: string;
   /**
-   * The ID of the layer, of the base style or of the map's `content`, that
-   * the indicator goes under. Without it, or when neither has such a layer as
-   * the indicator appears, the indicator goes above every layer. A layer that
-   * the app adds through `MapController.withFfiMap()` doesn't count.
+   * Places the indicator under another layer, as `StyleLayer.below` places a
+   * layer: the base-style or content layer with this ID, or the lowest
+   * base-style layer that the predicate picks. Without it, or when no layer
+   * matches as the indicator appears, the indicator goes above every layer.
+   * A layer that the app adds through `MapController.withFfiMap()` doesn't
+   * count.
    */
-  below?: string;
+  below?: string | LayerPredicate;
 }
 
 // How long the indicator and a following camera take to reach a new location.
@@ -101,8 +135,10 @@ export const BORDER_RADIUS = 10;
 const DOT_SIZE = 24;
 const ARROW_SIZE = 36;
 const SHADOW_SIZE = 28;
-const ACCURACY_COLOR = 'rgba(30, 136, 229, 0.15)';
-const ACCURACY_BORDER_COLOR = 'rgba(30, 136, 229, 0.5)';
+// The accuracy circle's default fill and border, as fractions of the color's
+// alpha.
+const ACCURACY_OPACITY = 0.15;
+const ACCURACY_BORDER_OPACITY = 0.5;
 
 // Location Kit reports a direction even at rest, so only a moving location has
 // a course.
@@ -116,6 +152,13 @@ function arrowBearing(location: geoLocationManager.Location, heading: number | u
   return heading ?? course(location);
 }
 
+// The indicator's colors, as the style takes them.
+interface IndicatorColors {
+  color: string;
+  accuracy: string;
+  accuracyBorder: string;
+}
+
 // The indicator layer of one map. A new style starts without it, so the view
 // adds it again as each style loads, and new options add it again. It goes in
 // after the content that the map is applying, so it can go under a layer of
@@ -124,8 +167,12 @@ export class UserLocationLayer {
   private readonly density: number;
   private readonly fail: (error: Error) => void;
   private readonly contentApplied: () => Promise<void>;
-  private readonly hasLayer: (id: string) => boolean;
+  // The ID of the layer that a `below` picks now, or '' for none.
+  private readonly layerBelow: (below: string | LayerPredicate) => string;
   private options: UserLocationIndicatorOptions;
+  // The options as JSON, which a change draws again, and their colors.
+  private optionsJson: string;
+  private colors: IndicatorColors;
   private location: geoLocationManager.Location | undefined = undefined;
   private heading: number | undefined = undefined;
   private loaded: boolean = false;
@@ -133,14 +180,18 @@ export class UserLocationLayer {
   // Counts the adds and removals, so an add that waits stops once it's stale.
   private changes: number = 0;
   private hasArrow: boolean = false;
+  // The layer that the indicator went under, or '' for the top.
+  private before: string = '';
 
   constructor(density: number, options: UserLocationIndicatorOptions, contentApplied: () => Promise<void>,
-    hasLayer: (id: string) => boolean, fail: (error: Error) => void) {
+    layerBelow: (below: string | LayerPredicate) => string, fail: (error: Error) => void) {
     this.density = density;
-    this.options = options;
     this.contentApplied = contentApplied;
-    this.hasLayer = hasLayer;
+    this.layerBelow = layerBelow;
     this.fail = fail;
+    this.options = options;
+    this.optionsJson = optionsJson(options);
+    this.colors = this.resolveColors();
   }
 
   styleLoaded(map: MapHandle, location: geoLocationManager.Location | undefined, heading: number | undefined): void {
@@ -157,12 +208,36 @@ export class UserLocationLayer {
     this.changes++;
   }
 
-  // Takes new options, which the next draw applies.
+  // Takes new options. Options that differ, or a predicate `below` that picks
+  // another layer, draw the indicator again.
   setOptions(map: MapHandle | undefined, options: UserLocationIndicatorOptions): void {
+    const json = optionsJson(options);
+    const changed = json !== this.optionsJson;
     this.options = options;
-    if (map !== undefined && this.loaded) {
-      this.remove(map);
+    if (changed) {
+      this.optionsJson = json;
+      this.colors = this.resolveColors();
     }
+    if (map === undefined || !this.loaded) {
+      return;
+    }
+    if (changed || (this.state === LayerState.added && this.below() !== this.before)) {
+      this.remove(map);
+      this.draw(map, this.location, this.heading);
+    }
+  }
+
+  // The color mode changed, so the colors resolve again, and an indicator in
+  // the style takes them.
+  colorModeChanged(map: MapHandle | undefined): void {
+    this.colors = this.resolveColors();
+    if (map === undefined || this.state !== LayerState.added) {
+      return;
+    }
+    this.addImages(map);
+    map.discarding.setStyleLayerProperty(USER_LOCATION_LAYER, 'accuracy-radius-color', this.colors.accuracy);
+    map.discarding.setStyleLayerProperty(USER_LOCATION_LAYER, 'accuracy-radius-border-color',
+      this.colors.accuracyBorder);
   }
 
   // Adds, moves, or removes the indicator. The style animates the move.
@@ -172,7 +247,7 @@ export class UserLocationLayer {
     if (!this.loaded) {
       return;
     }
-    if (location === undefined) {
+    if (location === undefined || this.options.visible === false) {
       this.remove(map);
       return;
     }
@@ -205,8 +280,8 @@ export class UserLocationLayer {
     this.changes++;
   }
 
-  // Adds the layer once the content in progress is in, under `below` if the
-  // base style or the content has it then, and above every layer otherwise.
+  // Adds the layer once the content in progress is in, under the layer that
+  // `below` picks then, and above every layer without one.
   private add(map: MapHandle): void {
     this.state = LayerState.adding;
     const change = ++this.changes;
@@ -216,13 +291,12 @@ export class UserLocationLayer {
       if (!current() || location === undefined) {
         return;
       }
-      const below = this.options.below;
-      const before = below !== undefined && this.hasLayer(below) ? below : '';
       const direction = arrowBearing(location, this.heading);
+      this.before = this.below();
       this.state = LayerState.added;
       this.hasArrow = direction !== undefined;
       this.addImages(map);
-      map.discarding.addStyleLayerJson(this.layerJson(location, direction), before);
+      map.discarding.addStyleLayerJson(this.layerJson(location, direction), this.before);
     }).catch((error: Error) => {
       if (current()) {
         this.fail(error);
@@ -230,10 +304,42 @@ export class UserLocationLayer {
     });
   }
 
+  // The layer that the options' `below` picks now, or '' for the top.
+  private below(): string {
+    const below = this.options.below;
+    return below === undefined ? '' : this.layerBelow(below);
+  }
+
+  // The options' colors, with the default in place of each that ArkUI can't
+  // resolve.
+  private resolveColors(): IndicatorColors {
+    const options = this.options;
+    const color = this.resolve(options.color, 'color') ?? resolveColor(DOT_COLOR);
+    return {
+      color: color.rgba(),
+      accuracy: this.resolve(options.accuracyColor, 'accuracyColor')?.rgba() ?? color.rgba(ACCURACY_OPACITY),
+      accuracyBorder: this.resolve(options.accuracyBorderColor, 'accuracyBorderColor')?.rgba() ??
+      color.rgba(ACCURACY_BORDER_OPACITY),
+    };
+  }
+
+  // Undefined without a color, or for one that fails, which the map reports.
+  private resolve(color: ResourceColor | undefined, name: string): StyleColor | undefined {
+    if (color === undefined) {
+      return undefined;
+    }
+    try {
+      return resolveColor(color);
+    } catch (error) {
+      this.fail(new Error(`userLocationIndicator.${name}: ${(error as Error).message}, so it takes its default`));
+      return undefined;
+    }
+  }
+
   // The default images that the options leave in place, in their color.
   private addImages(map: MapHandle): void {
     const options = this.options;
-    const color = options.color ?? DOT_COLOR;
+    const color = this.colors.color;
     if (options.topImage === undefined) {
       setImage(map, DOT_IMAGE, dotImage(this.density, color), this.density);
     }
@@ -265,8 +371,8 @@ export class UserLocationLayer {
       'bearing-transition': transition,
       'accuracy-radius': location.accuracy,
       'accuracy-radius-transition': transition,
-      'accuracy-radius-color': options.accuracyColor ?? ACCURACY_COLOR,
-      'accuracy-radius-border-color': options.accuracyBorderColor ?? ACCURACY_BORDER_COLOR,
+      'accuracy-radius-color': this.colors.accuracy,
+      'accuracy-radius-border-color': this.colors.accuracyBorder,
       'perspective-compensation': 0.85,
     };
     return { 'id': USER_LOCATION_LAYER, 'type': 'location-indicator', 'layout': layout, 'paint': paint };
@@ -278,6 +384,17 @@ enum LayerState {
   // Waiting for the content to go in first.
   adding,
   added,
+}
+
+// The options as JSON, with a `below` that names a layer, which can be one
+// that the content in progress adds. A predicate picks a base layer, which the
+// indicator compares by the layer it picks.
+function optionsJson(options: UserLocationIndicatorOptions): string {
+  const below = options.below;
+  const fields: (Object | undefined)[] = [options.visible, options.color, options.accuracyColor,
+    options.accuracyBorderColor, options.topImage, options.bearingImage, options.shadowImage,
+    typeof below === 'string' ? below : undefined];
+  return JSON.stringify(fields);
 }
 
 // The layer's location is latitude, longitude, and altitude, unlike GeoJSON.

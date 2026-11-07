@@ -37,13 +37,14 @@ export interface LayerSummary {
 }
 
 /**
- * Picks a layer of the base style, for `StyleLayer.below`.
+ * Picks a layer of the base style to place a layer under, for
+ * `StyleLayer.below` and `UserLocationIndicatorOptions.below`.
  *
- * It runs on the UI thread on each content pass, once for each base layer
- * from the bottom up until it returns `true`, so it must be fast and pure; the
- * map doesn't observe the state it reads. When it throws, the map reports the
- * exception to `MaplibreMap.onError` and the log, and the layer counts as
- * unmatched.
+ * It runs on the UI thread whenever the map places a layer that uses it, once
+ * for each base layer from the bottom up until it returns `true`, so it must
+ * be fast and pure; the map doesn't observe the state it reads. When it
+ * throws, the map reports the exception to `MaplibreMap.onError` and the log,
+ * and counts it as no match for that layer or the indicator.
  */
 export type LayerPredicate = (layer: LayerSummary) => boolean;
 
@@ -710,22 +711,37 @@ export class ContentReconciler {
     }
   }
 
-  // The base layer that a layer goes under, or '' for the top. A predicate
-  // that throws matches nothing.
+  /**
+   * The layer that `below` places a layer of the library's under, as the
+   * last pass left the style: the base-style or content layer with this ID,
+   * or the base layer that the predicate picks. '' when there's none. A
+   * predicate that throws is reported as `what`'s, and picks none.
+   */
+  layerBelow(below: string | LayerPredicate, what: string): string {
+    if (typeof below === 'string') {
+      return this.hasLayer(below) ? below : '';
+    }
+    return this.pick(below, what);
+  }
+
+  // The base layer that a layer goes under, or '' for the top.
   private resolve(layer: StyleLayer): string {
     const below = layer.below;
-    const base: LayerSummary[] = this.base ?? [];
-    let found: LayerSummary | undefined = undefined;
     if (typeof below === 'string') {
-      found = base.find((other: LayerSummary) => other.id === below);
-    } else if (below !== undefined) {
-      try {
-        found = base.find(below);
-      } catch (error) {
-        this.report(new MapError(`Content: the below predicate of layer ${layer.id} threw: ${(error as Error).message}`));
-      }
+      return (this.base ?? []).find((other: LayerSummary) => other.id === below)?.id ?? '';
     }
-    return found?.id ?? '';
+    return below === undefined ? '' : this.pick(below, `Content: the below predicate of layer ${layer.id}`);
+  }
+
+  // The base layer that `predicate` picks, or '' for none. One that throws is
+  // reported as `what`'s, and picks none.
+  private pick(predicate: LayerPredicate, what: string): string {
+    try {
+      return (this.base ?? []).find(predicate)?.id ?? '';
+    } catch (error) {
+      this.report(new MapError(`${what} threw: ${(error as Error).message}`));
+      return '';
+    }
   }
 }
 

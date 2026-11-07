@@ -136,9 +136,9 @@ export struct MaplibreMap {
    */
   @Param userHeading: number | undefined = undefined;
   /**
-   * How the map draws `userLocation`: its colors, images of the style's own,
-   * and the layer that it goes under. The default is a blue dot with an arrow
-   * and a shadow, above every layer.
+   * How the map draws `userLocation`: whether it draws it, its colors, images
+   * of the style's own, and the layer that it goes under. The default is a
+   * blue dot with an arrow and a shadow, above every layer.
    */
   @Param userLocationIndicator: UserLocationIndicatorOptions = {};
   /**
@@ -157,8 +157,9 @@ export struct MaplibreMap {
   };
   /**
    * Something failed while the map runs, such as a style that fails to load,
-   * a frame that fails to render, part of `content` that the map rejects, or
-   * an invalid `viewportInsets`, `cameraBounds`, or bearing of `interactions`.
+   * a frame that fails to render, part of `content` that the map rejects, an
+   * invalid `viewportInsets`, `cameraBounds`, or bearing of `interactions`, or
+   * a color of `userLocationIndicator` that doesn't resolve.
    * See `MapError` for its kinds. The map also logs each. Called on the UI
    * thread; the map logs what it throws.
    */
@@ -166,10 +167,12 @@ export struct MaplibreMap {
   };
   /**
    * The user started a gesture, which moves the camera. The `onStart` of
-   * `interactions` tells which way, such as a pan that stops following the
-   * user's location. `InteractionOptions` describes what a gesture is and the
-   * order of the gesture events. Called on the UI thread; the map logs what
-   * it throws, and the gesture goes on.
+   * `interactions` tells which way. A pan has already stopped following the
+   * user's location, and a rotation has cleared the followed bearing, so the
+   * controller's `followingUserLocation` and `followedBearing` show it.
+   * `InteractionOptions` describes what a gesture is and the order of the
+   * gesture events. Called on the UI thread; the map logs what it throws, and
+   * the gesture goes on.
    */
   @Event onGestureStart: () => void = () => {
   };

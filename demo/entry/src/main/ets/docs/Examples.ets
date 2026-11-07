@@ -557,14 +557,12 @@ struct LocationExample {
         style: STYLE,
         controller: this.controller,
         userLocation: this.location,
-        // The user takes the camera as they start to pan. Zooms and rotations
-        // keep following.
-        interactions: { pan: { onStart: () => this.controller.stopFollowingUserLocation() } },
       })
+      // A pan stops following, and the button shows it.
       Button(this.controller.followingUserLocation ? 'Following' : 'Locate me')
         .margin(64)
         .onClick(() => {
-          this.controller.followUserLocation({ zoom: 16, bearing: FollowBearing.course });
+          this.controller.followUserLocation({ zoom: 16, bearing: FollowBearing.COURSE });
           this.startUpdates().catch((error: Error) => console.error(error.message));
         })
     }
@@ -649,9 +647,10 @@ struct HeadingExample {
         userLocation: this.location,
         userHeading: this.heading,
       })
-      Button('Face up')
+      // A twist keeps following but stops turning, and a tap turns again.
+      Button(this.controller.followedBearing === FollowBearing.HEADING ? 'Facing up' : 'Face up')
         .margin(64)
-        .onClick(() => this.controller.followUserLocation({ zoom: 16, bearing: FollowBearing.heading }))
+        .onClick(() => this.controller.followUserLocation({ zoom: 16, bearing: FollowBearing.HEADING }))
     }
   }
   // #endregion heading
@@ -668,11 +667,12 @@ struct IndicatorExample {
       style: STYLE,
       controller: this.controller,
       userLocation: this.location,
+      // The accuracy circle takes the color too. Without a shadow, and under
+      // the style's labels.
       userLocationIndicator: {
         color: '#e53935',
-        accuracyColor: 'rgba(229, 57, 53, 0.15)',
-        accuracyBorderColor: 'rgba(229, 57, 53, 0.5)',
         shadowImage: '',
+        below: (layer: LayerSummary) => layer.type === 'symbol',
       },
     })
     // #endregion location-indicator

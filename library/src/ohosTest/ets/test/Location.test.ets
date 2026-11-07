@@ -1,10 +1,11 @@
 // The user's location: the indicator that the map draws, and a camera that
-// follows it through the user's input until the app stops it. The locations and headings are made up, as an
-// app's test or its simulated walk makes them; the emulator's Location Kit has
-// no fixes, and it has no compass.
+// follows it until the user pans, the app moves the center, or the app stops
+// it. The locations and headings are made up, as an app's test or its
+// simulated walk makes them; the emulator's Location Kit has no fixes, and it
+// has no compass.
 
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
-import { FollowBearing, LatLng } from '@maplibre/arkui';
+import { FollowBearing, LatLng, LayerSummary } from '@maplibre/arkui';
 import { MapHandle, StyleLayerInfo } from '@maplibre/native-ffi';
 import {
   BORDER_RADIUS,
@@ -12,11 +13,10 @@ import {
   DOT_RADIUS,
   USER_LOCATION_LAYER,
 } from '@maplibre/arkui/src/main/ets/location';
-
 import geoLocationManager from '@ohos.geoLocationManager';
 import { Driver, Point } from '@ohos.UiTest';
 
-import { backgroundStyle, showsMap, testMap } from '../testability/TestMaps';
+import { backgroundStyle, showsMap, styleDocument, testMap } from '../testability/TestMaps';
 import {
   camera,
   eventually,
@@ -198,7 +198,7 @@ export default function locationTest(): void {
       expect(Math.abs(camera().bearing)).assertLessOrEqual(0.001);
 
       // With the course, the map turns while the location moves.
-      map.followUserLocation({ bearing: FollowBearing.course });
+      map.followUserLocation({ bearing: FollowBearing.COURSE });
       testMap.userLocation = fix(5.7, 6.7, 10, 3, 90);
       await until('the camera turns to the course', () =>
         restsAt(5.7, 6.7) && near(camera().bearing, 90, 0.001));
@@ -242,7 +242,7 @@ export default function locationTest(): void {
 
     it('turns the camera with each heading while it follows the heading', 0, async () => {
       const map = testMap.controller;
-      map.followUserLocation({ bearing: FollowBearing.heading });
+      map.followUserLocation({ bearing: FollowBearing.HEADING });
       // The course of a moving location doesn't turn it.
       testMap.userLocation = fix(5, 6, 10, 3, 90);
       testMap.userHeading = 30;
@@ -256,16 +256,15 @@ export default function locationTest(): void {
       await until('the camera reaches the location', () => restsAt(5.1, 6.1));
       expectNear(camera().bearing, 60, 0.001);
 
-      // While it follows without the heading, a new heading leaves a camera
-      // change that the app makes.
-      map.followUserLocation({ bearing: FollowBearing.course });
+      // While it follows without the heading, a new heading doesn't move the
+      // camera, which would take a second.
+      map.followUserLocation({ bearing: FollowBearing.COURSE });
       await until('the camera turns to the course', () => restsAt(5.1, 6.1) && near(camera().bearing, 90, 0.001));
-      await map.updateCamera({ center: { latitude: 5.2, longitude: 6.2 } });
       testMap.userHeading = 120;
       await eventually('the arrow turns to the heading', async () =>
         await arrowBearing() === 120 ? true : undefined);
-      await frames(30);
-      expect(restsAt(5.2, 6.2)).assertTrue();
+      expect(mapSnapshot().transitionInProgress).assertFalse();
+      expectNear(camera().bearing, 90, 0.001);
     });
 
     it('follows from the start a map that appears after the app asks', 0, async () => {
@@ -295,18 +294,13 @@ export default function locationTest(): void {
       expectNear(camera().zoom, 14, 0.001);
     });
 
-    it('stops following where pan\'s onStart stops it, until the app resumes', 0, async () => {
+    it('stops following as the user pans, before the gesture\'s events', 0, async () => {
       const map = testMap.controller;
-      let pans = 0;
-      testMap.interactions = {
-        pan: {
-          onStart: () => {
-            pans++;
-            map.stopFollowingUserLocation();
-          },
-        },
-      };
-      map.followUserLocation();
+      // What the gesture's events see.
+      const seen: boolean[] = [];
+      testMap.onGestureStart = () => seen.push(map.followingUserLocation);
+      testMap.interactions = { pan: { onStart: () => seen.push(map.followingUserLocation) } };
+      map.followUserLocation({ bearing: FollowBearing.COURSE });
       testMap.userLocation = fix(0.01, 0.01);
       await until('the camera follows', () => restsAt(0.01, 0.01));
 
@@ -314,8 +308,9 @@ export default function locationTest(): void {
       const from = offset(c, 100, 0);
       const to = offset(c, -100, 0);
       await gesture(() => Driver.create().swipe(from.x, from.y, to.x, to.y, speed(200)));
-      expect(pans).assertEqual(1);
+      expect(seen.join()).assertEqual('false,false');
       expect(map.followingUserLocation).assertFalse();
+      expect(map.followedBearing).assertUndefined();
       const panned = camera().center;
       expect(panned.longitude).assertLarger(0.05);
 
@@ -356,53 +351,82 @@ export default function locationTest(): void {
       expect(map.followingUserLocation).assertTrue();
     });
 
-    it('keeps following through a twist, about the location, with its bearing', 0, async () => {
+    it('keeps following through a twist, about the location, without the bearing', 0, async () => {
       const map = testMap.controller;
-      map.followUserLocation();
-      testMap.userLocation = fix(0.01, 0.01);
-      await until('the camera follows', () => restsAt(0.01, 0.01));
+      map.followUserLocation({ bearing: FollowBearing.COURSE });
+      testMap.userLocation = fix(0.01, 0.01, 10, 3, 90);
+      await until('the camera turns to the course', () => restsAt(0.01, 0.01) && near(camera().bearing, 90, 0.001));
+      // What rotate's onStart sees.
+      const seen: (FollowBearing | undefined)[] = [];
+      testMap.interactions = { rotate: { onStart: () => seen.push(map.followedBearing) } };
 
       const ended = centerAtEnd();
       const c = offset(await mapCenter(), 60, 120);
       await gesture(async () => {
         await Driver.create().injectMultiPointerAction(twist(c, 100, 60, 20), speed(300));
       });
+      expect(seen.length).assertLarger(0);
+      expect(seen.every((bearing: FollowBearing | undefined) => bearing === undefined)).assertTrue();
       expect(map.followingUserLocation).assertTrue();
+      expect(map.followedBearing).assertUndefined();
       expectAt(ended, 0.01, 0.01);
       await until('the camera rests at the location', () => restsAt(0.01, 0.01));
       const bearing = camera().bearing;
-      expect(Math.abs(wrap(bearing))).assertLarger(40);
+      expect(Math.abs(wrap(bearing - 90))).assertLarger(40);
 
-      // The next location keeps the user's bearing.
-      testMap.userLocation = fix(0.012, 0.012);
+      // The next location keeps the user's bearing, not the course.
+      testMap.userLocation = fix(0.012, 0.012, 10, 3, 90);
       await until('the camera follows the next location', () => restsAt(0.012, 0.012));
       expectNear(camera().bearing, bearing, 0.001);
     });
 
-    it('turns back to the course after a twist, unless rotate\'s onStart follows without it', 0, async () => {
+    it('stops following at a fit, which sets the center', 0, async () => {
       const map = testMap.controller;
-      map.followUserLocation({ bearing: FollowBearing.course });
+      map.followUserLocation();
+      testMap.userLocation = fix(0.01, 0.01);
+      await until('the camera follows', () => restsAt(0.01, 0.01));
+
+      const fitted = map.fitCameraToBounds({
+        southwest: { latitude: 1, longitude: 1 },
+        northeast: { latitude: 2, longitude: 2 },
+      });
+      expect(map.followingUserLocation).assertFalse();
+      expect(await fitted).assertTrue();
+      testMap.userLocation = fix(0.02, 0.02);
+      await drawnAt(0.02, 0.02);
+      await frames(30);
+      expect(mapSnapshot().transitionInProgress).assertFalse();
+      expectNear(camera().center.latitude, 1.5, 0.01);
+    });
+
+    it('keeps following without the bearing after a move that sets one, such as the compass\'s', 0, async () => {
+      const map = testMap.controller;
+      map.followUserLocation({ bearing: FollowBearing.COURSE });
       testMap.userLocation = fix(0.01, 0.01, 10, 3, 90);
       await until('the camera turns to the course', () => restsAt(0.01, 0.01) && near(camera().bearing, 90, 0.001));
 
-      const c = await mapCenter();
-      await gesture(async () => {
-        await Driver.create().injectMultiPointerAction(twist(c, 100, 60, 20), speed(300));
-      });
-      await until('the camera turns back to the course', () =>
-        restsAt(0.01, 0.01) && near(camera().bearing, 90, 0.001));
-
-      testMap.interactions = { rotate: { onStart: () => map.followUserLocation() } };
-      await gesture(async () => {
-        await Driver.create().injectMultiPointerAction(twist(c, 100, 60, 20), speed(300));
-      });
+      const turned = map.updateCamera({ bearing: 0 });
+      expect(map.followedBearing).assertUndefined();
       expect(map.followingUserLocation).assertTrue();
-      await until('the camera rests at the location', () => restsAt(0.01, 0.01));
-      const bearing = camera().bearing;
-      expect(Math.abs(wrap(bearing - 90))).assertLarger(40);
+      expect(await turned).assertTrue();
       testMap.userLocation = fix(0.012, 0.012, 10, 3, 90);
       await until('the camera follows the next location', () => restsAt(0.012, 0.012));
-      expectNear(camera().bearing, bearing, 0.001);
+      expectNear(wrap(camera().bearing), 0, 0.001);
+    });
+
+    it('follows without drawing the indicator while it isn\'t visible', 0, async () => {
+      const map = testMap.controller;
+      testMap.userLocationIndicator = { visible: false };
+      map.followUserLocation();
+      testMap.userLocation = fix(0.01, 0.01);
+      await until('the camera follows', () => restsAt(0.01, 0.01));
+      expect(await drawnLocation()).assertUndefined();
+
+      testMap.userLocationIndicator = {};
+      await drawnAt(0.01, 0.01);
+      testMap.userLocationIndicator = { visible: false };
+      await eventually('the indicator goes', async () =>
+        await withMap((ffi: MapHandle) => ffi.getStyleLayer(USER_LOCATION_LAYER)) === undefined ? true : undefined);
     });
 
     it('draws the indicator with the options\' colors, images, and layer', 0, async () => {
@@ -458,5 +482,67 @@ export default function locationTest(): void {
       expect(ids[ids.length - 1]).assertEqual(USER_LOCATION_LAYER);
       expect(testMap.errors.length).assertEqual(0);
     });
+
+    it('moves under a content layer that comes with its new below', 0, async () => {
+      testMap.userLocation = fix(0, 0);
+      await drawnAt(0, 0);
+      const clear: Record<string, Object> = { 'background-opacity': 0 };
+      testMap.content = { layers: [{ id: 'late', type: 'background', paint: clear, below: 'background' }] };
+      testMap.userLocationIndicator = { below: 'late' };
+      await eventually('the indicator goes under the content layer', async () => {
+        const ids = await layerIds();
+        return ids.indexOf(USER_LOCATION_LAYER) === ids.indexOf('late') - 1 ? true : undefined;
+      });
+    });
+
+    it('goes under the base layer that a predicate picks', 0, async () => {
+      await setStyle(styleDocument('{"version":8,"sources":{},"layers":[' +
+        '{"id":"background","type":"background","paint":{"background-color":"#ffffff"}},' +
+        '{"id":"labels","type":"background","paint":{"background-opacity":0}}]}'));
+      testMap.userLocationIndicator = { below: (layer: LayerSummary) => layer.id === 'labels' };
+      testMap.userLocation = fix(0, 0);
+      await drawnAt(0, 0);
+      expect((await layerIds()).join()).assertEqual(`background,${USER_LOCATION_LAYER},labels`);
+
+      // A predicate that picks another layer moves the indicator.
+      testMap.userLocationIndicator = { below: () => true };
+      await eventually('the indicator goes under the background', async () =>
+        (await layerIds()).join() === `${USER_LOCATION_LAYER},background,labels` ? true : undefined);
+      expect(testMap.errors.length).assertEqual(0);
+    });
+
+    it('resolves a color resource, and takes the default for a color that doesn\'t resolve', 0, async () => {
+      // Half-transparent red, with the alpha first, as ArkUI writes it.
+      testMap.userLocationIndicator = { color: $r('app.color.indicator'), accuracyBorderColor: 'not a color' };
+      testMap.userLocation = fix(0, 0);
+      await drawnAt(0, 0);
+      // The accuracy circle takes the color at 15% of its alpha, and its
+      // border the default: the color at 50% of its alpha.
+      expectColor(await colorProperty('accuracy-radius-color'), [255, 0, 0, 0.15 * 128 / 255]);
+      expectColor(await colorProperty('accuracy-radius-border-color'), [255, 0, 0, 0.5 * 128 / 255]);
+      expect(testMap.errors.length).assertEqual(1);
+      expect(testMap.errors[0]).assertContain('accuracyBorderColor');
+    });
   });
+}
+
+// The style layers' IDs, bottom to top.
+async function layerIds(): Promise<string[]> {
+  return (await withMap((ffi: MapHandle) => ffi.listStyleLayers())).map((layer: StyleLayerInfo) => layer.id);
+}
+
+// A color property of the indicator layer, as the style normalizes it:
+// `['rgba', red, green, blue, alpha]`.
+async function colorProperty(name: string): Promise<number[]> {
+  const value = await withMap((ffi: MapHandle) => ffi.getStyleLayerProperty(USER_LOCATION_LAYER, name)) as Object[];
+  return value.slice(1) as number[];
+}
+
+function expectColor(actual: number[], expected: number[]): void {
+  expect(actual.length).assertEqual(4);
+  for (let i = 0; i < 3; i++) {
+    expectNear(actual[i], expected[i], 1);
+  }
+  // The style reports alpha rounded, such as 0.08 for 0.0753.
+  expectNear(actual[3], expected[3], 0.006);
 }

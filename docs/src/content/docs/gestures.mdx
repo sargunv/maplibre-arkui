@@ -33,9 +33,10 @@ stays north-up and flat, and tells the app while the user moves it:
 `onGestureStart` and `onGestureEnd` bracket each gesture: any input that moves
 the camera, with its momentum and a rotation's snap. To react to one movement,
 give it an `onStart`, which runs each time a gesture starts to move the camera
-that way. An app that moves the camera itself, such as to follow a vehicle,
-stops as the user starts to pan. The same example changes what the wheel and
-rotation do too:
+that way. A pan already stops the camera from
+[following the user's location](/maplibre-arkui/location/); an app that moves
+the camera itself, such as to follow a vehicle, stops as the user starts to pan.
+The same example changes what the wheel and rotation do too:
 
 <Code code={region(examples, "interactions")} lang="ts" />
 

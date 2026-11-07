@@ -21,10 +21,10 @@ class Recorder implements GestureTarget {
   deltas: CameraDelta[] = [];
   starts: number = 0;
   ends: number = 0;
-  // How often a gesture's end read the bearing to snap it, and the bearing that
-  // the last end handed a camera that catches up with the location.
+  // How often a gesture's end read the bearing to snap it.
   reads: number = 0;
-  endBearing: number | undefined = undefined;
+  // The pans, rotations, zooms, and starts that the gestures told of, in order.
+  told: string[] = [];
   errors: string[] = [];
   ticks: number = 0;
   // The camera's bearing before the deltas.
@@ -64,11 +64,23 @@ class Recorder implements GestureTarget {
 
   gestureStarted(): void {
     this.starts++;
+    this.told.push('start');
   }
 
-  gestureEnded(snapBearing: number | undefined): void {
+  panned(): void {
+    this.told.push('pan');
+  }
+
+  rotated(): void {
+    this.told.push('rotate');
+  }
+
+  zoomed(): void {
+    this.told.push('zoom');
+  }
+
+  gestureEnded(): void {
     this.ends++;
-    this.endBearing = snapBearing;
   }
 
   hapticTick(): void {
@@ -76,10 +88,6 @@ class Recorder implements GestureTarget {
   }
 
   keepsCenter(): boolean {
-    return this.keeps;
-  }
-
-  catchesUp(): boolean {
     return this.keeps;
   }
 
@@ -393,6 +401,29 @@ export default function gesturesTest(): void {
       expect(camera.deltas.slice(panned).some((d: CameraDelta) => d.anchor !== undefined)).assertTrue();
     });
 
+    it('tells the target of a pan, a rotation, or a zoom before the gesture starts', 0, () => {
+      const camera = new Recorder();
+      const gestures = new MapGestures(camera);
+      let end = drag(gestures, 0, [touch(1, 100, 100)], [touch(1, 100, 200)], 10, 50);
+      gestures.touch(end + 10, []);
+      expect(camera.told.slice(0, 2).join()).assertEqual('pan,start');
+
+      camera.told = [];
+      end = twist(gestures, 100, 60, 20, end + 1000);
+      gestures.touch(end + 100, []);
+      expect(camera.told.slice(0, 2).join()).assertEqual('rotate,start');
+
+      camera.told = [];
+      gestures.doubleTap(100, 100);
+      expect(camera.told.join()).assertEqual('zoom,start');
+
+      camera.told = [];
+      gestures.options = { wheel: WheelAction.PAN };
+      gestures.axisUpdate(0, 15, false, false);
+      expect(camera.told.join()).assertEqual('pan,start');
+      gestures.dispose();
+    });
+
     it('keeps the content under the fingers of a pinch that report one at a time', 0, () => {
       const camera = new Recorder();
       const gestures = new MapGestures(camera);
@@ -657,18 +688,6 @@ export default function gesturesTest(): void {
         expect(other.ends).assertEqual(1);
         snapping.dispose();
       }
-
-      // A camera that catches up with the location turns to the snap bearing
-      // as it does, after the gesture.
-      const following = new Recorder();
-      following.initialBearing = 50;
-      following.keeps = true;
-      const catching = new MapGestures(following);
-      end = twist(catching, 100, 60, 20);
-      catching.touch(end + 100, []);
-      expect(following.ends).assertEqual(1);
-      expectNear(following.endBearing ?? NaN, 0, 1e-9);
-      expect(following.deltas.every((d: CameraDelta) => d.animation === undefined)).assertTrue();
 
       // Without snap bearings, the end reads no bearing, and neither does a pan.
       const still = new Recorder();

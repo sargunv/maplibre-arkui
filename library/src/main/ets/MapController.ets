@@ -14,7 +14,7 @@ import {
 import { GeoJsonGeometry } from './GeoJson';
 import { LatLng, LatLngBounds, ScreenPoint } from './Geometry';
 import { NO_INSETS, paddingInVp } from './Insets';
-import { FollowUserLocationOptions } from './location';
+import { FollowBearing, FollowUserLocationOptions } from './location';
 import {
   checkHitPadding,
   RenderedFeature,
@@ -57,7 +57,9 @@ export function controllerState(controller: MapController): ControllerState {
  * the camera.
  *
  * Its getters are observable, so a component that reads them updates when
- * they change; only the map and the controller's methods change them.
+ * they change. The app can't set them: the map, the user's input, and the
+ * controller's methods change them, such as a pan that stops
+ * `followingUserLocation` and a rotation that clears `followedBearing`.
  *
  * The camera methods check their arguments first, and throw an `Error` for an
  * invalid one. A move then waits until a map shows the controller at its
@@ -123,13 +125,24 @@ export class MapController {
   }
 
   /**
-   * Whether the camera follows the map's `userLocation`. Only
-   * `followUserLocation()` and `stopFollowingUserLocation()` set it; the
-   * user's input doesn't, so an app stops following where it chooses, such as
-   * in the `onStart` of the map's `interactions.pan`. Observable.
+   * Whether the camera follows the map's `userLocation`: from
+   * `followUserLocation()` until `stopFollowingUserLocation()`, a pan by the
+   * user, or a camera move by the app that sets a center, as
+   * `followUserLocation()` describes. Observable.
    */
   get followingUserLocation(): boolean {
     return this.state.followingUserLocation;
+  }
+
+  /**
+   * The direction that the camera turns to while it follows the map's
+   * `userLocation`, as `followUserLocation()` set it. Undefined while the
+   * camera doesn't follow, or follows without turning: a rotation by the user,
+   * or a camera move by the app that sets a bearing, such as a
+   * `CompassButton`'s, clears it. Observable.
+   */
+  get followedBearing(): FollowBearing | undefined {
+    return this.state.followedBearing;
   }
 
   /**
@@ -210,41 +223,57 @@ export class MapController {
 
   /**
    * Moves the camera to the map's `userLocation`, and then to each new one,
-   * and to each new `userHeading` too while `options` follows the heading,
-   * until the app calls `stopFollowingUserLocation()`. Without a location yet,
-   * the camera moves once the map gets one, after the camera moves that wait
-   * for the map. Each move eases the center, the first also the zoom that
-   * `options` names, and each the bearing if `options` asks; the rest of the
-   * camera stays as the app leaves it. A camera change that the app makes
-   * while following lasts until the next location or heading.
-   *
-   * While it follows, the user's zoom and rotation keep the location at the
-   * center, and two fingers don't pan. The camera waits for the user's input
-   * to end, then catches up with the location, so a pan or a rotation away
-   * from a followed bearing eases back unless the app stops following, or
-   * follows without the bearing, in that movement's `onStart`:
+   * and to each new `userHeading` too while it follows the heading, until
+   * following stops. Without a location yet, the camera moves once the map
+   * gets one, after the camera moves that wait for the map. A new call
+   * replaces the options of the last.
    *
    * ```ets
-   * this.controller.followUserLocation({ zoom: 16, bearing: FollowBearing.heading });
-   *
-   * MaplibreMap({
-   *   style: STYLE,
-   *   controller: this.controller,
-   *   userLocation: this.location,
-   *   interactions: {
-   *     pan: { onStart: () => this.controller.stopFollowingUserLocation() },
-   *     rotate: { onStart: () => this.controller.followUserLocation() },
-   *   },
-   * })
+   * this.controller.followUserLocation({ zoom: 16, bearing: FollowBearing.HEADING });
    * ```
+   *
+   * Each move is a 1000 ms ease with MapLibre's default curve, as the
+   * indicator's move to the location is, so the location stays at the
+   * center. It moves the center, the first move also to `options.zoom`, and
+   * each to the bearing of `followedBearing` while there is one; the rest of
+   * the camera stays as it is. An app that draws its own `location-indicator`
+   * layer, with `userLocationIndicator.visible` false, matches it with a
+   * 1000 ms `location-transition`.
+   *
+   * While it follows, the user's input and the app's camera moves change it:
+   *
+   * - A pan by the user, in any way that `interactions.pan` allows, stops
+   *   following. Two fingers pan only after they drag 400 vp, so a pinch or a
+   *   twist that drifts keeps following.
+   * - A rotation by the user clears `followedBearing`, and the camera keeps
+   *   the bearing that the user leaves it at.
+   * - The user's zoom and pitch keep following, and zoom and rotation keep
+   *   the location at the center.
+   * - Both changes happen before `onGestureStart` and the movement's
+   *   `onStart`, so those see the new state. The camera waits for the user's
+   *   input to end, after `onGestureEnd`, then catches up with the location.
+   * - A camera move by the app that sets `center`, and every fit, stops
+   *   following. One that sets `bearing`, such as a `CompassButton`'s, clears
+   *   `followedBearing`. Others, such as those of `ZoomButtons`, keep
+   *   following.
+   * - A zoom by the user or the app before the first move takes the place of
+   *   `options.zoom`.
+   *
+   * To lock the camera to the location, turn the movements off: with
+   * `interactions.pan.enabled` false, the user can't stop following, and with
+   * `interactions.rotate.enabled` false, the user can't clear the bearing.
    */
   followUserLocation(options?: FollowUserLocationOptions): void {
     this.state.followUserLocation(options);
   }
 
-  /** Leaves the camera where it is when the map's `userLocation` changes. */
+  /**
+   * Stops following the map's `userLocation`, so the camera stays where it is
+   * when the location changes, and clears `followedBearing`. A move to the
+   * location that's under way finishes.
+   */
   stopFollowingUserLocation(): void {
-    this.state.followingUserLocation = false;
+    this.state.stopFollowingUserLocation();
   }
 
   /**
