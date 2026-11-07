@@ -12,7 +12,7 @@ import {
   DOT_COLOR,
   DOT_RADIUS,
   USER_LOCATION_LAYER,
-} from '@maplibre/arkui/src/main/ets/location';
+} from '@maplibre/arkui/src/main/ets/location/internal/UserLocationLayer';
 import geoLocationManager from '@ohos.geoLocationManager';
 import { Driver, Point } from '@ohos.UiTest';
 

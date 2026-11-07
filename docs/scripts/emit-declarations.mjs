@@ -7,16 +7,22 @@
 // Standard TypeScript reads none of the three ArkTS forms, so this script
 // rewrites each file into a `.d.ts`:
 //
-// - A struct becomes a class in TypeDoc's "Components" group, without a
-//   constructor. Its members that aren't params, such as `build()` and the
-//   `@Monitor` methods, become `@internal`.
+// - A struct becomes a class without a constructor. Its members that aren't
+//   params, such as `build()` and the `@Monitor` methods, become `@internal`.
 // - A decorator becomes a modifier tag in its declaration's doc comment, which
 //   TypeDoc shows as a badge: `@Param` becomes `@arkuiParam`.
-// - A doc comment that starts a paragraph with "Internal:" becomes `@internal`.
+// - Each top-level declaration gets the `@category` of its feature directory,
+//   from categories.mjs.
 // - An `ets` code block in a doc comment becomes a `ts` block, for TypeDoc.
+//
+// It fails when a file that the reference documents imports from MapLibre
+// Native FFI, except for the escape hatch's MapHandle and RenderSessionHandle
+// in map/MapController.d.ts.
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+
+import { categories } from "./categories.mjs";
 
 const usage =
   "usage: emit-declarations.mjs <SDK ets dir> <Index.ets> <FFI index.d.ts> <out dir>";
@@ -62,17 +68,38 @@ const program = ts.createProgram([path.resolve(entry), ...components], {
   },
 });
 
+// The category title of each feature directory under src/main/ets.
+const titles = new Map(
+  categories.map(({ directory, title }) => [directory, title]),
+);
+// The FFI types that the escape hatch lends, in the one file that may name
+// them.
+const ESCAPE_HATCH = "src/main/ets/map/MapController.d.ts";
+const ESCAPE_HATCH_TYPES = ["MapHandle", "RenderSessionHandle"];
+
 fs.rmSync(out, { recursive: true, force: true });
 let count = 0;
+const leaks = [];
 const result = program.emit(undefined, (fileName, text) => {
   if (!fileName.endsWith(".d.ets")) {
     return;
   }
   const target = fileName.replace(/\.d\.ets$/, ".d.ts");
+  const file = path.relative(out, target).split(path.sep).join("/");
+  leaks.push(...ffiImports(file, text));
   fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, rewrite(text, fileName));
+  fs.writeFileSync(target, rewrite(text, fileName, categoryOf(file)));
   count++;
 });
+if (leaks.length > 0) {
+  for (const leak of leaks) {
+    console.error(`error: ${leak}`);
+  }
+  console.error(
+    "error: the API declares its own types, and lends FFI's only through MapController.withFfiMap()",
+  );
+  process.exit(1);
+}
 // A syntax error emits a broken file, so it stops the build. Type errors,
 // such as a global that the SDK declares elsewhere, don't change what the
 // declarations say.
@@ -109,7 +136,54 @@ function isParamDecorator(name) {
   ].includes(name);
 }
 
-function rewrite(text, fileName) {
+// The category of the declarations in `file`, a path in the output directory,
+// or undefined for Index.d.ts, which only re-exports.
+function categoryOf(file) {
+  const parts = file.split("/");
+  if (parts.length === 1) {
+    return undefined;
+  }
+  const title =
+    parts.slice(0, 3).join("/") === "src/main/ets"
+      ? titles.get(parts[3])
+      : undefined;
+  if (title === undefined) {
+    throw new Error(
+      `${file}: docs/scripts/categories.mjs has no category for its directory`,
+    );
+  }
+  return title;
+}
+
+// What a file that the reference documents imports from FFI, besides what the
+// escape hatch may: the files outside internal/, whose declarations are
+// public. The library-only files under internal/ may use FFI's types.
+function ffiImports(file, text) {
+  if (file.split("/").includes("internal")) {
+    return [];
+  }
+  const found = [];
+  for (const match of text.matchAll(
+    /^(?:import|export)\s+(?:type\s+)?(\{[^}]*\}|\*(?:\s+as\s+\w+)?|\w+)\s*from\s*['"]@maplibre\/native-ffi['"]/gm,
+  )) {
+    const names = match[1].startsWith("{")
+      ? match[1]
+          .slice(1, -1)
+          .split(",")
+          .map((item) => item.trim().split(/\s+as\s+/)[0])
+          .filter((name) => name !== "")
+      : [match[1]];
+    for (const name of names) {
+      if (file !== ESCAPE_HATCH || !ESCAPE_HATCH_TYPES.includes(name)) {
+        found.push(`${file} imports ${name} from @maplibre/native-ffi`);
+      }
+    }
+  }
+  return found;
+}
+
+// Rewrites one file. `category` is that of its top-level declarations.
+function rewrite(text, fileName, category) {
   const lines = text.split("\n");
   const output = [];
   // The comment that ends right above the next declaration, as indices into
@@ -157,7 +231,15 @@ function rewrite(text, fileName) {
     if (isStruct) {
       // A struct takes its params as an object literal, not with `new`.
       modifiers.push("@hideconstructor");
-      blocks.push("@group Components");
+    }
+    if (
+      category !== undefined &&
+      indent === 0 &&
+      /^export\s+(declare\s+)?(abstract\s+)?(class|const|enum|function|interface|let|struct|type|var)\s/.test(
+        trimmed,
+      )
+    ) {
+      blocks.push(`@category ${category}`);
     }
     const inStruct =
       structIndent !== undefined &&
@@ -165,9 +247,6 @@ function rewrite(text, fileName) {
       !/^[}\])]/.test(trimmed);
     const isPrivate = /^(private|protected) /.test(trimmed);
     if (inStruct && !isPrivate && !decorators.some(isParamDecorator)) {
-      modifiers.push("@internal");
-    }
-    if (comment !== undefined && isInternal(output, comment)) {
       modifiers.push("@internal");
     }
     const tags = [...blocks];
@@ -199,12 +278,6 @@ function rewrite(text, fileName) {
     decorators = [];
   }
   return output.join("\n");
-}
-
-function isInternal(output, comment) {
-  return output
-    .slice(comment.start, comment.end + 1)
-    .some((line) => /^\s*(\/\*\*|\*)\s*Internal:/.test(line));
 }
 
 /** Adds lines of tags to the end of a doc comment in `output`. */

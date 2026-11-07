@@ -1,14 +1,13 @@
 // TypeDoc renders the API reference into public/api from the declarations that
 // scripts/emit-declarations.mjs writes into ../build/docs. `mise run docs:api`
 // runs the whole pipeline.
-import fs from "node:fs";
-
 import { OptionDefaults } from "typedoc";
 
+import { categories } from "./scripts/categories.mjs";
+
 const build = new URL("../build/docs/", import.meta.url).pathname;
-const { links } = JSON.parse(
-  fs.readFileSync(`${build}ffi-reference.json`, "utf8"),
-);
+const FFI_REFERENCE =
+  "https://maplibre.org/maplibre-native-ffi/reference/typescript/";
 
 // The ArkUI decorators that the declarations carry as modifier tags.
 const decorators = [
@@ -30,17 +29,28 @@ export default {
   entryPoints: [`${build}declarations/Index.d.ts`],
   tsconfig: "./tsconfig.api.json",
   out: "./public/api",
-  readme: `${build}reference.md`,
+  readme: "./reference.md",
   // The declarations are generated, so they link to no source.
   disableSources: true,
-  // The struct components, which the declarations put in this group, first.
-  groupOrder: ["Components", "*"],
+  // One category for each feature, which emit-declarations.mjs gives each
+  // declaration, in the order of the guides. The struct components come first
+  // in each (scripts/structs-first.mjs).
+  plugin: ["./scripts/structs-first.mjs"],
+  categorizeByGroup: false,
+  categoryOrder: [...categories.map((category) => category.title), "*"],
+  navigation: { includeCategories: true, includeGroups: false },
   excludeInternal: true,
   excludePrivate: true,
-  // FFI's re-exports are FFI's to document: link them to its reference.
+  // FFI's types are FFI's to document. Only the escape hatch,
+  // `MapController.withFfiMap()`, names any: link those to its reference.
   excludeExternals: true,
   externalPattern: [`${build}ffi/**`],
-  externalSymbolLinkMappings: { "@maplibre/native-ffi": links },
+  externalSymbolLinkMappings: {
+    "@maplibre/native-ffi": {
+      MapHandle: `${FFI_REFERENCE}classes/index.MapHandle.html`,
+      RenderSessionHandle: `${FFI_REFERENCE}classes/index.RenderSessionHandle.html`,
+    },
+  },
   // The SDK's ArkUI types, such as `Padding`, aren't in the program.
   skipErrorChecking: true,
   modifierTags: [

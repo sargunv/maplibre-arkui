@@ -6,7 +6,7 @@ import {
   RenderedFeature,
   ScreenPoint,
 } from '@maplibre/arkui';
-import { readPixelMap } from '@maplibre/arkui/src/main/ets/StyleImage';
+import { readPixelMap } from '@maplibre/arkui/src/main/ets/content/internal/PixelMaps';
 import { CommandCompletion, FeatureStateSelector, MapHandle } from '@maplibre/native-ffi';
 
 import { backgroundStyle, testMap } from '../testability/TestMaps';

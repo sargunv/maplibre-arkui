@@ -17,4 +17,10 @@ steps {
     glob = List("README.md", "library/README.md", "demo/entry/src/main/ets/docs/*.ets")
     check = "scripts/check-doc-examples.sh README.md library/README.md"
   }
+  // The rules of the API guidelines' Organization section that a script can
+  // check.
+  ["api-layout"] {
+    glob = List("library/Index.ets", "library/src/main/ets/**", "docs/scripts/categories.mjs")
+    check = "scripts/check-api-layout.sh"
+  }
 }

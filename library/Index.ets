@@ -1,72 +1,83 @@
-// The public API of @maplibre/arkui.
+// The public API of @maplibre/arkui, by feature, in the order of the guides.
+// scripts/check-api-layout.sh checks that each top-level file under
+// src/main/ets exports only what this file lists.
 
-export { MaplibreMap } from './src/main/ets/MaplibreMap';
-export { ContentError, MapError, StyleLoadError } from './src/main/ets/MapError';
-export type { CameraIdleEvent } from './src/main/ets/CameraIdleEvent';
-export type { MapClickEvent } from './src/main/ets/MapClickEvent';
-export type { CameraBoundsOptions } from './src/main/ets/CameraBounds';
-export { MapController } from './src/main/ets/MapController';
-export type { MapControllerOptions } from './src/main/ets/MapController';
-export type { Viewport } from './src/main/ets/Viewport';
+// Map
+export type { CameraBoundsOptions } from './src/main/ets/map/CameraBoundsOptions';
+export type { MapClickEvent } from './src/main/ets/map/MapClickEvent';
+export { MapController } from './src/main/ets/map/MapController';
 export type {
+  MapControllerOptions,
   RenderedFeature,
   RenderedFeatureQueryOptions,
   SourceFeature,
   SourceFeatureQueryOptions,
-} from './src/main/ets/Queries';
-export { CameraTransitionMode } from './src/main/ets/CameraPosition';
+} from './src/main/ets/map/MapController';
+export { ContentError, MapError, StyleLoadError } from './src/main/ets/map/MapError';
+export { MaplibreMap } from './src/main/ets/map/MaplibreMap';
+
+// Camera
+export type { CameraIdleEvent } from './src/main/ets/camera/CameraIdleEvent';
+export type { CameraPosition, CameraUpdate } from './src/main/ets/camera/CameraPosition';
+export { CameraTransitionMode } from './src/main/ets/camera/CameraTransitionOptions';
+export type { CameraTransitionOptions, FitCameraOptions } from './src/main/ets/camera/CameraTransitionOptions';
+export type { Viewport } from './src/main/ets/camera/Viewport';
+
+// Gestures
+export { WheelAction } from './src/main/ets/interaction/InteractionOptions';
+export type { InteractionOptions, MovementOptions, RotationOptions } from './src/main/ets/interaction/InteractionOptions';
+
+// Controls
+export { AttributionButton } from './src/main/ets/overlay/AttributionButton';
+export { AttributionText } from './src/main/ets/overlay/AttributionText';
+export { CompassButton, DisappearingCompassButton } from './src/main/ets/overlay/CompassButton';
+export { AttributionControls, DefaultControls, FullControls } from './src/main/ets/overlay/DefaultControls';
+export { MaplibreLogo } from './src/main/ets/overlay/MaplibreLogo';
+export { Marker } from './src/main/ets/overlay/Marker';
+export { OffscreenMarker } from './src/main/ets/overlay/OffscreenMarker';
+export type { OffscreenMarkerAngleEvent } from './src/main/ets/overlay/OffscreenMarker';
+export { PointerPinButton } from './src/main/ets/overlay/PointerPinButton';
+export { DisappearingScaleBar, ScaleBar, ScaleBarUnits } from './src/main/ets/overlay/ScaleBar';
+export { ZoomButtons } from './src/main/ets/overlay/ZoomButtons';
+
+// Map content
+export type { MapContent } from './src/main/ets/content/MapContent';
+export type { StyleImage } from './src/main/ets/content/StyleImage';
 export type {
-  CameraPosition,
-  CameraTransitionOptions,
-  CameraUpdate,
-  FitCameraOptions,
-} from './src/main/ets/CameraPosition';
-export type { LatLng, LatLngBounds, ScreenPoint } from './src/main/ets/Geometry';
-export type {
-  GeoJsonFeature,
-  GeoJsonFeatureCollection,
-  GeoJsonGeometry,
-  GeoJsonGeometryCollection,
-  GeoJsonLineString,
-  GeoJsonMultiLineString,
-  GeoJsonMultiPoint,
-  GeoJsonMultiPolygon,
-  GeoJsonObject,
-  GeoJsonPoint,
-  GeoJsonPolygon,
-  GeoJsonPosition,
-} from './src/main/ets/GeoJson';
-export { WheelAction } from './src/main/ets/gestures';
-export type { InteractionOptions, MovementOptions, RotationOptions } from './src/main/ets/gestures';
-export { FollowBearing } from './src/main/ets/location';
-export type { FollowUserLocationOptions, UserLocationIndicatorOptions } from './src/main/ets/location';
-export { MapRuntime } from './src/main/ets/MapRuntime';
-export type { MapRuntimeOptions } from './src/main/ets/MapRuntime';
-export { MapResourceError, MapResourceErrorReason } from './src/main/ets/MapResource';
+  FeatureClickEvent,
+  FeatureClickHandler,
+  LayerPredicate,
+  LayerSummary,
+  StyleLayer,
+} from './src/main/ets/content/StyleLayer';
+export type { StyleSource } from './src/main/ets/content/StyleSource';
+
+// User location
+export { FollowBearing } from './src/main/ets/location/FollowUserLocationOptions';
+export type { FollowUserLocationOptions } from './src/main/ets/location/FollowUserLocationOptions';
+export type { UserLocationIndicatorOptions } from './src/main/ets/location/UserLocationIndicatorOptions';
+
+// Snapshots
+export { renderSnapshot } from './src/main/ets/snapshot/Snapshot';
+export type { MapSnapshot, MapSnapshotOptions } from './src/main/ets/snapshot/Snapshot';
+
+// Runtime
+export { ConnectivityMode } from './src/main/ets/runtime/ConnectivityMode';
+export { MapLogLevel } from './src/main/ets/runtime/Logs';
+export type { MapLogHandler, MapLogRecord } from './src/main/ets/runtime/Logs';
+export { MapRuntime } from './src/main/ets/runtime/MapRuntime';
+export type { MapRuntimeOptions } from './src/main/ets/runtime/MapRuntime';
+export type { OfflineRegion, OfflineRegionDefinition, OfflineRegionStatus } from './src/main/ets/runtime/OfflineRegion';
+export { MapResourceError, MapResourceErrorReason } from './src/main/ets/runtime/Requests';
 export type {
   MapResourceLoadRequest,
   MapResourceProvider,
   MapResourceRange,
   MapResourceRequest,
   MapResourceResponse,
-} from './src/main/ets/MapResource';
-export type { OfflineRegion, OfflineRegionDefinition, OfflineRegionStatus } from './src/main/ets/OfflineRegion';
-export { ConnectivityMode } from './src/main/ets/connectivity';
-export { MapLogLevel } from './src/main/ets/log';
-export type { MapLogHandler, MapLogRecord } from './src/main/ets/log';
-export { renderSnapshot } from './src/main/ets/Snapshot';
-export type { MapSnapshot, MapSnapshotOptions } from './src/main/ets/Snapshot';
-export type {
-  FeatureClickEvent,
-  FeatureClickHandler,
-  LayerPredicate,
-  LayerSummary,
-  MapContent,
-  StyleImage,
-  StyleLayer,
-  StyleSource,
-} from './src/main/ets/Content';
+} from './src/main/ets/runtime/Requests';
 
+// Expressions
 export {
   abs,
   add,
@@ -126,7 +137,7 @@ export {
   toString,
   upcase,
   zoom,
-} from './src/main/ets/Expressions';
+} from './src/main/ets/expression/Expressions';
 export type {
   Condition,
   ExpressionInput,
@@ -136,19 +147,21 @@ export type {
   MatchCase,
   MatchLabel,
   Stop,
-} from './src/main/ets/Expressions';
+} from './src/main/ets/expression/Expressions';
 
-export { AttributionControls, DefaultControls, FullControls } from './src/main/ets/Overlay';
-export {
-  AttributionButton,
-  AttributionText,
-  CompassButton,
-  DisappearingCompassButton,
-  DisappearingScaleBar,
-  MaplibreLogo,
-  ScaleBar,
-  ScaleBarUnits,
-  ZoomButtons,
-} from './src/main/ets/Controls';
-export { Marker, OffscreenMarker, PointerPinButton } from './src/main/ets/Placement';
-export type { OffscreenMarkerAngleEvent } from './src/main/ets/Placement';
+// Geometry
+export type {
+  GeoJsonFeature,
+  GeoJsonFeatureCollection,
+  GeoJsonGeometry,
+  GeoJsonGeometryCollection,
+  GeoJsonLineString,
+  GeoJsonMultiLineString,
+  GeoJsonMultiPoint,
+  GeoJsonMultiPolygon,
+  GeoJsonObject,
+  GeoJsonPoint,
+  GeoJsonPolygon,
+  GeoJsonPosition,
+} from './src/main/ets/geometry/GeoJson';
+export type { LatLng, LatLngBounds, ScreenPoint } from './src/main/ets/geometry/Geometry';

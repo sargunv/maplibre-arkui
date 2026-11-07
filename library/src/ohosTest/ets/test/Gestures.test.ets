@@ -4,14 +4,10 @@
 import { describe, expect, it } from '@ohos/hypium';
 import { InteractionOptions, WheelAction } from '@maplibre/arkui';
 import { CameraDelta, CameraTransitionOutcome, GesturePhase, ScreenPoint } from '@maplibre/native-ffi';
-import {
-  GestureTarget,
-  MapGestures,
-  Momentum,
-  snapBearing,
-  TouchPoint,
-} from '@maplibre/arkui/src/main/ets/gestures';
-import { playTick } from '@maplibre/arkui/src/main/ets/haptics';
+import { snapBearing } from '@maplibre/arkui/src/main/ets/interaction/internal/BearingNotches';
+import { GestureTarget, MapGestures, TouchPoint } from '@maplibre/arkui/src/main/ets/interaction/internal/MapGestures';
+import { Momentum } from '@maplibre/arkui/src/main/ets/interaction/internal/Momentum';
+import { playTick } from '@maplibre/arkui/src/main/ets/interaction/internal/Haptics';
 import { KeyCode } from '@ohos.multimodalInput.keyCode';
 
 import { expectNear, frames, until } from './helpers';

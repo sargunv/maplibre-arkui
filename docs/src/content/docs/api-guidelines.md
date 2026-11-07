@@ -7,8 +7,9 @@ Rules for the public API of the published library.
 
 ## 1. About this guide
 
-This guide covers every declaration that `library/Index.ets` exports. It doesn't
-cover internal code, the demo app, or the tests.
+This guide covers every declaration that `library/Index.ets` exports, and how
+the library's sources are organized. It doesn't cover the design of internal
+code, the demo app, or the tests.
 
 The API is designed for apps written in strict ArkTS with ArkUI's state
 management V2. It should read like ArkUI's own components and options, so that
@@ -407,7 +408,30 @@ color: string; // Don't
  */
 ```
 
-## 12. Stability and compatibility
+## 12. Organization
+
+- Put each feature's sources in one lowercase, singular directory under
+  `library/src/main/ets`, such as `camera/`, and library-only code in its
+  `internal/` directory. Any feature may import another feature's `internal/`.
+  Don't add catch-all directories, such as `util/` or `common/`.
+- Name each file in UpperCamelCase, after its main declaration or its topic.
+- Group `library/Index.ets` by feature, in the order of the guides.
+- Support imports from the package root only. Apps that import a path under
+  `src/` may break in any release.
+
+`scripts/check-api-layout.sh` and `docs/scripts/emit-declarations.mjs` check the
+rest: every export of a file outside `internal/` is in `Index.ets`, which lists
+each name and exports nothing of FFI's, and each feature directory has a
+category in the API reference.
+
+```text
+camera/
+  CameraPosition.ets
+  internal/
+    Insets.ets
+```
+
+## 13. Stability and compatibility
 
 Until 1.0, any release may break the API. The PR that breaks it says how to
 migrate.

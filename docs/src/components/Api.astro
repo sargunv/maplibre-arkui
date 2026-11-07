@@ -1,12 +1,11 @@
 ---
 /**
  * Links a symbol to its page in the API reference: `<Api of="MapController" />`
- * or a member, `<Api of="MapController.updateCamera" />`. FFI's re-exports
- * link to FFI's reference, under the name that the package exports.
+ * or a member, `<Api of="MapController.updateCamera" />`.
  *
  * It resolves against the index that `scripts/api-index.mjs` writes, so a name
  * the reference doesn't have, or a member its page doesn't have, fails the
- * site build. FFI's members aren't checked.
+ * site build.
  */
 import index from "../generated/api-index.json";
 
@@ -18,9 +17,8 @@ interface Props {
 
 interface Entry {
   url: string;
-  external: boolean;
-  /** The members' anchors, for a page of the library's own reference. */
-  anchors?: string[];
+  /** The anchors of the page's members. */
+  anchors: string[];
 }
 
 const { of: name, display } = Astro.props;
@@ -30,16 +28,12 @@ if (entry === undefined) {
   throw new Error(`<Api of="${name}">: the API reference has no ${symbol}`);
 }
 const anchor = member?.toLowerCase();
-if (
-  anchor !== undefined &&
-  !entry.external &&
-  !entry.anchors?.includes(anchor)
-) {
+if (anchor !== undefined && !entry.anchors.includes(anchor)) {
   throw new Error(`<Api of="${name}">: ${symbol}'s page has no ${member}`);
 }
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-const page = entry.external ? entry.url : `${base}/${entry.url}`;
+const page = `${base}/${entry.url}`;
 const href = anchor === undefined ? page : `${page}#${anchor}`;
 ---
 
