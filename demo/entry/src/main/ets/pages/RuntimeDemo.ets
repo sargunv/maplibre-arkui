@@ -1,5 +1,6 @@
 import {
   addRuntimeEventListener,
+  AttributionText,
   getDefaultRuntime,
   OfflineRegionDefinition,
   OfflineRegionDownloadState,
@@ -72,7 +73,7 @@ export struct RuntimeDemo {
               .width(320)
               .height(200)
               .borderRadius(8)
-            Text(this.preview.attributions.join(' ')).fontSize(12)
+            AttributionText({ attributions: this.preview.attributions })
           } else {
             Text('Rendering…').height(200)
           }

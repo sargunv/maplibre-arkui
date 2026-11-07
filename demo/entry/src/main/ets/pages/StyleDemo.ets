@@ -4,6 +4,7 @@ import image from '@ohos.multimedia.image';
 
 import {
   all,
+  AttributionText,
   cases,
   eq,
   FeatureClickEvent,
@@ -225,11 +226,8 @@ export struct StyleDemo {
               .borderRadius(8)
               .borderWidth(2)
               .borderColor('#ffffff')
-            Text(this.preview.attributions.join(' '))
-              .fontSize(10)
+            AttributionText({ attributions: this.preview.attributions })
               .width(160)
-              .maxLines(2)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
               .backgroundColor('#ccffffff')
           }
           .position({ top: 12, right: 12 })

@@ -18,6 +18,7 @@ import util from '@ohos.util';
 import {
   addRuntimeEventListener,
   AttributionControls,
+  AttributionText,
   CameraPosition,
   CameraTransitionMode,
   CompassButton,
@@ -276,8 +277,7 @@ struct NoOverlayExample {
       }
       .layoutWeight(1)
       // The sources' terms require their attribution, so the app shows it.
-      Text(this.controller.attributions.join(' '))
-        .fontSize(12)
+      AttributionText({ attributions: this.controller.attributions })
     }
     // #endregion overlay-none
   }
@@ -725,8 +725,7 @@ struct SnapshotExample {
         Image(this.preview.image)
           .width(320)
           .height(200)
-        Text(this.preview.attributions.join(' '))
-          .fontSize(12)
+        AttributionText({ attributions: this.preview.attributions })
       }
     }
     .width('100%')
@@ -781,8 +780,7 @@ struct SnapshotOfExample {
           .width(320)
           .height(200)
         // The sources' terms usually require their attribution with the image.
-        Text(this.preview.attributions.join(' '))
-          .fontSize(12)
+        AttributionText({ attributions: this.preview.attributions })
       }
     }
   }

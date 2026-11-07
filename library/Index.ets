@@ -195,6 +195,7 @@ export type {
 export { AttributionControls, DefaultControls, FullControls } from './src/main/ets/Overlay';
 export {
   AttributionButton,
+  AttributionText,
   CompassButton,
   DisappearingCompassButton,
   DisappearingScaleBar,

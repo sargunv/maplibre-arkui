@@ -12,8 +12,9 @@ import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw"
 <Api of="renderSnapshot" display="renderSnapshot()" /> renders a still image of
 a map that isn't on screen. It resolves a <Api of="MapSnapshot" />: the image,
 as a `PixelMap` for an `Image`, and the attribution of the style's sources,
-which the sources' terms usually require you to show with it. The app owns the
-image, so release it once nothing shows it:
+which the sources' terms usually require you to show with it, such as with
+<Api of="AttributionText" />. The app owns the image, so release it once nothing
+shows it:
 
 <Code code={region(examples, "snapshot")} lang="ts" />
 

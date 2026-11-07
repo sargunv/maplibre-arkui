@@ -97,7 +97,8 @@ export interface MapSnapshot {
   /**
    * The attribution of the style's sources, as HTML, without repeats, in the
    * order the style lists them, as `MapController.attributions` gives it. Show
-   * it with the image, as the sources' terms usually require.
+   * it with the image, as the sources' terms usually require, such as with
+   * `AttributionText`.
    */
   attributions: string[];
 }
@@ -110,7 +111,7 @@ export interface MapSnapshot {
  * const preview = await renderSnapshot({ style: STYLE_URL, width: 320, height: 180,
  *   camera: { center: { latitude: 48.8584, longitude: 2.2945 }, zoom: 14 },
  *   uiContext: this.getUIContext() });
- * // In build(): Image(preview.image), and Text(preview.attributions.join(' '))
+ * // In build(): Image(preview.image), and AttributionText({ attributions: preview.attributions })
  * ```
  *
  * Call it on the UI thread. It throws an `Error` with the value for a size,
