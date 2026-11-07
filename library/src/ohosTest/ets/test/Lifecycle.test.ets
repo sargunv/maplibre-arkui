@@ -14,7 +14,7 @@ import {
   StyleLoadError,
   Viewport,
 } from '@maplibre/arkui';
-import { CameraUpdateMode, MapHandle, MapSnapshot } from '@maplibre/native-ffi';
+import { CameraUpdateMode, MapHandle, MapSnapshot, RenderSessionHandle } from '@maplibre/native-ffi';
 
 import util from '@ohos.util';
 
@@ -158,6 +158,18 @@ export default function lifecycleTest(): void {
         mapSnapshot().view.extent.height === full.height);
       await until('a frame of the full size shows', () =>
         near(map.viewport?.project(camera().center).y ?? 0, full.height / 2, 0.5));
+    });
+
+    it('follows a resize that comes while its session attaches', 0, async () => {
+      await hideMap();
+      testMap.shown = true;
+      // The session takes a few frames to attach, as content that appears
+      // with the map, such as its attribution, can resize it.
+      await until('the map attaches a session', () =>
+        map.withFfiMap((ffi: MapHandle, session: RenderSessionHandle | undefined) => session !== undefined) ?? false);
+      testMap.height = 200;
+      await until('the map takes the new size', () => mapSnapshot().view.extent.height === 200);
+      await until('a frame of the new size shows', () => map.viewport?.size.height === 200);
     });
 
     it('makes a new map at a new density, which keeps the camera and the content', 0, async () => {

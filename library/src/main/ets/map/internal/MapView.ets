@@ -253,14 +253,17 @@ export class MapView extends XComponentController implements GestureTarget, Runt
     this.retarget();
   }
 
+  // The resize waits for the target changes before it, because FFI rejects a
+  // resize from a session that is still attaching.
   onSurfaceChanged(surfaceId: string, rect: SurfaceRect): void {
     this.surfaceSize = rect;
-    const size = this.logicalSize();
-    if (this.session !== undefined && this.target !== undefined && size !== undefined) {
-      this.session.discarding.resize(size);
-    } else {
-      this.retarget();
-    }
+    this.enqueue(async () => {
+      const size = this.logicalSize();
+      if (this.session !== undefined && this.target !== undefined && size !== undefined) {
+        this.session.discarding.resize(size);
+      }
+    });
+    this.retarget();
   }
 
   // The platform is destroying the surface. Release it from the session, and
