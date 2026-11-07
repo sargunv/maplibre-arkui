@@ -42,7 +42,8 @@ import EnvironmentCallback from '@ohos.app.ability.EnvironmentCallback';
 import observer from '@ohos.arkui.observer';
 
 import { CameraIdleEvent } from '../../camera/CameraIdleEvent';
-import { CameraMoveEvent, CameraMoveReason } from '../../camera/CameraMoveEvent';
+import { CameraMoveReason } from '../../camera/CameraMoveReason';
+import { CameraMoveStartEvent } from '../../camera/CameraMoveStartEvent';
 import { CameraPosition } from '../../camera/CameraPosition';
 import {
   checkCamera,
@@ -115,7 +116,7 @@ export interface MapViewEvents {
   onStyleLoaded: () => void;
   onStyleImageMissing: (event: StyleImageMissingEvent) => Promise<ResolvedStyleImage | undefined>;
   onMapIdle: () => void;
-  onCameraMoveStart: (event: CameraMoveEvent) => void;
+  onCameraMoveStart: (event: CameraMoveStartEvent) => void;
   onCameraIdle: (event: CameraIdleEvent) => void;
   onFrameRendered: (event: FrameRenderedEvent) => void;
   onError: (error: MapError) => void;

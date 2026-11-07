@@ -14,7 +14,7 @@ import {
 } from '@maplibre/native-ffi';
 import geoLocationManager from '@ohos.geoLocationManager';
 
-import { CameraMoveReason } from '../../camera/CameraMoveEvent';
+import { CameraMoveReason } from '../../camera/CameraMoveReason';
 import { CameraPosition } from '../../camera/CameraPosition';
 import { CheckedCamera, CheckedFit, CheckedTransition } from '../../camera/internal/FfiCamera';
 import { FrameViewport } from '../../camera/internal/FrameViewport';

@@ -20,8 +20,8 @@ export type { StyleImageMissingEvent } from './src/main/ets/map/StyleImageMissin
 
 // Camera
 export type { CameraIdleEvent } from './src/main/ets/camera/CameraIdleEvent';
-export { CameraMoveReason } from './src/main/ets/camera/CameraMoveEvent';
-export type { CameraMoveEvent } from './src/main/ets/camera/CameraMoveEvent';
+export { CameraMoveReason } from './src/main/ets/camera/CameraMoveReason';
+export type { CameraMoveStartEvent } from './src/main/ets/camera/CameraMoveStartEvent';
 export type { CameraPosition, CameraUpdate } from './src/main/ets/camera/CameraPosition';
 export { CameraTransitionMode } from './src/main/ets/camera/CameraTransitionOptions';
 export type { CameraTransitionOptions, FitCameraOptions } from './src/main/ets/camera/CameraTransitionOptions';

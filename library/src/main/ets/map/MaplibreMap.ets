@@ -1,7 +1,7 @@
 import geoLocationManager from '@ohos.geoLocationManager';
 
 import { CameraIdleEvent } from '../camera/CameraIdleEvent';
-import { CameraMoveEvent } from '../camera/CameraMoveEvent';
+import { CameraMoveStartEvent } from '../camera/CameraMoveStartEvent';
 import { Insets } from '../camera/internal/Insets';
 import { MapContent } from '../content/MapContent';
 import { ResolvedStyleImage } from '../content/StyleImage';
@@ -203,7 +203,7 @@ export struct MaplibreMap {
    * before the movement's `onStart`, unless the camera was moving already.
    * Called on the UI thread; the map logs what it throws.
    */
-  @Event onCameraMoveStart: (event: CameraMoveEvent) => void = (event: CameraMoveEvent) => {
+  @Event onCameraMoveStart: (event: CameraMoveStartEvent) => void = (event: CameraMoveStartEvent) => {
   };
   /**
    * The camera has come to rest at `event.camera`, after a jump, or once an
@@ -282,7 +282,7 @@ export struct MaplibreMap {
       this.onStyleImageMissing(event),
     onMapIdle: () => callHandler('onMapIdle', () => this.onMapIdle()),
     onFrameRendered: (event: FrameRenderedEvent) => callHandler('onFrameRendered', () => this.onFrameRendered(event)),
-    onCameraMoveStart: (event: CameraMoveEvent) =>
+    onCameraMoveStart: (event: CameraMoveStartEvent) =>
       callHandler('onCameraMoveStart', () => this.onCameraMoveStart(event)),
     onCameraIdle: (event: CameraIdleEvent) => callHandler('onCameraIdle', () => this.onCameraIdle(event)),
     onError: (error: MapError) => callHandler('onError', () => this.onError(error)),

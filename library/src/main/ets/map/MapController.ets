@@ -1,7 +1,7 @@
 import { CameraFitOptions, CameraOptions, MapHandle, RenderSessionHandle } from '@maplibre/native-ffi';
 import display from '@ohos.display';
 
-import { CameraMoveReason } from '../camera/CameraMoveEvent';
+import { CameraMoveReason } from '../camera/CameraMoveReason';
 import { CameraPosition, CameraUpdate } from '../camera/CameraPosition';
 import { CameraTransitionOptions, FitCameraOptions } from '../camera/CameraTransitionOptions';
 import { checkCamera, checkFit, checkTransition } from '../camera/internal/FfiCamera';

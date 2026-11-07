@@ -3,7 +3,7 @@
 
 import {
   CameraBoundsOptions,
-  CameraMoveEvent,
+  CameraMoveStartEvent,
   CameraMoveReason,
   CameraPosition,
   FrameRenderedEvent,
@@ -238,7 +238,7 @@ export class TestMap {
   }
 
   /** Logs the start of a camera move, and whether the controller showed it first. */
-  cameraMoveStarted(event: CameraMoveEvent): void {
+  cameraMoveStarted(event: CameraMoveStartEvent): void {
     const reason = event.reason === CameraMoveReason.GESTURE ? 'gesture' : 'programmatic';
     const shown = this.controller.cameraMoving && this.controller.cameraMoveReason === event.reason;
     this.events.push(shown ? `start ${reason}` : `start ${reason} before the controller`);

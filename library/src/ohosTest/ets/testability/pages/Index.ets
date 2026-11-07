@@ -3,7 +3,7 @@ import {
   AttributionControls,
   AttributionText,
   CameraIdleEvent,
-  CameraMoveEvent,
+  CameraMoveStartEvent,
   CompassButton,
   DefaultControls,
   DisappearingCompassButton,
@@ -281,7 +281,7 @@ struct Index {
           testMap.imageMissing(event),
         onMapIdle: () => testMap.mapIdled(),
         onFrameRendered: (event: FrameRenderedEvent) => testMap.frameRendered(event),
-        onCameraMoveStart: (event: CameraMoveEvent) => testMap.cameraMoveStarted(event),
+        onCameraMoveStart: (event: CameraMoveStartEvent) => testMap.cameraMoveStarted(event),
         onCameraIdle: (event: CameraIdleEvent) => {
           testMap.cameraIdled(event.camera);
           if (testMap.throwOnCameraIdle) {
