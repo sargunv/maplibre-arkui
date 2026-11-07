@@ -92,6 +92,7 @@ class Recorder implements GestureTarget {
     this.deltas[this.deltas.length - 1].animation?.endHandler?.callback?.({
       outcome: CameraTransitionOutcome.completed,
       generation: BigInt(0),
+      velocity: { pan: { x: 0, y: 0 }, zoom: 0, bearing: 0, pitch: 0 },
     });
   }
 
