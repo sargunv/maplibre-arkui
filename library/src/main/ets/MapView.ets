@@ -581,10 +581,8 @@ export class MapView extends XComponentController implements GestureTarget {
       }
       for (const layer of layers) {
         const handler = long ? layer.onLongClick : layer.onClick;
-        // The query reverses MapLibre Native's list, which has the layers from
-        // the bottom up but each layer's features front first already.
         const features = hits.filter((hit: RenderedFeature) => hit.layerId === layer.id)
-          .map((hit: RenderedFeature) => hit.feature).reverse();
+          .map((hit: RenderedFeature) => hit.feature);
         if (handler !== undefined && features.length > 0 && consumes(`The click handler of layer ${layer.id}`,
           () => handler(featureClickEvent(event, features)))) {
           return;
