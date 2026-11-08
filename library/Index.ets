@@ -30,10 +30,13 @@ export type { Viewport } from './src/main/ets/camera/Viewport';
 // Gestures
 export { WheelAction } from './src/main/ets/interaction/InteractionOptions';
 export type {
-  BearingIntervalOptions,
   InteractionOptions,
+  IntervalOptions,
+  MomentumOptions,
   MovementOptions,
   RotationOptions,
+  SnapMovementOptions,
+  SnapOptions,
 } from './src/main/ets/interaction/InteractionOptions';
 
 // Controls

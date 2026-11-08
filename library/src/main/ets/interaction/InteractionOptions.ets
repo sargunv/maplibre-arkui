@@ -1,8 +1,8 @@
 /**
  * How the user moves the map: which camera movements input makes, what the app
- * does as each starts, and what the wheel, rotation, and haptics do. Fields
- * that it leaves out keep their defaults, so every movement is on. Clicks reach
- * the map's handlers whichever movements are on.
+ * does as each starts, how each glides and settles, and what the wheel and
+ * haptics do. Fields that it leaves out keep their defaults, so every movement
+ * is on. Clicks reach the map's handlers whichever movements are on.
  *
  * ```ets
  * MaplibreMap({
@@ -13,11 +13,13 @@
  * ```
  *
  * A gesture is input on the map that moves the camera, as `interactions`
- * allows, until it and its momentum stop. A drag that lifts while it moves
- * glides on and slows down as ArkUI's `Scroll` and `List` do after a fling,
- * and a pinch, twist, or tilt glides briefly too. The overlay's `ZoomButtons`
- * and `CompassButton` move the camera through the controller, so they don't
- * count. The map's `onGestureStart` and `onGestureEnd` bracket each gesture:
+ * allows, until it, its momentum, and its snap stop. A drag that lifts while
+ * it moves glides on and slows down as ArkUI's `Scroll` and `List` do after a
+ * fling, a pinch, twist, or tilt glides briefly too, and a rotation that ends
+ * near north settles there. Each movement's `momentum` and `snap` change how
+ * it glides and settles. The overlay's `ZoomButtons` and `CompassButton` move
+ * the camera through the controller, so they don't count. The map's
+ * `onGestureStart` and `onGestureEnd` bracket each gesture:
  *
  * - Each `onGestureStart` is followed by exactly one `onGestureEnd` before the
  *   next `onGestureStart`.
@@ -28,12 +30,15 @@
  *   during an animation, takes the move over: `cameraMoveReason` becomes
  *   `GESTURE`, without another `onCameraMoveStart`.
  * - `onGestureEnd` comes a frame or more after the last input, once the
- *   momentum and a rotation's snap end, and before that gesture's
+ *   momentum and the snaps end, and before that gesture's
  *   `onCameraIdle`. The controller's `cameraMoving` stays true until then.
  * - A camera change by the app that stops momentum or held keys ends the
  *   gesture, and `onGestureEnd` runs before that call returns.
  * - A touch sequence that the system cancels (`TouchType.Cancel`) ends with no
  *   momentum and no snap, and still fires `onGestureEnd`.
+ *
+ * A value out of the range that its doc comment gives is reported to the
+ * map's `onError` when the options change, and its default takes its place.
  *
  * A change of the options applies at once. A movement that is turned off
  * stops at once, even in the middle of a gesture. Any such change also ends
@@ -58,7 +63,7 @@ export interface InteractionOptions {
    * the plus and minus keys, and double tap and drag while `pan` is on. While
    * it's on, a tap waits 300 ms for a second tap before it clicks.
    */
-  zoom?: MovementOptions;
+  zoom?: SnapMovementOptions;
   /**
    * Twist two fingers, drag with the right mouse button from side to side,
    * and Shift with the left and right arrows.
@@ -68,7 +73,7 @@ export interface InteractionOptions {
    * Drag two fingers up or down together, drag with the right mouse button up
    * or down, and Shift with the up and down arrows.
    */
-  pitch?: MovementOptions;
+  pitch?: SnapMovementOptions;
   /**
    * What the mouse wheel does: `WheelAction.ZOOM` at the pointer, the default,
    * or `WheelAction.PAN`. With Ctrl held, it does the other, except in
@@ -91,16 +96,21 @@ export interface InteractionOptions {
   cooperative?: boolean;
 }
 
-/** Whether a camera movement is on, and what the app does as the user starts it. */
+/** Whether a camera movement is on, what the app does as the user starts it, and how it glides. */
 export interface MovementOptions {
   /** Whether the user's input makes this movement. On by default. */
   enabled?: boolean;
   /**
+   * How the movement glides on and slows down after the user lets go while it
+   * moves. Fields that it leaves out keep their defaults.
+   */
+  momentum?: MomentumOptions;
+  /**
    * The user started this movement, such as a pan. It runs each time a
    * gesture starts to move the camera this way, which can be more than once in
    * a gesture: a finger that goes down or lifts starts the movements again. It
-   * runs after `onGestureStart`. Momentum, a held key's repeats, and a
-   * rotation's snap never call it.
+   * runs after `onGestureStart`. Momentum, a held key's repeats, and a snap
+   * never call it.
    *
    * Fingers that are down keep moving the camera from where the app puts it
    * here. A camera change, including `followUserLocation()`, ends held keys
@@ -112,36 +122,97 @@ export interface MovementOptions {
   onStart?: () => void;
 }
 
-/** Rotation's options: those of each movement, and where it settles and ticks. */
-export interface RotationOptions extends MovementOptions {
+/** The options of a movement that changes one value of the camera, which can settle on chosen values. */
+export interface SnapMovementOptions extends MovementOptions {
   /**
-   * Where a rotation settles: one that ends within 7° of one of these bearings
-   * eases to it after its momentum, as the last part of the gesture. North by
-   * default; `{ interval: 0 }` turns snapping off.
+   * The values that the movement settles on, in its unit: zoom levels, or
+   * degrees of bearing or pitch. A gesture that made this movement ends by
+   * easing to the nearest one, after its momentum, when it stops within the
+   * snap's `tolerance` of it. A wheel's notches and a double tap's zoom don't
+   * snap. Off, `{ interval: 0 }`, by default for zoom and pitch, and north,
+   * `{ interval: 360 }`, for rotation.
    */
-  snap?: BearingIntervalOptions;
+  snap?: SnapOptions;
+}
+
+/** Rotation's options: those of a movement that snaps, and where it ticks. */
+export interface RotationOptions extends SnapMovementOptions {
   /**
-   * Where a soft tick plays as a twist or a right-button drag turns the map
-   * across one of these bearings. North by default; `{ interval: 0 }` turns the
-   * ticks off. Ticks need the app to declare `ohos.permission.VIBRATE`, and
-   * play only when the system's touch feedback is on.
+   * The bearings where a soft tick plays as a twist or a right-button drag
+   * turns the map across one. North, `{ interval: 360 }`, by default;
+   * `{ interval: 0 }` turns the ticks off. Ticks need the app to declare
+   * `ohos.permission.VIBRATE`, and play only when the system's touch feedback
+   * is on.
    */
-  haptics?: BearingIntervalOptions;
+  haptics?: IntervalOptions;
 }
 
 /**
- * Bearings every `interval` degrees from `offset`. Each turn has the bearings
+ * How a movement glides after the user lets go: its speed halves every
+ * `halfLifeMs` until it falls to `stopSpeed`, as friction slows it. Speeds and
+ * distances are in the movement's unit: vp for pan, zoom levels for zoom, and
+ * degrees for rotate and pitch. Speeds are per second.
+ */
+export interface MomentumOptions {
+  /** Whether the movement glides. On by default. A movement that doesn't glide still snaps. */
+  enabled?: boolean;
+  /**
+   * How long the speed takes to halve, in milliseconds. Positive. By default,
+   * a pan glides as ArkUI's `List` flings: from 1.2 times the release's speed
+   * with a half-life of 165 ms below 3000 px/s, and from 1.5 times it with
+   * 220 ms above. A half-life that the app gives serves every release, and
+   * the glide starts at the release's own speed. 140 ms for zoom, rotate, and
+   * pitch.
+   */
+  halfLifeMs?: number;
+  /**
+   * The slowest release that glides. Not negative. ArkUI's 240 px/s, in vp,
+   * for pan; 0 for zoom; 60 for rotate; 5 for pitch.
+   */
+  minSpeed?: number;
+  /**
+   * The speed at which the glide ends. Positive. ArkUI's 120 px/s, in vp, for
+   * pan; 0.01 for zoom; 1 for rotate and pitch.
+   */
+  stopSpeed?: number;
+  /**
+   * The fastest the glide starts: a faster one starts at this speed.
+   * Positive. 9000 for pan, ArkUI's fling limit; none for the others.
+   */
+  maxSpeed?: number;
+  /**
+   * The farthest the glide goes: one that would go farther starts slower.
+   * Positive. 2.5 for zoom; none for the others.
+   */
+  maxDistance?: number;
+}
+
+/**
+ * Values every `interval` from `offset`, in the unit of the movement that
+ * takes them. Bearings repeat each turn: a turn has the bearings
  * `offset + k * interval` that are less than a turn from `offset`, so an
  * interval that doesn't divide 360 leaves a shorter gap before `offset`.
- *
- * A value that isn't finite, or an interval that is negative, is reported to
- * the map's `onError`, and its default takes its place.
  */
-export interface BearingIntervalOptions {
-  /** The degrees from one bearing to the next. 360 by default; 0 leaves none. */
+export interface IntervalOptions {
+  /**
+   * The distance from one value to the next. Not negative; 0 leaves none. The
+   * option that holds it gives the default.
+   */
   interval?: number;
-  /** One of the bearings, in degrees. 0, north, by default. */
+  /** One of the values. Finite. 0 by default. */
   offset?: number;
+}
+
+/** Where a movement settles: the values that `IntervalOptions` gives, and how it eases to them. */
+export interface SnapOptions extends IntervalOptions {
+  /**
+   * How near one of the values the movement has to stop to ease to it. Not
+   * negative. 7° for rotate and pitch; half a level for zoom, so that
+   * `{ interval: 1 }` settles on the nearest whole level.
+   */
+  tolerance?: number;
+  /** How long the ease takes, in milliseconds. Not negative; 0 settles at once. 300 by default. */
+  durationMs?: number;
 }
 
 /**

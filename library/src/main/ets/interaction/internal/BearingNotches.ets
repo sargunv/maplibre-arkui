@@ -5,8 +5,8 @@ const NOTCH_CAPTURE = 1;
 const NOTCH_REARM = 2;
 const NOTCH_MIN_MS = 50;
 
-/** Bearings every `interval` degrees from `offset` through each turn. */
-export interface Bearings {
+/** Values every `interval` from `offset`; bearings repeat each turn. */
+export interface Interval {
   interval: number;
   offset: number;
 }
@@ -14,14 +14,14 @@ export interface Bearings {
 // The haptic notches of one rotation by the pointer. A notch that the rotation
 // starts at is silent until the bearing leaves it.
 export class BearingNotches {
-  private readonly notches: Bearings;
+  private readonly notches: Interval;
   private bearing: number;
   // The notch that ticked last, or that the rotation started at, until the
   // bearing leaves it.
   private silent: number | undefined;
   private lastTick: number = -Infinity;
 
-  constructor(notches: Bearings, bearing: number) {
+  constructor(notches: Interval, bearing: number) {
     this.notches = notches;
     this.bearing = bearing;
     this.silent = this.reached(bearing, bearing);
