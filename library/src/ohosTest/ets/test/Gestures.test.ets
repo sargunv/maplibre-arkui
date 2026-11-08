@@ -228,7 +228,8 @@ export default function gesturesTest(): void {
         expectNear(pan?.velocity?.y ?? NaN, px === 3 ? 3000 : 2400, 1e-6);
         expect(pan?.velocity?.x).assertEqual(0);
         expectNear(pan?.decay?.halfLifeMs ?? NaN, Math.LN2 / (4.2 * (px === 3 ? 0.75 : 1)) * 1000, 1e-6);
-        expectNear(pan?.decay?.minSpeed ?? NaN, 240 / px, 1e-9);
+        // A release under 240 px/s doesn't glide.
+        expectNear(pan?.decay?.minSpeed ?? NaN, 240 / px * (px === 3 ? 1.5 : 1.2), 1e-9);
         expectNear(pan?.decay?.stopSpeed ?? NaN, 120 / px, 1e-9);
         expect(pan?.decay?.maxSpeed).assertEqual(9000);
         // The gesture lasts until the map ends the glide.

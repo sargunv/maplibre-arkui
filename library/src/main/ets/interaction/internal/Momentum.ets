@@ -97,8 +97,8 @@ export function anchoredMomentum(glide: Glide, velocity: number | undefined, sna
  * per vp. By default it glides as ArkUI's `Scroll` and `List` fling
  * (ace_engine's `scrollable.cpp`, OpenHarmony 7.0, and the SDK's `friction()`
  * and `flingSpeedLimit()`): the release speed times a gain decays at 4.2 times
- * the friction per second, from at least 240 px/s, down to 120 px/s, starting
- * at most 9000 vp/s. A release under 3000 px/s takes a gain of 1.2 and
+ * the friction per second, from a release of at least 240 px/s, down to
+ * 120 px/s, starting at most 9000 vp/s. A release under 3000 px/s takes a gain of 1.2 and
  * friction 1, and a faster one 1.5 and the default friction, 0.75. A half-life
  * that the app gives replaces the gain and the friction.
  */
@@ -111,7 +111,8 @@ export function panMomentum(glide: Glide, x: number, y: number, density: number)
   const gain = momentum.halfLifeMs !== undefined ? 1 : slow ? 1.2 : 1.5;
   const result = decay(momentum);
   result.halfLifeMs = momentum.halfLifeMs ?? Math.LN2 / (4.2 * (slow ? 1 : 0.75)) * 1000;
-  result.minSpeed = momentum.minSpeed ?? 240 / density;
+  // The minimum is the release's, before the gain.
+  result.minSpeed = (momentum.minSpeed ?? 240 / density) * gain;
   result.stopSpeed = momentum.stopSpeed ?? 120 / density;
   result.maxSpeed = momentum.maxSpeed ?? 9000;
   return { velocity: { x: x * gain, y: y * gain }, decay: result };
