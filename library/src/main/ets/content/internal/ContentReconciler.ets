@@ -16,7 +16,8 @@ import { MapContent } from '../MapContent';
 import { StyleImageSource } from '../StyleImage';
 import { FeatureClickEvent, LayerPredicate, LayerSummary, StyleLayer } from '../StyleLayer';
 import { StyleSource } from '../StyleSource';
-import { StyleImagePixels, stylePixels } from './StyleImages';
+import { contextScales, LengthScales } from '../../camera/internal/Insets';
+import { CheckedImageOptions, StyleImagePixels, stylePixels } from './StyleImages';
 
 // The features of a click on a layer, front first, as its handler takes them.
 export function featureClickEvent(event: MapClickEvent, features: GeoJsonFeature[]): FeatureClickEvent {
@@ -117,8 +118,16 @@ export class ContentReconciler {
   }
 
   /** The pixels of an image, as this reconciler's map takes them. */
-  stylePixels(source: StyleImageSource, drawAsSdf: boolean): Promise<StyleImagePixels> {
-    return stylePixels(source, drawAsSdf, this.pixelRatio, this.context);
+  stylePixels(source: StyleImageSource, options: CheckedImageOptions): Promise<StyleImagePixels> {
+    return stylePixels(source, options, this.pixelRatio, this.context, this.scales());
+  }
+
+  // How many vp a length is, in the map's UI or the snapshot.
+  private scales(): LengthScales {
+    if (this.context !== undefined) {
+      return contextScales(this.context);
+    }
+    return { px: (px: number) => px / this.pixelRatio, fp: (fp: number) => fp * this.fontScale };
   }
 
   /**
@@ -552,7 +561,7 @@ export class ContentReconciler {
     const colorMode = this.colorMode;
     let pixels: StyleImagePixels;
     try {
-      pixels = await this.stylePixels(ref.source, ref.drawAsSdf);
+      pixels = await this.stylePixels(ref.source, ref.options);
     } catch (error) {
       this.check(generation);
       this.failedImages.add(ref.name);
@@ -561,8 +570,7 @@ export class ContentReconciler {
     }
     this.check(generation);
     if (await this.run(generation, undefined, `setting the image ${ref.name}`,
-      this.map.setStyleImage(ref.name, pixels.pixels,
-        { pixelRatio: pixels.pixelRatio, sdf: ref.drawAsSdf, keepUnused: true }))) {
+      this.map.setStyleImage(ref.name, pixels.pixels, pixels.options))) {
       this.images.set(ref.name, colorMode);
     } else {
       this.failedImages.add(ref.name);

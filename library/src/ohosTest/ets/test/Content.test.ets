@@ -8,6 +8,8 @@ import {
   GeoJsonGeometry,
   get,
   image as styleImage,
+  StyleImageOptions,
+  StyleImageTextFit,
   LayerPredicate,
   LayerSummary,
   MapContent,
@@ -16,6 +18,7 @@ import {
   StyleLayer,
 } from '@maplibre/arkui';
 import { ContentReconciler } from '@maplibre/arkui/src/main/ets/content/internal/ContentReconciler';
+import { checkImageOptions } from '@maplibre/arkui/src/main/ets/content/internal/StyleImages';
 import { imageName } from '@maplibre/arkui/src/main/ets/expression/internal/StyleRefs';
 import { MapHandle, StyleLayerInfo, StyleLayerVisibility } from '@maplibre/native-ffi';
 import application from '@ohos.app.ability.application';
@@ -734,9 +737,89 @@ export default function contentTest(): void {
       red.release();
     });
 
+    it('draws an image at the size it gives', 0, async () => {
+      // 6 vp from the middle: outside an 8 vp icon, inside a 16 vp one.
+      const edge = async (source: image.PixelMap | Resource): Promise<string> => {
+        const center: GeoJsonGeometry = { type: 'Point', coordinates: [0, 0] };
+        const snapshot = await renderSnapshot({
+          style: backgroundStyle('#0000ff'),
+          content: { sources: [{ id: 'places', json: { 'type': 'geojson', 'data': center } }],
+            layers: icon({ 'icon-image': styleImage(source, { size: { width: 16, height: 16 } }) }) },
+          width: 64, height: 32, pixelRatio: 2, camera: { center: { latitude: 0, longitude: 0 }, zoom: 0 },
+          uiContext: testMap.context,
+        });
+        const pixels = await readPixels(snapshot.image);
+        await snapshot.image.release();
+        return pixelAt(pixels, 128, 2 * (32 + 6), 32).join();
+      };
+      const red = square(8, 255, 0, 0);
+      expect(await edge(red)).assertEqual('255,0,0,255');
+      red.release();
+      expect(await edge($r('app.media.green_square'))).assertEqual('0,255,0,255');
+    });
+
+    it('sets an image that is already an SDF as one, without changing it', 0, async () => {
+      const red = square(8, 255, 0, 0);
+      const options: StyleImageOptions = { sdf: true };
+      testMap.content = content(TWO, [{ id: 'icons', type: 'symbol', source: 'places',
+        layout: { 'icon-image': styleImage(red, options) } }]);
+      const info = await eventually('the map has the image', async () =>
+        withMap((ffi: MapHandle) => ffi.getStyleImage(imageName(red, checkImageOptions(options)))));
+      expect(info.sdf).assertTrue();
+      expect(info.width).assertEqual(8);
+      expect(info.pixels[0]).assertEqual(255);
+      red.release();
+    });
+
+    it('stretches an image by its slice or its ranges, and fits it to text', 0, async () => {
+      const red = square(4, 255, 0, 0);
+      const sliced: StyleImageOptions = {
+        size: { width: 16, height: 8 },
+        stretch: {
+          slice: { left: 4, right: 4, top: 2, bottom: 2 },
+          content: { left: 3, right: 3, top: 1, bottom: 1 },
+          textFitWidth: StyleImageTextFit.PROPORTIONAL,
+          textFitHeight: StyleImageTextFit.STRETCH_ONLY,
+        },
+      };
+      const ranged: StyleImageOptions = {
+        size: { width: 16, height: 8 },
+        stretch: { x: [{ from: 2, to: 5 }, { from: 10, to: 14 }], y: [{ from: 1, to: 7 }] },
+      };
+      testMap.content = content(TWO, [
+        { id: 'sliced', type: 'symbol', source: 'places', layout: { 'icon-image': styleImage(red, sliced) } },
+        { id: 'ranged', type: 'symbol', source: 'places', layout: { 'icon-image': styleImage(red, ranged) } },
+      ]);
+      const info = (options: StyleImageOptions) => eventually('the map has the image', async () =>
+        withMap((ffi: MapHandle) => ffi.getStyleImage(imageName(red, checkImageOptions(options)))));
+      const a = await info(sliced);
+      const r = a.pixelRatio;
+      expect(a.width).assertEqual(Math.round(16 * r));
+      expect(JSON.stringify(a.stretchX)).assertEqual(JSON.stringify([{ from: 4 * r, to: 12 * r }]));
+      expect(JSON.stringify(a.stretchY)).assertEqual(JSON.stringify([{ from: 2 * r, to: 6 * r }]));
+      expect(JSON.stringify(a.content))
+        .assertEqual(JSON.stringify({ left: 3 * r, top: 1 * r, right: 13 * r, bottom: 7 * r }));
+      expect(a.textFitWidth).assertEqual(2);
+      expect(a.textFitHeight).assertEqual(1);
+      const b = await info(ranged);
+      expect(JSON.stringify(b.stretchX))
+        .assertEqual(JSON.stringify([{ from: 2 * r, to: 5 * r }, { from: 10 * r, to: 14 * r }]));
+      expect(JSON.stringify(b.stretchY)).assertEqual(JSON.stringify([{ from: 1 * r, to: 7 * r }]));
+      red.release();
+    });
+
+    it('reports an image whose stretch doesn\'t fit in it', 0, async () => {
+      const red = square(4, 255, 0, 0);
+      testMap.content = content(TWO, [{ id: 'icons', type: 'symbol', source: 'places',
+        layout: { 'icon-image': styleImage(red, { size: { width: 8, height: 8 }, stretch: { x: [{ from: 2, to: 20 }] } }) } }]);
+      await until('the map reports the image', () =>
+        testMap.failures.some((error: MapError) => error.message.includes('image')));
+      red.release();
+    });
+
     it('adds an image while a layer uses it, and removes it after', 0, async () => {
       const red = square(8, 255, 0, 0);
-      const name = imageName(red, false);
+      const name = imageName(red, checkImageOptions(undefined));
       const icons = (id: string): StyleLayer => ({ id: id, type: 'symbol', source: 'places',
         layout: { 'icon-image': styleImage(red) } });
       testMap.content = content(TWO, [icons('a'), icons('b')]);

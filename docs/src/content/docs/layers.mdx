@@ -78,4 +78,14 @@ layer's `icon-color`:
 
 <Code code={region(layers, "sdf")} lang="ts" />
 
+## Put labels on a background
+
+To draw each label on a background that grows with its text, stretch an image
+around it. `stretch` says which parts of the image stretch and where the text
+goes, and the layer's `icon-text-fit` fits the image to the text:
+
+<Code code={region(layers, "stretch")} lang="ts" />
+
+See <Api of="StyleImageStretch" /> for stretch ranges and how the image fits.
+
 [spec]: https://maplibre.org/maplibre-style-spec/

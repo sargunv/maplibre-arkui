@@ -303,6 +303,17 @@ export default function expressionsTest(): void {
       expect(thrown(() => image('pin', { drawAsSdf: true }))).assertContain('"pin"');
     });
 
+    it('throws for invalid image() options', 0, () => {
+      const pin = $r('app.media.green_square');
+      expect(thrown(() => image(pin, { size: { width: 0, height: 8 } }))).assertContain('0 by 8');
+      expect(thrown(() => image(pin, { sdf: true, drawAsSdf: true }))).assertContain('not both');
+      expect(thrown(() => image(pin, { stretch: { slice: { left: 2 }, x: [{ from: 0, to: 1 }] } })))
+        .assertContain('not both');
+      expect(thrown(() => image(pin, { stretch: { x: [{ from: 4, to: 6 }, { from: 2, to: 3 }] } })))
+        .assertContain('increasing order');
+      expect(thrown(() => image(pin, { stretch: { content: { left: '10%' } } }))).assertContain('10%');
+    });
+
     it('rejects an expression of the wrong type', 0, () => {
       let threw = false;
       try {
