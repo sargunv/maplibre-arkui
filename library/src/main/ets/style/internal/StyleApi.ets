@@ -232,9 +232,16 @@ export class StyleApi implements MapStyle {
     if (style === undefined) {
       return Promise.resolve(false);
     }
-    style.reconciler.trackRefs(`light/${name}`, refsOf(value));
+    // The property's colors change once the map takes the value.
+    const refs = refsOf(value);
     return write(() => this.current() === style, `setting ${name} of the light`,
-      () => style.map.setStyleLightProperty(name, propertyValue(name, value)));
+      () => style.map.setStyleLightProperty(name, propertyValue(name, value)))
+      .then((applied: boolean): boolean => {
+        if (applied && this.current() === style) {
+          style.reconciler.trackRefs(`light/${name}`, refs);
+        }
+        return applied;
+      });
   }
 
   private findSource(id: string, style: LoadedStyle | undefined = this.current()): Promise<SourceHandle | undefined> {

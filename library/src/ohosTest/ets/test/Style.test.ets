@@ -597,6 +597,10 @@ export default function styleTest(): void {
       const background = await layerNamed('background');
       expect(await background.setProperty('background-pattern', styleImage(first))).assertTrue();
       await eventually('the first image goes in', async () => await has(first) ? true : undefined);
+      // A value that the map rejects leaves the property, and its image, as they were.
+      expect(await rejection(background.setProperty('background-pattern', 42))).assertContain('background-pattern');
+      await frames(10);
+      expect(await has(first)).assertTrue();
       expect(await background.setProperty('background-pattern', styleImage(second))).assertTrue();
       await eventually('the second image replaces it', async () =>
         await has(second) && !(await has(first)) ? true : undefined);
