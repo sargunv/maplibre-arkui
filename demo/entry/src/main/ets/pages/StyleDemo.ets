@@ -70,7 +70,7 @@ const PARIS: GeoJsonFeatureCollection = {
   ],
 };
 
-const PARK_COLORS = ['#66bb6a', '#ffa726', '#ab47bc'];
+const PARK_COLORS: ResourceColor[] = ['#66bb6a', '#ffa726', '#ab47bc'];
 
 // Paint that reads the feature's `selected` state, which a tap sets.
 const SELECTED = toBoolean(featureState('selected'));
@@ -78,7 +78,7 @@ const SELECTED_STATE: Record<string, Object> = { 'selected': true };
 
 // Under the base style's labels, so they draw over it. Each layer's features
 // handle a click with `onClick`.
-function parkLayer(fill: string, onClick: FeatureClickHandler): StyleLayer {
+function parkLayer(fill: ResourceColor, onClick: FeatureClickHandler): StyleLayer {
   return {
     id: 'paris-park', type: 'fill', source: 'paris', filter: eq(geometryType(), 'Polygon'),
     paint: { 'fill-color': cases([[SELECTED, color('#2e7d32')]], color(fill)), 'fill-opacity': 0.6 },

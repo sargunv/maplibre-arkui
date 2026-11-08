@@ -129,9 +129,27 @@ export struct ImageExample {
           layout: { 'icon-image': image($r('app.media.pin')), 'icon-anchor': 'bottom' },
         },
         // #endregion image
+      ],
+    };
+  }
+
+  build() {
+    MaplibreMap({ style: STYLE, controller: this.controller, content: this.content })
+  }
+}
+
+@ComponentV2
+export struct SdfImageExample {
+  private controller: MapController = new MapController({ camera: { center: PARIS, zoom: 12 } });
+
+  @Computed
+  get content(): MapContent {
+    return {
+      sources: [{ id: 'places', json: { 'type': 'geojson', 'data': PLACES } }],
+      layers: [
         // #region sdf
         {
-          id: 'dots', type: 'symbol', source: 'places',
+          id: 'pins', type: 'symbol', source: 'places',
           layout: { 'icon-image': image($r('app.media.pin'), { drawAsSdf: true }), 'icon-anchor': 'bottom' },
           paint: { 'icon-color': color($r('app.color.place')) },
         },

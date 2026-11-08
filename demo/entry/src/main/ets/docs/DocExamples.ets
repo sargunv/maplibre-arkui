@@ -3,7 +3,7 @@
 
 import { EditStyleExample, StyleUrlExample, SwitchStyleExample } from './Styling';
 import { CameraBoundsExample, CameraMovingExample, MoveCameraExample, ReadCameraExample, StartPositionExample, ViewportInsetsExample } from './Camera';
-import { BelowLabelsExample, ExpressionLayerExample, GeoJsonExample, ImageExample } from './Layers';
+import { BelowLabelsExample, ExpressionLayerExample, GeoJsonExample, ImageExample, SdfImageExample } from './Layers';
 import { CooperativeExample, LayerClickExample, MapClickExample, PanStartExample, RestrictExample } from './Interaction';
 import { ClusterExample, HighlightExample, QueryRenderedExample } from './Features';
 import { CustomControlsExample, MarkerExample, NoControlsExample, PointerPinExample, PresetExample } from './Controls';
@@ -61,6 +61,9 @@ export struct DocExamples {
         TabContent() {
           ImageExample()
         }.tabBar('Image')
+        TabContent() {
+          SdfImageExample()
+        }.tabBar('SDF image')
         TabContent() {
           RestrictExample()
         }.tabBar('Restrict')
