@@ -162,3 +162,34 @@ export struct SdfImageExample {
     MaplibreMap({ style: STYLE, controller: this.controller, content: this.content })
   }
 }
+
+@ComponentV2
+export struct StretchImageExample {
+  private controller: MapController = new MapController({ camera: { center: PARIS, zoom: 12 } });
+
+  @Computed
+  get content(): MapContent {
+    return {
+      sources: [{ id: 'places', json: { 'type': 'geojson', 'data': PLACES } }],
+      layers: [
+        // #region stretch
+        {
+          id: 'names', type: 'symbol', source: 'places',
+          layout: {
+            'text-field': get('name'),
+            'text-font': literal(['Noto Sans Regular']),
+            'icon-image': image($r('app.media.bubble'), {
+              stretch: { slice: { left: 4, right: 4, top: 4, bottom: 4 }, content: { left: 6, right: 6, top: 4, bottom: 4 } },
+            }),
+            'icon-text-fit': 'both',
+          },
+        },
+        // #endregion stretch
+      ],
+    };
+  }
+
+  build() {
+    MaplibreMap({ style: STYLE, controller: this.controller, content: this.content })
+  }
+}

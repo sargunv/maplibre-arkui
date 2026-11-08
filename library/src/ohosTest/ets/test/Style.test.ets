@@ -32,6 +32,7 @@ import {
 } from '@maplibre/arkui';
 import { ContentReconciler } from '@maplibre/arkui/src/main/ets/content/internal/ContentReconciler';
 import { readPixelMap } from '@maplibre/arkui/src/main/ets/content/internal/PixelMaps';
+import { checkImageOptions } from '@maplibre/arkui/src/main/ets/content/internal/StyleImages';
 import { imageName } from '@maplibre/arkui/src/main/ets/expression/internal/StyleRefs';
 import { USER_LOCATION_LAYER } from '@maplibre/arkui/src/main/ets/location/internal/UserLocationLayer';
 import { LoadedStyle } from '@maplibre/arkui/src/main/ets/style/internal/LoadedStyle';
@@ -593,7 +594,7 @@ export default function styleTest(): void {
       const first = square(8);
       const second = square(8);
       const has = async (source: image.PixelMap): Promise<boolean> =>
-        (await withMap((ffi: MapHandle) => ffi.getStyleImage(imageName(source, false)))) !== undefined;
+        (await withMap((ffi: MapHandle) => ffi.getStyleImage(imageName(source, checkImageOptions(undefined))))) !== undefined;
       const background = await layerNamed('background');
       expect(await background.setProperty('background-pattern', styleImage(first))).assertTrue();
       await eventually('the first image goes in', async () => await has(first) ? true : undefined);

@@ -8,6 +8,7 @@
 // check nothing in ArkTS without a brand, or type assertions at every feature
 // property with one.
 
+import { checkImageOptions } from '../content/internal/StyleImages';
 import { StyleImageOptions, StyleImageSource } from '../content/StyleImage';
 import { resolveColor } from './internal/Colors';
 import { FONT_SCALE_STATE } from './internal/FontScale';
@@ -463,10 +464,10 @@ export function image(value: ExpressionInput | StyleImageSource, options?: Style
     return call('image', value as ExpressionInput);
   }
   const source = value as StyleImageSource;
-  const drawAsSdf = options?.drawAsSdf ?? false;
-  const name = imageName(source, drawAsSdf);
+  const checked = checkImageOptions(options);
+  const name = imageName(source, checked);
   const expression = new Expression(['image', name]);
-  setRefs(expression, [new ImageRef(name, source, drawAsSdf)]);
+  setRefs(expression, [new ImageRef(name, source, checked)]);
   return expression;
 }
 

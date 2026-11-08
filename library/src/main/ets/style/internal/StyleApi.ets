@@ -11,7 +11,7 @@ import {
   StyleTransitionOptions as FfiTransitionOptions,
 } from '@maplibre/native-ffi';
 
-import { StyleImagePixels } from '../../content/internal/StyleImages';
+import { checkImageOptions, StyleImagePixels } from '../../content/internal/StyleImages';
 import { StyleImageOptions, StyleImageSource } from '../../content/StyleImage';
 import { refsOf } from '../../expression/internal/StyleRefs';
 import { StyleSource } from '../../content/StyleSource';
@@ -127,19 +127,19 @@ export class StyleApi implements MapStyle {
 
   setImage(id: string, image: StyleImageSource, options?: StyleImageOptions): Promise<boolean> {
     checkId('image', id);
+    const checked = checkImageOptions(options);
     const style = this.current();
     if (style === undefined) {
       return Promise.resolve(false);
     }
-    const sdf = options?.drawAsSdf ?? false;
     // A pixel map's pixels are read before this returns. A failure reaches the
     // caller once the image writes before this one settle.
-    const drawn = style.reconciler.stylePixels(image, sdf);
+    const drawn = style.reconciler.stylePixels(image, checked);
     drawn.catch((): void => {
     });
     return this.queued(this.imageWrites.then(() => drawn).then((pixels: StyleImagePixels) =>
       this.current() !== style ? false : write(() => this.current() === style, `setting image ${id}`,
-        () => style.map.setStyleImage(id, pixels.pixels, { pixelRatio: pixels.pixelRatio, sdf: sdf, keepUnused: true }))));
+        () => style.map.setStyleImage(id, pixels.pixels, pixels.options))));
   }
 
   removeImage(id: string): Promise<boolean> {

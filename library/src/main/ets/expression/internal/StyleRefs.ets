@@ -3,6 +3,7 @@
 // property, which follows the color mode, and an image under a reserved ID.
 // A weak table keeps them off the public Expression class.
 
+import { CheckedImageOptions } from '../../content/internal/StyleImages';
 import { StyleImageSource } from '../../content/StyleImage';
 
 // A resource color, under the global state name that the expression reads.
@@ -20,12 +21,12 @@ export class ColorRef {
 export class ImageRef {
   readonly name: string;
   readonly source: StyleImageSource;
-  readonly drawAsSdf: boolean;
+  readonly options: CheckedImageOptions;
 
-  constructor(name: string, source: StyleImageSource, drawAsSdf: boolean) {
+  constructor(name: string, source: StyleImageSource, options: CheckedImageOptions) {
     this.name = name;
     this.source = source;
-    this.drawAsSdf = drawAsSdf;
+    this.options = options;
   }
 
   // Whether ArkUI draws the image, so a new color mode can change it.
@@ -92,7 +93,7 @@ export function colorName(color: Resource): string {
 
 // The style image ID of an image: the same for the same resource, and for the
 // same pixel map or drawable descriptor.
-export function imageName(source: StyleImageSource, drawAsSdf: boolean): string {
+export function imageName(source: StyleImageSource, options: CheckedImageOptions): string {
   let key: string;
   if (isResource(source)) {
     key = `r/${resourceKey(source as Resource)}`;
@@ -104,5 +105,5 @@ export function imageName(source: StyleImageSource, drawAsSdf: boolean): string 
     }
     key = `o/${id}`;
   }
-  return `${IMAGE_PREFIX}${key}${drawAsSdf ? '/sdf' : ''}`;
+  return `${IMAGE_PREFIX}${key}/${options.key}`;
 }
