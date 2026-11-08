@@ -11,8 +11,9 @@ import {
   StyleTransitionOptions as FfiTransitionOptions,
 } from '@maplibre/native-ffi';
 
-import { readPixelMap } from '../../content/internal/PixelMaps';
-import { StyleImage } from '../../content/StyleImage';
+import { StyleImagePixels } from '../../content/internal/StyleImages';
+import { StyleImageOptions, StyleImageSource } from '../../content/StyleImage';
+import { refsOf } from '../../expression/internal/StyleRefs';
 import { StyleSource } from '../../content/StyleSource';
 import { LayerHandle } from '../LayerHandle';
 import { MapStyle, StyleTransitionOptions } from '../MapStyle';
@@ -37,6 +38,8 @@ const DEFAULT_TRANSITION_MS = 300;
 export class StyleApi implements MapStyle {
   // The style that the map showing the controller has loaded, if any.
   readonly current: () => LoadedStyle | undefined;
+  // Settles once the image writes so far have.
+  private imageWrites: Promise<void> = Promise.resolve();
 
   constructor(current: () => LoadedStyle | undefined) {
     this.current = current;
@@ -122,21 +125,21 @@ export class StyleApi implements MapStyle {
         .map((info: StyleLayerInfo): LayerHandle => new LayerHandle(new LayerKey(this.current, style, info))));
   }
 
-  setImage(item: StyleImage): Promise<boolean> {
-    checkId('image', item.id);
-    const ratio = item.pixelRatio;
-    if (ratio !== undefined && !(Number.isFinite(ratio) && ratio > 0)) {
-      throw new Error(`An image's pixelRatio must be finite and greater than 0: ${ratio}`);
-    }
-    const pixels = readPixelMap(item.image);
+  setImage(id: string, image: StyleImageSource, options?: StyleImageOptions): Promise<boolean> {
+    checkId('image', id);
     const style = this.current();
     if (style === undefined) {
       return Promise.resolve(false);
     }
-    checkOwned(style.reconciler.ownsImage(item.id), 'image', item.id);
-    return write(() => this.current() === style, `setting image ${item.id}`,
-      () => style.map.setStyleImage(item.id, pixels,
-        { pixelRatio: ratio ?? style.reconciler.pixelRatio, sdf: item.sdf ?? false, keepUnused: true }));
+    const sdf = options?.drawAsSdf ?? false;
+    // A pixel map's pixels are read before this returns. A failure reaches the
+    // caller once the image writes before this one settle.
+    const drawn = style.reconciler.stylePixels(image, sdf);
+    drawn.catch((): void => {
+    });
+    return this.queued(this.imageWrites.then(() => drawn).then((pixels: StyleImagePixels) =>
+      this.current() !== style ? false : write(() => this.current() === style, `setting image ${id}`,
+        () => style.map.setStyleImage(id, pixels.pixels, { pixelRatio: pixels.pixelRatio, sdf: sdf, keepUnused: true }))));
   }
 
   removeImage(id: string): Promise<boolean> {
@@ -145,11 +148,21 @@ export class StyleApi implements MapStyle {
     if (style === undefined) {
       return Promise.resolve(false);
     }
-    checkOwned(style.reconciler.ownsImage(id), 'image', id);
     // The app can't know which images the sprite has, so one that the style
     // doesn't have is an answer, not a failure.
-    return write(() => this.current() === style, `removing image ${id}`, () => style.map.removeStyleImage(id),
-      (error: Error): boolean => failedWith(error, Status.notFound));
+    return this.queued(this.imageWrites.then(() => this.current() !== style ? false :
+      write(() => this.current() === style, `removing image ${id}`,
+        () => style.map.removeStyleImage(id), (error: Error): boolean => failedWith(error, Status.notFound))));
+  }
+
+  // Makes the image writes after this one wait for it, so they apply in call
+  // order while one waits for ArkUI to draw its image. A write whose style is
+  // gone by its turn isn't sent.
+  private queued(written: Promise<boolean>): Promise<boolean> {
+    this.imageWrites = written.then((): void => {
+    }, (): void => {
+    });
+    return written;
   }
 
   getGlobalStateProperty(name: string): Promise<Object | undefined> {
@@ -219,8 +232,16 @@ export class StyleApi implements MapStyle {
     if (style === undefined) {
       return Promise.resolve(false);
     }
+    // The property's colors change once the map takes the value.
+    const refs = refsOf(value);
     return write(() => this.current() === style, `setting ${name} of the light`,
-      () => style.map.setStyleLightProperty(name, propertyValue(name, value)));
+      () => style.map.setStyleLightProperty(name, propertyValue(name, value)))
+      .then((applied: boolean): boolean => {
+        if (applied && this.current() === style) {
+          style.reconciler.trackRefs(`light/${name}`, refs);
+        }
+        return applied;
+      });
   }
 
   private findSource(id: string, style: LoadedStyle | undefined = this.current()): Promise<SourceHandle | undefined> {

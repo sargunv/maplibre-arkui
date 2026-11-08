@@ -1,6 +1,6 @@
 // Examples for the "Capture a map image" guide.
 
-import { AttributionText, MapContent, MapController, MaplibreMap, MapSnapshot, renderSnapshot } from '@maplibre/arkui';
+import { AttributionText, color, MapContent, MapController, MaplibreMap, MapSnapshot, renderSnapshot } from '@maplibre/arkui';
 
 import { PARIS, PLACES, STYLE } from './Common';
 
@@ -44,7 +44,7 @@ export struct SnapshotOfMapExample {
   private controller: MapController = new MapController({ camera: { center: PARIS, zoom: 13 } });
   private content: MapContent = {
     sources: [{ id: 'places', json: { 'type': 'geojson', 'data': PLACES } }],
-    layers: [{ id: 'places', type: 'circle', source: 'places', paint: { 'circle-color': '#e53935' } }],
+    layers: [{ id: 'places', type: 'circle', source: 'places', paint: { 'circle-color': color('#e53935') } }],
   };
 
   aboutToDisappear(): void {

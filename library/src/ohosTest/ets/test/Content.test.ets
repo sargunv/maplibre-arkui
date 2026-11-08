@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
 import {
+  color,
   ContentError,
   eq,
   fp,
   GeoJsonFeatureCollection,
   GeoJsonGeometry,
   get,
+  image as styleImage,
   LayerPredicate,
   LayerSummary,
   MapContent,
@@ -14,8 +16,11 @@ import {
   StyleLayer,
 } from '@maplibre/arkui';
 import { ContentReconciler } from '@maplibre/arkui/src/main/ets/content/internal/ContentReconciler';
+import { imageName } from '@maplibre/arkui/src/main/ets/expression/internal/StyleRefs';
 import { MapHandle, StyleLayerInfo, StyleLayerVisibility } from '@maplibre/native-ffi';
 import application from '@ohos.app.ability.application';
+import ConfigurationConstant from '@ohos.app.ability.ConfigurationConstant';
+import { ColorMetrics } from '@ohos.arkui.node';
 import fs from '@ohos.file.fs';
 import image from '@ohos.multimedia.image';
 
@@ -72,6 +77,46 @@ function pixel(r: number, g: number, b: number,
     srcPixelFormat: image.PixelMapFormat.RGBA_8888,
     pixelFormat: format,
   });
+}
+
+// An opaque square, `size` px on each side.
+function square(size: number, r: number, g: number, b: number): image.PixelMap {
+  const pixels = new Uint8Array(size * size * 4);
+  for (let i = 0; i < pixels.length; i += 4) {
+    pixels[i] = r;
+    pixels[i + 1] = g;
+    pixels[i + 2] = b;
+    pixels[i + 3] = 255;
+  }
+  return image.createPixelMapSync(pixels.buffer, {
+    size: { width: size, height: size },
+    srcPixelFormat: image.PixelMapFormat.RGBA_8888,
+    pixelFormat: image.PixelMapFormat.RGBA_8888,
+  });
+}
+
+// The color of the middle of a snapshot of `layers` over black, at 1 px per
+// vp, with a point feature in the middle.
+async function middleOf(layers: StyleLayer[]): Promise<string> {
+  const center: GeoJsonGeometry = { type: 'Point', coordinates: [0, 0] };
+  const snapshot = await renderSnapshot({
+    style: backgroundStyle('#000000'),
+    content: { sources: [{ id: 'places', json: { 'type': 'geojson', 'data': center } }], layers: layers },
+    width: 64, height: 32, pixelRatio: 1, camera: { center: { latitude: 0, longitude: 0 }, zoom: 0 },
+    uiContext: testMap.context,
+  });
+  const pixels = await readPixels(snapshot.image);
+  await snapshot.image.release();
+  return pixelAt(pixels, 64, 32, 16).join();
+}
+
+function fill(paint: Record<string, Object>): StyleLayer[] {
+  return [{ id: 'fill', type: 'background', paint: paint }];
+}
+
+function icon(layout: Record<string, Object>, paint: Record<string, Object> = {}): StyleLayer[] {
+  layout['icon-allow-overlap'] = true;
+  return [{ id: 'icon', type: 'symbol', source: 'places', layout: layout, paint: paint }];
 }
 
 // Whether the map reported a ContentError for `id`.
@@ -156,10 +201,9 @@ export default function contentTest(): void {
       await testMap.reset(BASE);
     });
 
-    it('adds sources, layers, and images, in order, under base layers', 0, async () => {
+    it('adds sources and layers, in order, under base layers', 0, async () => {
       const dot: MapContent = {
         sources: [{ id: 'places', json: { 'type': 'geojson', 'data': TWO } }],
-        images: [{ id: 'dot', image: pixel(255, 0, 0) }],
         layers: [
           circles('low', '#ff0000', (layer: LayerSummary) => layer.type === 'symbol'),
           circles('high', '#00ff00'),
@@ -169,12 +213,6 @@ export default function contentTest(): void {
       testMap.content = dot;
       await untilLayers('background,low,mid,labels,high');
       expect((await withMap((ffi: MapHandle) => ffi.getStyleSource('places')))?.id).assertEqual('places');
-      const dotImage = await withMap((ffi: MapHandle) => ffi.getStyleImage('dot'));
-      expect(dotImage?.width).assertEqual(1);
-      expect(dotImage?.pixels[0]).assertEqual(255);
-      // At the display's density, and kept while no layer uses it.
-      expectNear(dotImage?.pixelRatio ?? 0, testMap.context!.vp2px(1), 0.001);
-      expect(dotImage?.keepUnused).assertTrue();
       expect(testMap.errors.length).assertEqual(0);
 
       testMap.content = {};
@@ -366,44 +404,21 @@ export default function contentTest(): void {
       await untilLayers('background,labels,dots');
     });
 
-    it('replaces an image that the style already had, and removes it when it leaves', 0, async () => {
-      await withMap((ffi: MapHandle) =>
-        ffi.setStyleImage('dot', { width: 2, height: 1, stride: 8, pixels: new Uint8Array(8) }));
-      testMap.content = { images: [{ id: 'dot', image: pixel(255, 0, 0) }] };
-      await eventually('the content image replaces it', async () =>
-        (await withMap((ffi: MapHandle) => ffi.getStyleImage('dot')))?.width === 1 ? true : undefined);
-      const empty: MapContent = {};
-      testMap.content = empty;
-      await eventually('the image goes', async () =>
-        (await withMap((ffi: MapHandle) => ffi.getStyleImage('dot')).catch(() => undefined)) === undefined ? true :
-          undefined);
-      expect(testMap.errors.length).assertEqual(0);
-    });
-
-    it('reports a pixel map it can\'t read, draws the rest, and leaves the image ID alone', 0, async () => {
-      await withMap((ffi: MapHandle) =>
-        ffi.setStyleImage('dot', { width: 3, height: 1, stride: 12, pixels: new Uint8Array(12) }));
+    it('reports a pixel map it can\'t read once, and draws the rest', 0, async () => {
       const rgb565 = pixel(255, 0, 0, image.PixelMapFormat.RGB_565);
-      const withImage = (color: string): MapContent => ({
-        sources: [{ id: 'places', json: { 'type': 'geojson', 'data': TWO } }],
-        layers: [circles('dots', color)],
-        images: [{ id: 'dot', image: rgb565 }],
-      });
+      const withImage = (color: string): MapContent => content(TWO, [circles('dots', color),
+        { id: 'icons', type: 'symbol', source: 'places', layout: { 'icon-image': styleImage(rgb565) } }]);
+      const reported = (): number =>
+        testMap.failures.filter((error: MapError) => error.message.includes('drawing an image')).length;
       testMap.content = withImage('#ff0000');
-      await until('the map reports the image', () => contentFailed('dot'));
-      await untilLayers('background,labels,dots');
+      await until('the map reports the image', () => reported() > 0);
+      await untilLayers('background,labels,dots,icons');
       // Not again while the pixel map stays the same.
       testMap.content = withImage('#00ff00');
       await untilProperty('dots', 'circle-color', GREEN);
-      expect(testMap.failures.filter((error: MapError) => error instanceof ContentError && error.id === 'dot').length)
-        .assertEqual(1);
-      const empty: MapContent = {};
-      testMap.content = empty;
-      await untilLayers('background,labels');
-      expect((await withMap((ffi: MapHandle) => ffi.getStyleImage('dot')))?.width).assertEqual(3);
+      expect(reported()).assertEqual(1);
       rgb565.release();
     });
-
     it('removes a source on a later pass once nothing else uses it', 0, async () => {
       testMap.content = content(TWO, []);
       await eventually('the source goes in', async () => withMap((ffi: MapHandle) => ffi.getStyleSource('places')));
@@ -604,47 +619,10 @@ export default function contentTest(): void {
       await untilFeatures(1);
     });
 
-    it('sets an image again when its pixel map, pixel ratio, or sdf changes', 0, async () => {
-      const red = pixel(255, 0, 0);
-      testMap.content = { images: [{ id: 'dot', image: red, pixelRatio: 1 }] };
-      await eventually('the image goes in', async () => withMap((ffi: MapHandle) => ffi.getStyleImage('dot')));
-
-      testMap.content = { images: [{ id: 'dot', image: red, pixelRatio: 7 }] };
-      await eventually('the pixel ratio changes', async () =>
-        (await withMap((ffi: MapHandle) => ffi.getStyleImage('dot')))?.pixelRatio === 7 ? true : undefined);
-      testMap.content = { images: [{ id: 'dot', image: red, pixelRatio: 7, sdf: true }] };
-      await eventually('the image becomes an SDF', async () =>
-        (await withMap((ffi: MapHandle) => ffi.getStyleImage('dot')))?.sdf ? true : undefined);
-      const green = pixel(0, 255, 0);
-      testMap.content = { images: [{ id: 'dot', image: green, pixelRatio: 7, sdf: true }] };
-      await eventually('the pixels change', async () =>
-        (await withMap((ffi: MapHandle) => ffi.getStyleImage('dot')))?.pixels[1] === 255 ? true : undefined);
-      testMap.content = { images: [{ id: 'dot', image: green }] };
-      await eventually('the image takes the defaults', async () => {
-        const info = await withMap((ffi: MapHandle) => ffi.getStyleImage('dot'));
-        return info !== undefined && !info.sdf && info.pixelRatio !== 7 ? true : undefined;
-      });
-
-      // The same pixel map, which the map doesn't compare by its pixels, stays
-      // as the style has it.
-      await withMap((ffi: MapHandle) =>
-        ffi.setStyleImage('dot', { width: 1, height: 1, stride: 4, pixels: new Uint8Array([0, 0, 255, 255]) }));
-      // A layer that goes in with it shows that the map has applied it.
-      const shade: StyleLayer = { id: 'shade', type: 'background' };
-      testMap.content = { images: [{ id: 'dot', image: green }], layers: [shade] };
-      await untilLayers('background,labels,shade');
-      expect((await withMap((ffi: MapHandle) => ffi.getStyleImage('dot')))?.pixels[2]).assertEqual(255);
-      expect(testMap.errors.length).assertEqual(0);
-    });
-
-    // The map gives the reconciler each content as the app sets it, so these
-    // cases drive one of their own, for the timing. It shares the test map's
-    // style, whose own content is empty, and keeps the FFI map past the lend,
-    // as the library's own does, while the map stays for the case.
     it('applies only the latest content that comes during a pass, once it ends', 0, async () => {
       const errors: string[] = [];
       const reconciler = withMap((ffi: MapHandle) =>
-        new ContentReconciler(ffi, (error: Error) => errors.push(error.message), 1));
+        new ContentReconciler(ffi, (error: Error) => errors.push(error.message), 1, undefined));
       reconciler.setContent(content(TWO, [circles('a', '#ff0000')]));
       const loaded = reconciler.styleLoaded();
       // The map runs commands in order, so once this one completes, the pass
@@ -663,7 +641,7 @@ export default function contentTest(): void {
     it('stops a pass when the style changes, and applies the content to the next style', 0, async () => {
       const errors: string[] = [];
       const reconciler = withMap((ffi: MapHandle) =>
-        new ContentReconciler(ffi, (error: Error) => errors.push(error.message), 1));
+        new ContentReconciler(ffi, (error: Error) => errors.push(error.message), 1, undefined));
       reconciler.setContent(content(TWO, manyCircles(20)));
       const loaded = reconciler.styleLoaded();
       // The map runs commands in order, so once this one completes, the pass
@@ -716,6 +694,82 @@ export default function contentTest(): void {
       expect(pixelAt(pixels, 128, 32, 32).join()).assertEqual('255,0,0,255');
       expect(pixelAt(pixels, 128, 96, 32).join()).assertEqual('0,0,255,255');
       await pixelMap.release();
+    });
+    it('draws color() from a Color, an ArkUI color string, and a resource', 0, async () => {
+      expect(await middleOf(fill({ 'background-color': color(Color.Red) }))).assertEqual('255,0,0,255');
+      // ArkUI reads alpha first: opaque green, where the style spec would read
+      // transparent yellow.
+      expect(await middleOf(fill({ 'background-color': color('#FF00FF00') }))).assertEqual('0,255,0,255');
+      expect(await middleOf(fill({ 'background-color': color($r('app.color.green')) }))).assertEqual('0,255,0,255');
+    });
+
+    it('gives a resource color the value of the current color mode', 0, async () => {
+      // Made in light mode, used in dark mode.
+      const mode = color($r('app.color.mode'));
+      const context = application.getApplicationContext();
+      const blue = (): boolean => ColorMetrics.resourceColor($r('app.color.mode')).blue === 255;
+      context.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_DARK);
+      try {
+        await until('dark mode applies', blue);
+        expect(await middleOf(fill({ 'background-color': mode }))).assertEqual('0,0,255,255');
+      } finally {
+        context.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
+        await until('dark mode ends', () => !blue());
+      }
+    });
+
+    it('draws image() from a pixel map and from a resource', 0, async () => {
+      const red = square(8, 255, 0, 0);
+      expect(await middleOf(icon({ 'icon-image': styleImage(red) }))).assertEqual('255,0,0,255');
+      red.release();
+      expect(await middleOf(icon({ 'icon-image': styleImage($r('app.media.green_square')) })))
+        .assertEqual('0,255,0,255');
+    });
+
+    it('recolors an image that it draws as an SDF', 0, async () => {
+      const red = square(16, 255, 0, 0);
+      const layers = icon({ 'icon-image': styleImage(red, { drawAsSdf: true }) },
+        { 'icon-color': color('#FF00FF00') });
+      expect(await middleOf(layers)).assertEqual('0,255,0,255');
+      red.release();
+    });
+
+    it('adds an image while a layer uses it, and removes it after', 0, async () => {
+      const red = square(8, 255, 0, 0);
+      const name = imageName(red, false);
+      const icons = (id: string): StyleLayer => ({ id: id, type: 'symbol', source: 'places',
+        layout: { 'icon-image': styleImage(red) } });
+      testMap.content = content(TWO, [icons('a'), icons('b')]);
+      const info = await eventually('the map has the image', async () =>
+        withMap((ffi: MapHandle) => ffi.getStyleImage(name)));
+      // At the display's density, and kept until no layer uses it.
+      expectNear(info.pixelRatio, testMap.context!.vp2px(1), 0.001);
+      expect(info.keepUnused).assertTrue();
+      // Kept while another layer uses it.
+      testMap.content = content(TWO, [icons('b')]);
+      await untilLayers('background,labels,b');
+      expect((await withMap((ffi: MapHandle) => ffi.getStyleImage(name)))?.width).assertEqual(8);
+      testMap.content = content(TWO, [circles('dots', '#00ff00')]);
+      await eventually('the image goes', async () =>
+        (await withMap((ffi: MapHandle) => ffi.getStyleImage(name))) === undefined ? true : undefined);
+      red.release();
+    });
+
+    it('gives a resource color on the map the value of each color mode', 0, async () => {
+      const values = async (): Promise<Object[]> =>
+        Object.values(await withMap((ffi: MapHandle) => ffi.getGlobalState()) as Record<string, Object>);
+      const holding = async (value: string): Promise<boolean | undefined> =>
+        (await values()).includes(value) ? true : undefined;
+      testMap.content = { layers: fill({ 'background-color': color($r('app.color.mode')) }) };
+      await eventually('the map has the light color', () => holding('rgba(255, 0, 0, 1)'));
+      const context = application.getApplicationContext();
+      context.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_DARK);
+      try {
+        await eventually('the map has the dark color', () => holding('rgba(0, 0, 255, 1)'));
+      } finally {
+        context.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
+        await until('dark mode ends', () => ColorMetrics.resourceColor($r('app.color.mode')).blue !== 255);
+      }
     });
   });
 }

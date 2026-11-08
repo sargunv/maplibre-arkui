@@ -2,24 +2,21 @@
 // MaplibreMap or a snapshot to a map's style. After MapLibre Compose's
 // StyleReconciler, much simplified.
 
-import {
-  CommandCompletion,
-  MapHandle,
-  PremultipliedRgba8Image,
-  StyleLayerInfo,
-} from '@maplibre/native-ffi';
+import { CommandCompletion, MapHandle, StyleLayerInfo } from '@maplibre/native-ffi';
 
 import { Expression } from '../../expression/Expressions';
+import { resolveColor } from '../../expression/internal/Colors';
 import { FONT_SCALE_STATE } from '../../expression/internal/FontScale';
+import { ColorRef, ImageRef, refsOf, StyleRef } from '../../expression/internal/StyleRefs';
 import { GeoJsonFeature } from '../../geometry/GeoJson';
 import { MapClickEvent } from '../../map/MapClickEvent';
 import { ContentError, MapError } from '../../map/MapError';
 import { logError } from '../../runtime/internal/Log';
 import { MapContent } from '../MapContent';
-import { StyleImage } from '../StyleImage';
+import { StyleImageSource } from '../StyleImage';
 import { FeatureClickEvent, LayerPredicate, LayerSummary, StyleLayer } from '../StyleLayer';
 import { StyleSource } from '../StyleSource';
-import { readPixelMap } from './PixelMaps';
+import { StyleImagePixels, stylePixels } from './StyleImages';
 
 // The features of a click on a layer, front first, as its handler takes them.
 export function featureClickEvent(event: MapClickEvent, features: GeoJsonFeature[]): FeatureClickEvent {
@@ -67,8 +64,9 @@ class Stale extends Error {
 export class ContentReconciler {
   private readonly map: MapHandle;
   private readonly onError: (error: Error) => void;
-  // The pixel ratio of an image that doesn't give one.
-  readonly pixelRatio: number;
+  // The pixel ratio of a pixel map, and the UI that draws resources, if any.
+  private readonly pixelRatio: number;
+  private readonly context: UIContext | undefined;
   private content: MapContent | undefined = undefined;
   // Counts the styles, so a pass stops once its style is gone.
   private generation: number = 0;
@@ -78,10 +76,19 @@ export class ContentReconciler {
   private stack: string[] = [];
   private sources: Map<string, AppliedSource> = new Map<string, AppliedSource>();
   private layers: Map<string, AppliedLayer> = new Map<string, AppliedLayer>();
-  private images: Map<string, StyleImage> = new Map<string, StyleImage>();
+  // The global state value of each resource color in the current style, the
+  // images of expressions that it has, with the color mode that each was drawn
+  // in, and those that the map couldn't draw or take.
+  private colors: Map<string, string> = new Map<string, string>();
+  private images: Map<string, number> = new Map<string, number>();
+  private failedImages: Set<string> = new Set<string>();
+  // The colors and images of what the app set through the style API, which the
+  // current style keeps.
+  private styleRefs: Map<string, StyleRef[]> = new Map<string, StyleRef[]>();
+  // Counts the color modes, so an image drawn in the last one is drawn again.
+  private colorMode: number = 0;
   // What the map rejected, by ID, as text, so a pass skips it until it changes.
   private rejectedSources: Map<string, string> = new Map<string, string>();
-  private rejectedImages: Map<string, StyleImage> = new Map<string, StyleImage>();
   private rejectedLayers: Map<string, string> = new Map<string, string>();
   // The invalid hitPadding of each layer that has one, as text, which a pass
   // reports once.
@@ -101,10 +108,40 @@ export class ContentReconciler {
   private fontScale: number = 1;
   private appliedFontScale: number | undefined = undefined;
 
-  constructor(map: MapHandle, onError: (error: Error) => void, pixelRatio: number) {
+  constructor(map: MapHandle, onError: (error: Error) => void, pixelRatio: number,
+    context: UIContext | undefined) {
     this.map = map;
     this.onError = onError;
     this.pixelRatio = pixelRatio;
+    this.context = context;
+  }
+
+  /** The pixels of an image, as this reconciler's map takes them. */
+  stylePixels(source: StyleImageSource, drawAsSdf: boolean): Promise<StyleImagePixels> {
+    return stylePixels(source, drawAsSdf, this.pixelRatio, this.context);
+  }
+
+  /**
+   * The system's color mode changed, so resource colors and the images that
+   * ArkUI draws get their values again.
+   */
+  colorModeChanged(): void {
+    this.colorMode++;
+    this.failedImages.clear();
+    this.schedule();
+  }
+
+  /**
+   * The app set the property `owner` to a value that uses `refs` through the
+   * style API, in place of what it set before.
+   */
+  trackRefs(owner: string, refs: StyleRef[]): void {
+    if (refs.length > 0) {
+      this.styleRefs.set(owner, refs);
+    } else if (!this.styleRefs.delete(owner)) {
+      return;
+    }
+    this.schedule();
   }
 
   /** Applies `content` to the loaded style, and to each style from now on. */
@@ -149,11 +186,6 @@ export class ContentReconciler {
   /** Whether the latest content has a layer with this ID. */
   ownsLayer(id: string): boolean {
     return (this.content?.layers ?? []).some((layer: StyleLayer) => layer.id === id);
-  }
-
-  /** Whether the latest content has an image with this ID. */
-  ownsImage(id: string): boolean {
-    return (this.content?.images ?? []).some((item: StyleImage) => item.id === id);
   }
 
   /** Counts the adds and removals of the source with this ID in the current style. */
@@ -234,9 +266,11 @@ export class ContentReconciler {
     this.stack = [];
     this.sources.clear();
     this.layers.clear();
+    this.colors.clear();
     this.images.clear();
+    this.failedImages.clear();
+    this.styleRefs.clear();
     this.rejectedSources.clear();
-    this.rejectedImages.clear();
     this.rejectedLayers.clear();
     this.sourceVersions.clear();
     this.layerVersions.clear();
@@ -275,7 +309,17 @@ export class ContentReconciler {
         await this.run(generation, undefined, 'setting the font scale',
           this.map.setGlobalStateProperty(FONT_SCALE_STATE, scale));
       }
-      await this.apply(this.content, generation);
+      const content = this.content;
+      const refs = this.refsOf(content);
+      await this.applyRefs(refs, generation);
+      await this.apply(content, generation);
+      // After the layers that used them change.
+      for (const name of Array.from(this.images.keys())) {
+        if (!refs.has(name)) {
+          this.images.delete(name);
+          await this.run(generation, undefined, `removing image ${name}`, this.map.removeStyleImage(name));
+        }
+      }
     } catch (error) {
       if (!(error instanceof Stale)) {
         this.report(error as Error);
@@ -325,10 +369,6 @@ export class ContentReconciler {
     for (const layer of content?.layers ?? []) {
       layers.set(layer.id, layer);
     }
-    const images = new Map<string, StyleImage>();
-    for (const item of content?.images ?? []) {
-      images.set(item.id, item);
-    }
     this.checkPaddings(layers);
 
     // A rejected source that the content dropped no longer holds back the
@@ -377,21 +417,6 @@ export class ContentReconciler {
       if (!(replaced.has(source.id) && this.sources.has(source.id))) {
         await this.applySource(source, generation);
       }
-    }
-
-    for (const id of Array.from(this.rejectedImages.keys())) {
-      if (!images.has(id)) {
-        this.rejectedImages.delete(id);
-      }
-    }
-    for (const id of Array.from(this.images.keys())) {
-      if (!images.has(id)) {
-        this.images.delete(id);
-        await this.run(generation, id, `removing image ${id}`, map.removeStyleImage(id));
-      }
-    }
-    for (const item of Array.from(images.values())) {
-      await this.applyImage(item, generation);
     }
 
     // The layers under each content layer, and the rest by the base layer
@@ -480,39 +505,68 @@ export class ContentReconciler {
     }
   }
 
-  // Sets the image unless the style has it or rejected it as it is. The
-  // content owns an image's ID once the map has taken an image for it.
-  private async applyImage(wanted: StyleImage, generation: number): Promise<void> {
-    const applied = this.images.get(wanted.id);
-    const rejected = this.rejectedImages.get(wanted.id);
-    if ((applied !== undefined && this.sameImage(applied, wanted)) ||
-      (rejected !== undefined && this.sameImage(rejected, wanted))) {
-      return;
+  // The colors and images that the content's layers and the style API's values
+  // use, by name.
+  private refsOf(content: MapContent | undefined): Map<string, StyleRef> {
+    const refs = new Map<string, StyleRef>();
+    this.styleRefs.forEach((list: StyleRef[]) => list.forEach((ref: StyleRef) => refs.set(ref.name, ref)));
+    const add = (value: Object | null | undefined): void => {
+      refsOf(value).forEach((ref: StyleRef) => refs.set(ref.name, ref));
+    };
+    for (const layer of content?.layers ?? []) {
+      add(layer.filter);
+      Object.values(layer.paint ?? {}).forEach(add);
+      Object.values(layer.layout ?? {}).forEach(add);
     }
-    let pixels: PremultipliedRgba8Image;
-    try {
-      pixels = readPixelMap(wanted.image);
-    } catch (error) {
-      this.rejectedImages.set(wanted.id, wanted);
-      this.report(new ContentError(wanted.id,
-        `Content: reading image ${wanted.id} failed: ${(error as Error).message}`));
-      return;
-    }
-    const set = await this.run(generation, wanted.id, `setting image ${wanted.id}`,
-      this.map.setStyleImage(wanted.id, pixels,
-        { pixelRatio: wanted.pixelRatio ?? this.pixelRatio, sdf: wanted.sdf ?? false, keepUnused: true }));
-    if (set) {
-      this.images.set(wanted.id, wanted);
-      this.rejectedImages.delete(wanted.id);
-    } else {
-      this.rejectedImages.set(wanted.id, wanted);
+    return refs;
+  }
+
+  // Sets each resource color's value, and adds each image that the style lacks,
+  // before the layers that use them.
+  private async applyRefs(refs: Map<string, StyleRef>, generation: number): Promise<void> {
+    for (const ref of Array.from(refs.values())) {
+      if (ref instanceof ColorRef) {
+        let value: string;
+        try {
+          value = resolveColor(ref.color).rgba();
+        } catch (error) {
+          this.report(new MapError(`Content: ${(error as Error).message}`));
+          continue;
+        }
+        if (this.colors.get(ref.name) !== value) {
+          this.colors.set(ref.name, value);
+          await this.run(generation, undefined, `setting the color ${ref.name}`,
+            this.map.setGlobalStateProperty(ref.name, value));
+        }
+      } else if (ref instanceof ImageRef) {
+        await this.applyImage(ref, generation);
+      }
     }
   }
 
-  private sameImage(a: StyleImage, b: StyleImage): boolean {
-    // As text, so NaN equals itself.
-    return a.image === b.image && `${a.pixelRatio ?? this.pixelRatio}` === `${b.pixelRatio ?? this.pixelRatio}` &&
-      (a.sdf ?? false) === (b.sdf ?? false);
+  private async applyImage(ref: ImageRef, generation: number): Promise<void> {
+    const applied = this.images.get(ref.name);
+    if ((applied !== undefined && (!ref.drawn || applied === this.colorMode)) || this.failedImages.has(ref.name)) {
+      return;
+    }
+    const colorMode = this.colorMode;
+    let pixels: StyleImagePixels;
+    try {
+      pixels = await this.stylePixels(ref.source, ref.drawAsSdf);
+    } catch (error) {
+      this.check(generation);
+      this.failedImages.add(ref.name);
+      this.report(new MapError(`Content: drawing an image failed: ${(error as Error).message}`));
+      return;
+    }
+    this.check(generation);
+    if (await this.run(generation, undefined, `setting the image ${ref.name}`,
+      this.map.setStyleImage(ref.name, pixels.pixels,
+        { pixelRatio: pixels.pixelRatio, sdf: ref.drawAsSdf, keepUnused: true }))) {
+      this.images.set(ref.name, colorMode);
+    } else {
+      this.failedImages.add(ref.name);
+    }
   }
 
   // Adds the layer under `above`, or changes it and moves it there, and returns

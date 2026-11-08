@@ -54,7 +54,7 @@ export { ZoomButtons } from './src/main/ets/overlay/ZoomButtons';
 
 // Map content
 export type { MapContent } from './src/main/ets/content/MapContent';
-export type { ResolvedStyleImage, StyleImage } from './src/main/ets/content/StyleImage';
+export type { ResolvedStyleImage, StyleImageOptions, StyleImageSource } from './src/main/ets/content/StyleImage';
 export type {
   FeatureClickEvent,
   FeatureClickHandler,
@@ -104,6 +104,7 @@ export {
   cases,
   ceil,
   coalesce,
+  color,
   concat,
   cubicBezier,
   divide,

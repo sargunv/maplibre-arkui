@@ -72,9 +72,9 @@ export struct MaplibreMap {
    */
   @Param @Once runtime: MapRuntime = MapRuntime.getDefault();
   /**
-   * Sources, layers, and images to draw over the style, in every style the map
-   * loads. Pass a new value to change them. One that the map rejects is
-   * reported to `onError` as a `ContentError`. None by default.
+   * Sources and layers to draw over the style, in every style the map loads.
+   * Pass a new value to change them. One that the map rejects is reported to
+   * `onError` as a `ContentError`. None by default.
    */
   @Param content: MapContent = {};
   /**
@@ -119,10 +119,11 @@ export struct MaplibreMap {
   @Event onStyleLoaded: () => void = () => {
   };
   /**
-   * Called when the style uses an image that neither it nor `content` has.
-   * Resolve the image for `event.id` to add it to the style, or undefined to
-   * leave it out. The map asks for each ID at most once per style, and copies
-   * the pixels when the promise resolves. Resolves undefined by default.
+   * Called when the style uses an image that it doesn't have. Resolve the image
+   * for `event.id` to add it to the style, or undefined to leave it out. The
+   * map asks for each ID at most once per style, and copies a pixel map's
+   * pixels when the promise resolves. An image that the map can't draw is
+   * reported to `onError`. Resolves undefined by default.
    */
   @Event onStyleImageMissing: (event: StyleImageMissingEvent) => Promise<ResolvedStyleImage | undefined> =
     (event: StyleImageMissingEvent) => Promise.resolve(undefined);

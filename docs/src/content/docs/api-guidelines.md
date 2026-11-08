@@ -159,13 +159,16 @@ breaking change.
 | Kind           | Use when                                                                           | Declare as                         | Example                    |
 | -------------- | ---------------------------------------------------------------------------------- | ---------------------------------- | -------------------------- |
 | Closed         | The values can never change, because they describe math or a fixed protocol        | A string-literal type              | GeoJSON's tags             |
-| Open input     | Callers only pass values in                                                        | `enum`                             | `WheelAction`              |
+| Open input     | Callers only pass values in                                                        | `enum`, or a union of types        | `WheelAction`              |
 | Open identity  | A raw name from the style spec or the engine, possibly one with no named value yet | `string`                           | A layer's type             |
 | Open structure | The library returns one of a family of types, such as errors or handles            | Classes, matched with `instanceof` | `MapError`, `SourceHandle` |
 
 - State the kind in the doc comment: "Closed." or "Values may be added in later
   releases; give a `switch` over it a `default` branch."
   [[1]](https://maplibre.org/maplibre-compose/api-guidelines/#4-types-that-may-grow)
+- Declare an open input that takes values of several types, such as
+  `StyleImageSource`, as a union of those types, and say "Types may be added in
+  later releases."
 - An input enum stays open input when a getter echoes back only the values that
   callers passed in.
 - A set of values that the library reports stays an `enum`, as ArkUI's
@@ -389,6 +392,7 @@ get map(): MapHandle | undefined;
 | Insets                         | ArkUI `Padding` or `LocalizedPadding`      |
 | Color                          | ArkUI `ResourceColor`                      |
 | Image                          | `image.PixelMap`                           |
+| Icon or pattern                | The library's `StyleImageSource`           |
 | Location from Location Kit     | `geoLocationManager.Location`              |
 
 ```ets
