@@ -138,7 +138,7 @@ export class StyleApi implements MapStyle {
     drawn.catch((): void => {
     });
     return this.queued(this.imageWrites.then(() => drawn).then((pixels: StyleImagePixels) =>
-      write(() => this.current() === style, `setting image ${id}`,
+      this.current() !== style ? false : write(() => this.current() === style, `setting image ${id}`,
         () => style.map.setStyleImage(id, pixels.pixels, { pixelRatio: pixels.pixelRatio, sdf: sdf, keepUnused: true }))));
   }
 
@@ -150,12 +150,14 @@ export class StyleApi implements MapStyle {
     }
     // The app can't know which images the sprite has, so one that the style
     // doesn't have is an answer, not a failure.
-    return this.queued(this.imageWrites.then(() => write(() => this.current() === style, `removing image ${id}`,
-      () => style.map.removeStyleImage(id), (error: Error): boolean => failedWith(error, Status.notFound))));
+    return this.queued(this.imageWrites.then(() => this.current() !== style ? false :
+      write(() => this.current() === style, `removing image ${id}`,
+        () => style.map.removeStyleImage(id), (error: Error): boolean => failedWith(error, Status.notFound))));
   }
 
   // Makes the image writes after this one wait for it, so they apply in call
-  // order while one waits for ArkUI to draw its image.
+  // order while one waits for ArkUI to draw its image. A write whose style is
+  // gone by its turn isn't sent.
   private queued(written: Promise<boolean>): Promise<boolean> {
     this.imageWrites = written.then((): void => {
     }, (): void => {

@@ -30,8 +30,11 @@ import {
   StyleLayer,
   toBoolean,
 } from '@maplibre/arkui';
+import { ContentReconciler } from '@maplibre/arkui/src/main/ets/content/internal/ContentReconciler';
 import { readPixelMap } from '@maplibre/arkui/src/main/ets/content/internal/PixelMaps';
 import { USER_LOCATION_LAYER } from '@maplibre/arkui/src/main/ets/location/internal/UserLocationLayer';
+import { LoadedStyle } from '@maplibre/arkui/src/main/ets/style/internal/LoadedStyle';
+import { StyleApi } from '@maplibre/arkui/src/main/ets/style/internal/StyleApi';
 import { CommandCompletion, FeatureStateSelector, LatLng as FfiLatLng, MapHandle } from '@maplibre/native-ffi';
 
 import { backgroundStyle, showsMap, styleDocument, testMap } from '../testability/TestMaps';
@@ -564,6 +567,25 @@ export default function styleTest(): void {
       expect(await again).assertTrue();
       expect(await removed).assertTrue();
       expect(await withMap((ffi: MapHandle) => ffi.getStyleImage('dot'))).assertUndefined();
+    });
+
+    // A style API of its own, whose style the case takes away while ArkUI
+    // draws an image, keeps the FFI map past the lend while the map stays.
+    it('sends no image write whose style goes while it waits', 0, async () => {
+      await withMap((ffi: MapHandle) =>
+        ffi.setStyleImage('kept', { width: 1, height: 1, stride: 4, pixels: new Uint8Array(4) }));
+      const ffi = withMap((map: MapHandle) => map);
+      let current: LoadedStyle | undefined =
+        new LoadedStyle(ffi, new ContentReconciler(ffi, (error: Error) => {
+        }, 1, testMap.context), () => undefined);
+      const api = new StyleApi(() => current);
+      const set = api.setImage('drawn', $r('app.media.green_square'));
+      const removed = api.removeImage('kept');
+      current = undefined;
+      expect(await set).assertFalse();
+      expect(await removed).assertFalse();
+      expect(await withMap((map: MapHandle) => map.getStyleImage('drawn'))).assertUndefined();
+      expect((await withMap((map: MapHandle) => map.getStyleImage('kept')))?.width).assertEqual(1);
     });
 
     it('changes an image source\'s image and corners', 0, async () => {
