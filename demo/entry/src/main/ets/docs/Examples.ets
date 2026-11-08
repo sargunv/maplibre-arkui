@@ -577,10 +577,32 @@ struct InteractionExample {
         // The wheel pans, and zooms with Ctrl.
         wheel: WheelAction.PAN,
         // A rotation settles on, and ticks at, north, east, south, and west.
-        rotate: { snapBearings: [0, 90, 180, 270], hapticBearings: [0, 90, 180, 270] },
+        rotate: { snap: { interval: 90 }, haptics: { interval: 90 } },
       },
     })
     // #endregion interactions
+  }
+}
+
+@ComponentV2
+struct MomentumExample {
+  private controller: MapController = new MapController();
+
+  build() {
+    // #region momentum
+    MaplibreMap({
+      style: STYLE,
+      controller: this.controller,
+      interactions: {
+        // A drag glides for a shorter time than a list's fling.
+        pan: { momentum: { halfLifeMs: 120 } },
+        // A pinch doesn't glide, and settles on the nearest whole level.
+        zoom: { momentum: { enabled: false }, snap: { interval: 1 } },
+        // A tilt that ends within 10° of flat lies flat.
+        pitch: { snap: { interval: 90, tolerance: 10 } },
+      },
+    })
+    // #endregion momentum
   }
 }
 
@@ -1205,6 +1227,9 @@ export struct DocExamples {
         TabContent() {
           InteractionExample()
         }.tabBar('Interactions')
+        TabContent() {
+          MomentumExample()
+        }.tabBar('Momentum')
         TabContent() {
           LocationExample()
         }.tabBar('Location')

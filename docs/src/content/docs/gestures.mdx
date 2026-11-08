@@ -22,6 +22,8 @@ Users pan, zoom, rotate, and pitch the map by default:
 
 A drag that starts on the map moves the map, even in a `Scroll`. Content over
 the map that handles its own gestures, such as a button, keeps them.
+A drag that lifts while it moves glides on and slows as a `Scroll` or `List`
+does after a fling, until a touch or a camera move by the app stops it.
 
 ## Choose the camera's movements
 
@@ -31,7 +33,7 @@ stays north-up and flat, and tells the app while the user moves it:
 <Code code={region(examples, "gestures")} lang="ts" />
 
 `onGestureStart` and `onGestureEnd` bracket each gesture: any input that moves
-the camera, with its momentum and a rotation's snap. The camera's move starts
+the camera, with its momentum and its snap. The camera's move starts
 with the map's `onCameraMoveStart` after `onGestureStart`, unless the camera was
 moving already, and ends with its `onCameraIdle` after `onGestureEnd`. To react
 to one movement,
@@ -56,17 +58,30 @@ A map in a `Scroll` or `List` can leave the page's gestures to it: with
 The map moves with two fingers. With Ctrl held, the wheel does what `wheel`
 says, and a touchpad swipe pans.
 
-## Snap and tick rotation
+## Tune momentum and snapping
 
-A rotation that ends within 7° of north eases to it, and its gesture ends, with
-`onGestureEnd`, once the camera gets there. `snapBearings` chooses the bearings
-to snap to, and `[]` turns snapping off.
+A drag that lifts while it moves glides as a `List` flings, and a pinch, a
+twist, and a tilt glide briefly. Each movement's `momentum` changes how far and
+how long it glides, or turns its glide off. A rotation that ends within 7° of
+north eases to it. The `snap` of zoom, rotate, and pitch chooses the values
+each settles on: every `interval` from `offset`, such as whole zoom levels or a
+city's street grid. `{ interval: 0 }` turns snapping off, which it is for zoom
+and pitch by default. The gesture ends, with `onGestureEnd`, once the glide and
+the snap do:
+
+<Code code={region(examples, "momentum")} lang="ts" />
+
+See <Api of="MomentumOptions" /> and <Api of="SnapOptions" /> for each setting
+and its default.
+
+## Tick rotation
 
 As a twist or a right-button drag turns the map across north, the device plays
-a soft tick. `hapticBearings` chooses where it ticks, and `[]` turns the ticks
-off. Ticks follow the system's touch feedback setting, and they need the
-vibrator permission, which the library can't declare for its apps. An app that
-wants them declares it in its `module.json5`:
+a soft tick. `rotate.haptics` chooses where it ticks, every `interval` degrees
+from `offset`, as `snap` does. Ticks follow the
+system's touch feedback setting, and they need the vibrator permission, which
+the library can't declare for its apps. An app that wants them declares it in
+its `module.json5`:
 
 ```json5
 "requestPermissions": [{ "name": "ohos.permission.VIBRATE" }]

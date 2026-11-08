@@ -1,5 +1,3 @@
-// A rotation that ends within this of a snap bearing snaps to it.
-const BEARING_SNAP = 7;
 // After MapLibre Compose's BearingHapticDetector: a notch ticks as the bearing
 // comes within 1° of it or crosses it, and again only after the bearing has
 // gone 2° away. Ticks come at most once in 50 ms.
@@ -7,35 +5,26 @@ const NOTCH_CAPTURE = 1;
 const NOTCH_REARM = 2;
 const NOTCH_MIN_MS = 50;
 
-/**
- * The bearing that a rotation ending at `bearing` snaps to: the nearest of
- * `targets` within 7°, as many turns around as `bearing`, or undefined when
- * there's none or it's there already.
- */
-export function snapBearing(bearing: number, targets: number[]): number | undefined {
-  let nearest: number | undefined = undefined;
-  for (const target of targets) {
-    const offset = wrap(bearing - target);
-    if (Math.abs(offset) <= BEARING_SNAP && (nearest === undefined || Math.abs(offset) < Math.abs(nearest))) {
-      nearest = offset;
-    }
-  }
-  return nearest === undefined || nearest === 0 ? undefined : bearing - nearest;
+/** Values every `interval` from `offset`; bearings repeat each turn. */
+export interface Interval {
+  interval: number;
+  offset: number;
 }
 
-// The haptic notches of one rotation by the pointer, after MapLibre Compose's
-// BearingHapticDetector. A notch that the rotation starts at is silent until
-// the bearing leaves it.
+// The haptic notches of one rotation by the pointer. A notch that the rotation
+// starts at is silent until the bearing leaves it.
 export class BearingNotches {
-  private readonly bearings: number[];
-  private readonly armed: boolean[];
+  private readonly notches: Interval;
   private bearing: number;
+  // The notch that ticked last, or that the rotation started at, until the
+  // bearing leaves it.
+  private silent: number | undefined;
   private lastTick: number = -Infinity;
 
-  constructor(bearings: number[], bearing: number) {
-    this.bearings = bearings;
+  constructor(notches: Interval, bearing: number) {
+    this.notches = notches;
     this.bearing = bearing;
-    this.armed = bearings.map((notch: number) => Math.abs(wrap(notch - bearing)) > NOTCH_CAPTURE);
+    this.silent = this.reached(bearing, bearing);
   }
 
   // Turns by `degrees` at `time`, and returns whether that reached a notch. A
@@ -44,26 +33,32 @@ export class BearingNotches {
     const from = this.bearing;
     const to = from + degrees;
     this.bearing = to;
-    if (degrees === 0) {
-      return false;
+    const notch = this.reached(from, to);
+    const reached = notch !== undefined && notch !== this.silent;
+    if (reached) {
+      this.silent = notch;
     }
-    let reached = false;
-    for (let i = 0; i < this.bearings.length; i++) {
-      const ahead = wrap(this.bearings[i] - from);
-      if (this.armed[i] && ahead >= Math.min(0, degrees) - NOTCH_CAPTURE &&
-        ahead <= Math.max(0, degrees) + NOTCH_CAPTURE) {
-        reached = true;
-        this.armed[i] = false;
-      }
-      if (Math.abs(wrap(this.bearings[i] - to)) > NOTCH_REARM) {
-        this.armed[i] = true;
-      }
+    if (this.silent !== undefined && Math.abs(to - this.silent) > NOTCH_REARM) {
+      this.silent = undefined;
     }
     if (!reached || time - this.lastTick < NOTCH_MIN_MS) {
       return false;
     }
     this.lastTick = time;
     return true;
+  }
+
+  // The last notch that a turn from `from` to `to` reaches, if any: the one
+  // at or before the edge of its capture past `to`.
+  private reached(from: number, to: number): number | undefined {
+    const forward = to >= from;
+    const edge = (forward ? to + NOTCH_CAPTURE : to - NOTCH_CAPTURE) - this.notches.offset;
+    const turn = Math.floor(edge / 360) * 360;
+    const steps = (edge - turn) / this.notches.interval;
+    const notch = this.notches.offset +
+      Math.min(turn + (forward ? Math.floor(steps) : Math.ceil(steps)) * this.notches.interval, turn + 360);
+    return notch >= Math.min(from, to) - NOTCH_CAPTURE && notch <= Math.max(from, to) + NOTCH_CAPTURE ? notch :
+      undefined;
   }
 }
 

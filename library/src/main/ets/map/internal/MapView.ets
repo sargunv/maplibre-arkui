@@ -11,7 +11,6 @@ import {
   CameraDelta,
   CameraFitOptions,
   CameraOptions,
-  CameraQueryResult,
   CameraTransitionOutcome,
   CameraUpdateMode,
   CommandCompletion,
@@ -531,17 +530,8 @@ export class MapView extends XComponentController implements GestureTarget, Runt
     this.map?.discarding.cancelCameraTransitionsWithId(transitionId);
   }
 
-  readBearing(read: (bearing: number | undefined) => void): void {
-    const map = this.map;
-    if (map === undefined) {
-      read(undefined);
-      return;
-    }
-    map.getCamera().then((result: CameraQueryResult) => read(this.map === map ? result.camera.bearing : undefined),
-      (error: Error) => {
-        this.fail(error);
-        read(undefined);
-      });
+  density(): number {
+    return this.context.vp2px(1);
   }
 
   /** The app moves the camera, which takes over from the gestures. */

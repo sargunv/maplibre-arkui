@@ -29,7 +29,15 @@ export type { Viewport } from './src/main/ets/camera/Viewport';
 
 // Gestures
 export { WheelAction } from './src/main/ets/interaction/InteractionOptions';
-export type { InteractionOptions, MovementOptions, RotationOptions } from './src/main/ets/interaction/InteractionOptions';
+export type {
+  InteractionOptions,
+  IntervalOptions,
+  MomentumOptions,
+  MovementOptions,
+  RotationOptions,
+  SnapMovementOptions,
+  SnapOptions,
+} from './src/main/ets/interaction/InteractionOptions';
 
 // Controls
 export { AttributionButton } from './src/main/ets/overlay/AttributionButton';

@@ -1,98 +1,133 @@
-import { CameraDelta, ScreenPoint } from '@maplibre/native-ffi';
+import { AnchoredMomentum, MomentumDecay, PanMomentum, ScreenPoint } from '@maplibre/native-ffi';
 
-// Momentum on release.
+import { InteractionOptions, IntervalOptions, MomentumOptions, SnapOptions } from '../InteractionOptions';
+import { Interval } from './BearingNotches';
+
+// A release's speed is over its last 100 ms.
 export const VELOCITY_WINDOW_MS = 100;
-const FLING_MIN_SPEED = 250;
-const FLING_STEP = 16;
-const TRANSFORM_MOMENTUM_MS = 600;
-const MAX_ZOOM_MOMENTUM = 2.5;
+
+/** How a movement glides and settles, as `checkGlides()` checked it. */
+export interface Glide {
+  momentum: MomentumOptions;
+  snap: Snap;
+}
+
+export interface Snap extends Interval {
+  tolerance: number | undefined;
+  durationMs: number | undefined;
+}
+
+/** The options' numbers, each one that's out of range left out, so it takes its default. */
+export interface Glides {
+  pan: Glide;
+  zoom: Glide;
+  rotate: Glide;
+  pitch: Glide;
+  haptics: Interval;
+}
 
 /**
- * The camera's motion after a release, eased out over its duration. Pan alone
- * slows as a fling; zoom and rotation slow faster, and a pan with them follows
- * their curve so neither runs ahead. From MapLibre Compose's GestureMath.
+ * The glides and haptics of `options`. Each value out of range goes to `fail`
+ * and is left out. A snap's interval, and the haptics', takes its default
+ * here: north for rotation, and none for the rest.
  */
-export class Momentum {
-  readonly offsetX: number;
-  readonly offsetY: number;
-  readonly zoomLevels: number;
-  readonly bearing: number;
-  readonly anchor: ScreenPoint | undefined;
-  readonly durationMs: number;
-  readonly power: number;
-  done: boolean = false;
-  private progress: number = 0;
+export function checkGlides(options: InteractionOptions, fail: (error: Error) => void): Glides {
+  // `value`, or undefined when it's out of range: not finite, or not positive
+  // or negative as `least` says.
+  const checked = (path: string, value: number | undefined, least: 'any' | 'zero' | 'positive'): number | undefined => {
+    if (value === undefined ||
+      (Number.isFinite(value) && (least === 'any' || value > 0 || (least === 'zero' && value === 0)))) {
+      return value;
+    }
+    const range = least === 'any' ? 'finite' : least === 'zero' ? 'finite and not negative' : 'finite and positive';
+    fail(new Error(`interactions.${path} must be ${range}: ${value}`));
+    return undefined;
+  };
+  const interval = (path: string, given: IntervalOptions | undefined, fallback: number): Interval => ({
+    interval: checked(`${path}.interval`, given?.interval, 'zero') ?? fallback,
+    offset: checked(`${path}.offset`, given?.offset, 'any') ?? 0,
+  });
+  const glide = (name: string, momentum: MomentumOptions | undefined, snap: SnapOptions | undefined,
+    snapInterval: number): Glide => {
+    const spaced = interval(`${name}.snap`, snap, snapInterval);
+    return {
+      momentum: {
+        enabled: momentum?.enabled,
+        halfLifeMs: checked(`${name}.momentum.halfLifeMs`, momentum?.halfLifeMs, 'positive'),
+        minSpeed: checked(`${name}.momentum.minSpeed`, momentum?.minSpeed, 'zero'),
+        stopSpeed: checked(`${name}.momentum.stopSpeed`, momentum?.stopSpeed, 'positive'),
+        maxSpeed: checked(`${name}.momentum.maxSpeed`, momentum?.maxSpeed, 'positive'),
+        maxDistance: checked(`${name}.momentum.maxDistance`, momentum?.maxDistance, 'positive'),
+      },
+      snap: {
+        interval: spaced.interval,
+        offset: spaced.offset,
+        tolerance: checked(`${name}.snap.tolerance`, snap?.tolerance, 'zero'),
+        durationMs: checked(`${name}.snap.durationMs`, snap?.durationMs, 'zero'),
+      },
+    };
+  };
+  return {
+    pan: glide('pan', options.pan?.momentum, undefined, 0),
+    zoom: glide('zoom', options.zoom?.momentum, options.zoom?.snap, 0),
+    rotate: glide('rotate', options.rotate?.momentum, options.rotate?.snap, 360),
+    pitch: glide('pitch', options.pitch?.momentum, options.pitch?.snap, 0),
+    haptics: interval('rotate.haptics', options.rotate?.haptics, 360),
+  };
+}
 
-  constructor(offsetX: number, offsetY: number, zoomLevels: number, bearing: number,
-    anchor: ScreenPoint | undefined, durationMs: number, power: number) {
-    this.offsetX = offsetX;
-    this.offsetY = offsetY;
-    this.zoomLevels = zoomLevels;
-    this.bearing = bearing;
-    this.anchor = anchor;
-    this.durationMs = durationMs;
-    this.power = power;
-  }
+/**
+ * The momentum of a zoom, rotation, or pitch released at `velocity` units per
+ * second, or not moving if undefined, and its snap if `snaps`.
+ */
+export function anchoredMomentum(glide: Glide, velocity: number | undefined, snaps: boolean,
+  anchor: ScreenPoint | undefined): AnchoredMomentum {
+  const snap = glide.snap;
+  return {
+    velocity: glide.momentum.enabled === false ? undefined : velocity,
+    anchor: anchor,
+    decay: decay(glide.momentum),
+    snap: snaps && snap.interval > 0 ?
+      { spacing: snap.interval, offset: snap.offset, tolerance: snap.tolerance, durationMs: snap.durationMs } : undefined,
+  };
+}
 
-  /**
-   * Plans the momentum of a release at these velocities, in vp, zoom levels,
-   * and degrees of bearing per second, or none when it's too slow.
-   */
-  static plan(panX: number, panY: number, zoom: number, bearing: number,
-    anchor: ScreenPoint | undefined): Momentum | undefined {
-    const speed = Math.hypot(panX, panY);
-    let offsetX = 0;
-    let offsetY = 0;
-    let panMs = 0;
-    if (speed >= FLING_MIN_SPEED) {
-      panMs = speed / 10.5 + 150;
-      offsetX = panX * panMs * 0.28 / 1000;
-      offsetY = panY * panMs * 0.28 / 1000;
-    }
-    // Quartic easing travels a quarter of the initial speed times the duration.
-    const seconds = TRANSFORM_MOMENTUM_MS / 1000;
-    const levels = Math.max(-MAX_ZOOM_MOMENTUM, Math.min(MAX_ZOOM_MOMENTUM, zoom * seconds / 4));
-    const degrees = bearing * seconds / 4;
-    const transform = Math.abs(levels) >= 0.01 || Math.abs(degrees) >= 0.1;
-    if (!transform) {
-      return panMs > 0 ? new Momentum(offsetX, offsetY, 0, 0, anchor, panMs, 2) : undefined;
-    }
-    // Keep the pan's initial speed on the quartic curve without adding travel.
-    const scale = panMs > 0 ? Math.min(1, TRANSFORM_MOMENTUM_MS / panMs * 2 / 4) : 0;
-    return new Momentum(offsetX * scale, offsetY * scale, levels, degrees, anchor,
-      TRANSFORM_MOMENTUM_MS, 4);
+/**
+ * The glide of a pan released at `x`, `y` vp/s on a display of `density` px
+ * per vp. By default it glides as ArkUI's `Scroll` and `List` fling
+ * (ace_engine's `scrollable.cpp`, OpenHarmony 7.0, and the SDK's `friction()`
+ * and `flingSpeedLimit()`): the release speed times a gain decays at 4.2 times
+ * the friction per second, from a release of at least 240 px/s, down to
+ * 120 px/s, starting at most 9000 vp/s. A release under 3000 px/s takes a gain of 1.2 and
+ * friction 1, and a faster one 1.5 and the default friction, 0.75. A half-life
+ * that the app gives replaces the gain and the friction.
+ */
+export function panMomentum(glide: Glide, x: number, y: number, density: number): PanMomentum | undefined {
+  const momentum = glide.momentum;
+  if (momentum.enabled === false) {
+    return undefined;
   }
+  const slow = Math.hypot(x, y) * density < 3000;
+  const gain = momentum.halfLifeMs !== undefined ? 1 : slow ? 1.2 : 1.5;
+  const result = decay(momentum);
+  result.halfLifeMs = momentum.halfLifeMs ?? Math.LN2 / (4.2 * (slow ? 1 : 0.75)) * 1000;
+  // The minimum is the release's, before the gain.
+  result.minSpeed = (momentum.minSpeed ?? 240 / density) * gain;
+  result.stopSpeed = momentum.stopSpeed ?? 120 / density;
+  result.maxSpeed = momentum.maxSpeed ?? 9000;
+  return { velocity: { x: x * gain, y: y * gain }, decay: result };
+}
 
-  /**
-   * The camera changes from the last call to `elapsedMs` after the release. A
-   * long frame's pan comes in steps of at most 16 vp, so a pitched map doesn't
-   * project one large offset.
-   */
-  advance(elapsedMs: number): CameraDelta[] {
-    const t = Math.min(1, Math.max(0, elapsedMs / this.durationMs));
-    const progress = 1 - Math.pow(1 - t, this.power);
-    const fraction = progress - this.progress;
-    this.progress = progress;
-    this.done = t >= 1;
-    const deltas: CameraDelta[] = [];
-    if (this.zoomLevels !== 0 || this.bearing !== 0) {
-      const delta: CameraDelta = { anchor: this.anchor };
-      if (this.zoomLevels !== 0) {
-        delta.scale = Math.pow(2, this.zoomLevels * fraction);
-      }
-      if (this.bearing !== 0) {
-        delta.bearing = this.bearing * fraction;
-      }
-      deltas.push(delta);
-    }
-    const x = this.offsetX * fraction;
-    const y = this.offsetY * fraction;
-    const steps = Math.ceil(Math.hypot(x, y) / FLING_STEP);
-    for (let i = 0; i < steps; i++) {
-      deltas.push({ offset: { x: x / steps, y: y / steps } });
-    }
-    return deltas;
-  }
+// The settings of `momentum` that the app gave, which FFI takes as its decay;
+// FFI's defaults fill in the rest.
+function decay(momentum: MomentumOptions): MomentumDecay {
+  return {
+    halfLifeMs: momentum.halfLifeMs,
+    minSpeed: momentum.minSpeed,
+    stopSpeed: momentum.stopSpeed,
+    maxSpeed: momentum.maxSpeed,
+    maxDistance: momentum.maxDistance,
+  };
 }
 
 // A velocity from the samples of the last 100 ms before a release.
