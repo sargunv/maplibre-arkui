@@ -165,6 +165,7 @@ export class MapView extends XComponentController implements GestureTarget, Runt
       if (config.colorMode !== undefined && config.colorMode !== this.colorMode) {
         this.colorMode = config.colorMode;
         this.locationLayer.colorModeChanged(this.map);
+        this.reconciler?.colorModeChanged();
       }
     },
     onMemoryLevel: (): void => {
@@ -791,7 +792,7 @@ export class MapView extends XComponentController implements GestureTarget, Runt
       return;
     }
     this.map = map;
-    this.reconciler = new ContentReconciler(map, (error: Error) => this.fail(error), scaleFactor);
+    this.reconciler = new ContentReconciler(map, (error: Error) => this.fail(error), scaleFactor, this.context);
     this.reconciler.setContent(this.content);
     this.reconciler.setFontScale(fontScaleOf(this.context));
     // The controller's camera moves go to the map once it shows a frame, and
@@ -846,7 +847,7 @@ export class MapView extends XComponentController implements GestureTarget, Runt
       const payload = event.payload;
       if (payload.kind === 'styleImage') {
         const id = payload.value.imageId;
-        this.missingImages.missing(id, event.generation, this.reconciler?.ownsImage(id) === true);
+        this.missingImages.missing(id, event.generation);
       }
     } else if (event.type === RuntimeEventType.mapSourceChanged) {
       // A source's attribution can arrive after the style, with its TileJSON.

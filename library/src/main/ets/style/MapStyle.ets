@@ -1,4 +1,4 @@
-import { StyleImage } from '../content/StyleImage';
+import { ResolvedStyleImage } from '../content/StyleImage';
 import { StyleSource } from '../content/StyleSource';
 import { LayerHandle } from './LayerHandle';
 import { GeoJsonSourceHandle, ImageSourceHandle, SourceHandle, VectorSourceHandle } from './SourceHandle';
@@ -50,10 +50,11 @@ export interface MapStyle {
   getLayers(): Promise<LayerHandle[] | undefined>;
 
   /**
-   * Adds an image to the style, or replaces the style's image with the same
-   * ID. The app can release the pixel map once the call returns.
+   * Adds an image to the style under `id`, or replaces the style's image with
+   * that ID. The app can release a pixel map once the call returns. Rejects
+   * when the image can't be drawn.
    */
-  setImage(image: StyleImage): Promise<boolean>;
+  setImage(id: string, image: ResolvedStyleImage): Promise<boolean>;
 
   /** Removes the style's image with `id`. Resolves `false` when the style has none. */
   removeImage(id: string): Promise<boolean>;

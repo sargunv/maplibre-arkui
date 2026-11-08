@@ -3,6 +3,7 @@
 import { MapDebugFlag, MapHandle } from '@maplibre/native-ffi';
 
 import {
+  color,
   call,
   eq,
   Expression,
@@ -23,7 +24,7 @@ const PARKS: StyleLayer = {
   filter: eq(geometryType(), 'Point'),
   paint: {
     'circle-radius': interpolate(linear(), zoom(), [[8, 2], [16, 10]]),
-    'circle-color': match(get('kind'), [['park', '#43a047'], [['lake', 'river'], '#1e88e5']], '#9e9e9e'),
+    'circle-color': match(get('kind'), [['park', color('#43a047')], [['lake', 'river'], color('#1e88e5')]], color('#9e9e9e')),
   },
 };
 // #endregion expressions

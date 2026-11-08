@@ -34,9 +34,9 @@ export interface MapSnapshotOptions {
   /** The image's height in vp, rounded to a whole number. At least 1 after rounding. */
   height: number;
   /**
-   * Sources, layers, and images to draw over the style. One that MapLibre
-   * rejects is left out and logged. An image's `pixelRatio` defaults to the
-   * snapshot's. None by default.
+   * Sources and layers to draw over the style. One that MapLibre rejects is
+   * left out and logged. Images from resources and drawable descriptors need
+   * `uiContext`. None by default.
    */
   content?: MapContent;
   /**
@@ -154,7 +154,7 @@ async function render(options: MapSnapshotOptions, opening: Promise<RuntimeHandl
     try {
       await session.ready;
       const reconciler = new ContentReconciler(map,
-        (error: Error) => logError(`a snapshot left out content: ${error.message}`), pixelRatio);
+        (error: Error) => logError(`a snapshot left out content: ${error.message}`), pixelRatio, options.uiContext);
       reconciler.setContent(options.content);
       reconciler.setFontScale(fontScale);
       await loadStyle(map, options.style);

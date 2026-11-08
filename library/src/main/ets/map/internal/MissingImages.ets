@@ -1,7 +1,7 @@
 // The images that a map's style uses but lacks, which the map asks the app
 // for: once for each ID in each style, from the time the style loads.
 
-import { ResolvedStyleImage, StyleImage } from '../../content/StyleImage';
+import { ResolvedStyleImage } from '../../content/StyleImage';
 import { logError } from '../../runtime/internal/Log';
 import { LoadedStyle } from '../../style/internal/LoadedStyle';
 import { StyleApi } from '../../style/internal/StyleApi';
@@ -49,14 +49,14 @@ export class MissingImages {
     this.generation = generation;
     const waiting = this.waiting;
     this.waiting = [];
-    waiting.forEach((image: WaitingImage) => this.missing(image.id, image.generation, false));
+    waiting.forEach((image: WaitingImage) => this.missing(image.id, image.generation));
   }
 
   // The style lacks the image `id`, as of the map's `generation`. The
-  // content's images and the library's are on their way, so the map doesn't
-  // ask for them.
-  missing(id: string, generation: bigint, ownedByContent: boolean): void {
-    if (ownedByContent || reservedId(id)) {
+  // library's images, which include those of expressions, are on their way,
+  // so the map doesn't ask for them.
+  missing(id: string, generation: bigint): void {
+    if (reservedId(id)) {
       return;
     }
     const style = this.style;
@@ -71,9 +71,6 @@ export class MissingImages {
   // Asks the app for the image, and adds what it gives to the style that
   // asked, if that's still the loaded style.
   private request(style: LoadedStyle, id: string): void {
-    if (style.reconciler.ownsImage(id)) {
-      return;
-    }
     let answer: Promise<ResolvedStyleImage | undefined>;
     try {
       answer = this.ask({ id: id });
@@ -85,9 +82,7 @@ export class MissingImages {
       if (resolved === undefined || this.style !== style) {
         return;
       }
-      // The style API copies the pixels now.
-      const image: StyleImage = { id: id, image: resolved.image, pixelRatio: resolved.pixelRatio, sdf: resolved.sdf };
-      this.api.setImage(image).catch((error: Error) => this.onError(error));
+      this.api.setImage(id, resolved).catch((error: Error) => this.onError(error));
     }, (error: Error) => logError(`onStyleImageMissing rejected: ${error.message}`))
       .catch((error: Error) => this.onError(error));
   }

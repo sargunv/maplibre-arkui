@@ -23,11 +23,11 @@ export class StyleLoadError extends MapError {
 }
 
 /**
- * The map rejected a source, layer, or image of its `content`. It stays off the
- * map until the app changes it.
+ * The map rejected a source or layer of its `content`. It stays off the map
+ * until the app changes it.
  */
 export class ContentError extends MapError {
-  /** The ID of the rejected source, layer, or image. */
+  /** The ID of the rejected source or layer. */
   readonly id: string;
 
   /** Creates an error for the content with `id`. */

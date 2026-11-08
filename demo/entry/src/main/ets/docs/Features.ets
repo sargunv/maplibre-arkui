@@ -1,6 +1,7 @@
 // Examples for the "Query and highlight features" guide.
 
 import {
+  color,
   CameraTransitionMode,
   cases,
   eq,
@@ -76,7 +77,7 @@ export struct HighlightExample {
           id: 'places', type: 'circle', source: 'places',
           paint: {
             'circle-radius': 8,
-            'circle-color': cases([[toBoolean(featureState('selected')), '#e53935']], '#1e88e5'),
+            'circle-color': cases([[toBoolean(featureState('selected')), color('#e53935')]], color('#1e88e5')),
           },
           onClick: (event: FeatureClickEvent): boolean => {
             this.select(event.features[0]).catch((error: Error) => console.error(error.message));
@@ -129,7 +130,7 @@ export struct ClusterExample {
       layers: [
         {
           id: 'clusters', type: 'circle', source: 'places', filter: has('point_count'),
-          paint: { 'circle-radius': 16, 'circle-color': '#1e88e5' },
+          paint: { 'circle-radius': 16, 'circle-color': color('#1e88e5') },
           onClick: (event: FeatureClickEvent): boolean => {
             this.expand(event.features[0]).catch((error: Error) => console.error(error.message));
             return true;
@@ -137,7 +138,7 @@ export struct ClusterExample {
         },
         {
           id: 'places', type: 'circle', source: 'places', filter: not(has('point_count')),
-          paint: { 'circle-radius': 8, 'circle-color': '#e53935' },
+          paint: { 'circle-radius': 8, 'circle-color': color('#e53935') },
         },
       ],
     };

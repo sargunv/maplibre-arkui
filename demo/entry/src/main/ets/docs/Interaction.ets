@@ -1,6 +1,7 @@
 // Examples for the "Handle gestures and clicks" guide.
 
 import {
+  color,
   FeatureClickEvent,
   MapClickEvent,
   MapContent,
@@ -75,7 +76,7 @@ export struct LayerClickExample {
       layers: [
         {
           id: 'places', type: 'circle', source: 'places',
-          paint: { 'circle-radius': 6, 'circle-color': '#e53935' },
+          paint: { 'circle-radius': 6, 'circle-color': color('#e53935') },
           hitPadding: 8,
           onClick: (event: FeatureClickEvent): boolean => {
             this.selected = `${event.features[0].properties?.['name']}`;

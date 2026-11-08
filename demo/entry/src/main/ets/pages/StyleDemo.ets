@@ -1,9 +1,8 @@
-import image from '@ohos.multimedia.image';
-
 import {
   all,
   AttributionText,
   cases,
+  color,
   eq,
   FeatureClickEvent,
   FeatureClickHandler,
@@ -13,6 +12,7 @@ import {
   GeoJsonSourceHandle,
   geometryType,
   get,
+  image,
   LatLng,
   LayerHandle,
   LayerSummary,
@@ -78,10 +78,10 @@ const SELECTED_STATE: Record<string, Object> = { 'selected': true };
 
 // Under the base style's labels, so they draw over it. Each layer's features
 // handle a click with `onClick`.
-function parkLayer(color: string, onClick: FeatureClickHandler): StyleLayer {
+function parkLayer(fill: string, onClick: FeatureClickHandler): StyleLayer {
   return {
     id: 'paris-park', type: 'fill', source: 'paris', filter: eq(geometryType(), 'Polygon'),
-    paint: { 'fill-color': cases([[SELECTED, '#2e7d32']], color), 'fill-opacity': 0.6 },
+    paint: { 'fill-color': cases([[SELECTED, color('#2e7d32')]], color(fill)), 'fill-opacity': 0.6 },
     below: (layer: LayerSummary) => layer.type === 'symbol',
     onClick: onClick,
   };
@@ -92,7 +92,7 @@ function walkLayer(onClick: FeatureClickHandler): StyleLayer {
   return {
     id: 'paris-walk', type: 'line', source: 'paris', filter: eq(geometryType(), 'LineString'),
     layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: { 'line-color': '#5e35b1', 'line-width': cases([[SELECTED, 9]], 5) },
+    paint: { 'line-color': color('#5e35b1'), 'line-width': cases([[SELECTED, 9]], 5) },
     onClick: onClick,
     hitPadding: 8,
   };
@@ -103,10 +103,10 @@ function placesLayer(onClick: FeatureClickHandler): StyleLayer {
     id: 'paris-places', type: 'circle', source: 'paris', filter: eq(geometryType(), 'Point'),
     paint: {
       'circle-radius': cases([[SELECTED, 12]], 8),
-      'circle-color': match(get('kind'), [['museum', '#fb8c00'], ['monument', '#1e88e5'], ['added', '#e53935']],
-        '#757575'),
+      'circle-color': match(get('kind'),
+        [['museum', color('#fb8c00')], ['monument', color('#1e88e5')], ['added', color('#e53935')]], color('#757575')),
       'circle-stroke-width': cases([[SELECTED, 4]], 2),
-      'circle-stroke-color': cases([[SELECTED, '#e53935']], '#ffffff'),
+      'circle-stroke-color': cases([[SELECTED, color('#e53935')]], color('#ffffff')),
     },
     onClick: onClick,
   };
@@ -117,7 +117,7 @@ function pinsLayer(onClick: FeatureClickHandler): StyleLayer {
   return {
     id: 'paris-pins', type: 'symbol', source: 'paris',
     filter: all(eq(geometryType(), 'Point'), eq(get('kind'), 'monument')),
-    layout: { 'icon-image': 'pin', 'icon-anchor': 'bottom', 'icon-allow-overlap': true },
+    layout: { 'icon-image': image($r('app.media.pin')), 'icon-anchor': 'bottom', 'icon-allow-overlap': true },
     onClick: onClick,
   };
 }
@@ -134,18 +134,6 @@ function addedPoint(n: number, coordinate?: LatLng): GeoJsonFeature {
     type: 'Feature', id: 100 + n, properties: { 'name': `Point ${n + 1}`, 'kind': 'added' },
     geometry: { type: 'Point', coordinates: position },
   };
-}
-
-// Decodes an image from the app's rawfile resources. (This repository's build
-// can't compile `$r()` yet; see AGENTS.md.)
-function loadPin(context: UIContext): image.PixelMap {
-  const bytes = context.getHostContext()!.resourceManager.getRawFileContentSync('pin.png');
-  const source = image.createImageSource(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
-  try {
-    return source.createPixelMapSync();
-  } finally {
-    source.release();
-  }
 }
 
 // A map whose content comes from the page's state: a GeoJSON source, layers
@@ -165,8 +153,6 @@ export struct StyleDemo {
   private controller: MapController = new MapController({
     camera: { center: { latitude: 48.8570, longitude: 2.2965 }, zoom: 13.6 },
   });
-  // Kept while the content has it, and released as the page goes.
-  private pin: image.PixelMap = loadPin(this.getUIContext());
   // The content's source in the current style, and the ID of the feature
   // that a tap selected in it.
   private places: GeoJsonSourceHandle | undefined = undefined;
@@ -193,14 +179,12 @@ export struct StyleDemo {
     return {
       sources: [{ id: 'paris', json: { 'type': 'geojson', 'data': places } }],
       layers: layers,
-      images: [{ id: 'pin', image: this.pin }],
     };
   }
 
   aboutToDisappear(): void {
     this.gone = true;
     this.preview?.image.release();
-    this.pin.release();
   }
 
   build() {

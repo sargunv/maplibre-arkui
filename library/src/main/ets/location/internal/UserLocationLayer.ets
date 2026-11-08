@@ -12,7 +12,7 @@ import { LengthMetricsUnit } from '@ohos.arkui.node';
 import { readPixelMap } from '../../content/internal/PixelMaps';
 import { LayerPredicate } from '../../content/StyleLayer';
 import { UserLocationIndicatorOptions } from '../UserLocationIndicatorOptions';
-import { resolveColor, StyleColor } from './Colors';
+import { resolveColor, StyleColor } from '../../expression/internal/Colors';
 
 // The `location-indicator` layer that draws `userLocation`. It exists only
 // while the map has a location, so it's internal.

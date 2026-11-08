@@ -1,1 +1,6 @@
-{ "color": [{ "name": "background", "value": "#FFFFFF" }] }
+{
+  "color": [
+    { "name": "background", "value": "#FFFFFF" },
+    { "name": "place", "value": "#E53935" }
+  ]
+}

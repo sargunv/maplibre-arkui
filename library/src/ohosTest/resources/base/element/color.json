@@ -1,6 +1,8 @@
 {
   "color": [
     { "name": "background", "value": "#FFFFFF" },
-    { "name": "indicator", "value": "#80FF0000" }
+    { "name": "indicator", "value": "#80FF0000" },
+    { "name": "green", "value": "#FF00FF00" },
+    { "name": "mode", "value": "#FFFF0000" }
   ]
 }

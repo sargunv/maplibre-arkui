@@ -1,6 +1,6 @@
 // Examples for the "Style the map" guide.
 
-import { LayerHandle, MapController, MaplibreMap } from '@maplibre/arkui';
+import { color, LayerHandle, MapController, MaplibreMap } from '@maplibre/arkui';
 
 @ComponentV2
 export struct StyleUrlExample {
@@ -48,7 +48,7 @@ export struct EditStyleExample {
 
   private async recolorWater(): Promise<void> {
     const water: LayerHandle | undefined = await this.controller.style.getLayer('water');
-    await water?.setProperty('fill-color', '#1565c0');
+    await water?.setProperty('fill-color', color('#1565c0'));
   }
   // #endregion edit-layer
 }

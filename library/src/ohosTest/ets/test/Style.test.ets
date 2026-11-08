@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from '@ohos/hypium';
 import application from '@ohos.app.ability.application';
+import display from '@ohos.display';
 import fs from '@ohos.file.fs';
 import geoLocationManager from '@ohos.geoLocationManager';
 import image from '@ohos.multimedia.image';
@@ -11,6 +12,7 @@ import {
   GeoJsonFeatureCollection,
   GeoJsonSourceHandle,
   has,
+  image as styleImage,
   ImageSourceHandle,
   LatLng,
   LayerHandle,
@@ -24,7 +26,6 @@ import {
   ResolvedStyleImage,
   ScreenPoint,
   SourceHandle,
-  StyleImage,
   StyleImageMissingEvent,
   StyleLayer,
   toBoolean,
@@ -103,13 +104,13 @@ function square(size: number): image.PixelMap {
 }
 
 // The places as content, in symbol layers that show the image of each ID
-// alone, with the images.
-function icons(ids: string[], images: StyleImage[] = []): MapContent {
+// alone, or the image that `icon` gives for it.
+function icons(ids: string[], icon: (id: string) => Object = (id: string): Object => id): MapContent {
   const layers = ids.map((id: string): StyleLayer => ({
     id: `icons-${id}`, type: 'symbol', source: 'places',
-    layout: { 'icon-image': id, 'icon-allow-overlap': true },
+    layout: { 'icon-image': icon(id), 'icon-allow-overlap': true },
   }));
-  return { sources: [{ id: 'places', json: geoJson(PLACES) }], layers: layers, images: images };
+  return { sources: [{ id: 'places', json: geoJson(PLACES) }], layers: layers };
 }
 
 // Lays the symbols out again, in new tiles, which would ask for their images
@@ -398,7 +399,6 @@ export default function styleTest(): void {
       testMap.content = {
         sources: [{ id: 'places', json: geoJson(PLACES) }],
         layers: [dots('places')],
-        images: [{ id: 'pin', image: pin }],
       };
       const layer = await layerNamed('dots');
       expect(await layer.getProperty('circle-radius')).assertEqual(12);
@@ -408,12 +408,10 @@ export default function styleTest(): void {
       expectThrow('places', () => source?.setData(PLACES));
       expectThrow('places', () => source?.remove());
       expectThrow('places', () => mapStyle().addSource({ id: 'places', json: geoJson(PLACES) }));
-      expectThrow('pin', () => mapStyle().setImage({ id: 'pin', image: pin }));
-      expectThrow('pin', () => mapStyle().removeImage('pin'));
 
       expectThrow('maplibre-arkui-places',
         () => mapStyle().addSource({ id: 'maplibre-arkui-places', json: geoJson(PLACES) }));
-      expectThrow('maplibre-arkui-pin', () => mapStyle().setImage({ id: 'maplibre-arkui-pin', image: pin }));
+      expectThrow('maplibre-arkui-pin', () => mapStyle().setImage('maplibre-arkui-pin', { image: pin }));
       expectThrow('maplibre-arkui:font-scale', () => mapStyle().setGlobalStateProperty('maplibre-arkui:font-scale', 2));
       expect(await mapStyle().getGlobalStateProperty('maplibre-arkui:font-scale')).assertUndefined();
       pin.release();
@@ -429,7 +427,7 @@ export default function styleTest(): void {
       expect(await unused.getLightProperty('anchor')).assertUndefined();
       expect(await unused.addSource({ id: 'places', json: geoJson(PLACES) })).assertUndefined();
       const pin = pixel();
-      expect(await unused.setImage({ id: 'pin', image: pin })).assertFalse();
+      expect(await unused.setImage('pin', { image: pin })).assertFalse();
       pin.release();
       expect(await unused.removeImage('pin')).assertFalse();
       expect(await unused.setGlobalStateProperty('mode', 'night')).assertFalse();
@@ -543,16 +541,14 @@ export default function styleTest(): void {
 
     it('sets and removes an image, from pixels that it copies', 0, async () => {
       const pin = pixel();
-      const set = mapStyle().setImage({ id: 'dot', image: pin, pixelRatio: 2 });
+      const set = mapStyle().setImage('dot', { image: pin });
       pin.release();
       expect(await set).assertTrue();
-      expect((await withMap((ffi: MapHandle) => ffi.getStyleImage('dot')))?.pixelRatio).assertEqual(2);
+      expect((await withMap((ffi: MapHandle) => ffi.getStyleImage('dot')))?.pixelRatio)
+        .assertEqual(display.getDefaultDisplaySync().densityPixels);
       expect(await mapStyle().removeImage('dot')).assertTrue();
       expect(await withMap((ffi: MapHandle) => ffi.getStyleImage('dot'))).assertUndefined();
       expect(await mapStyle().removeImage('dot')).assertFalse();
-      const other = pixel();
-      expectThrow('0', () => mapStyle().setImage({ id: 'dot', image: other, pixelRatio: 0 }));
-      other.release();
     });
 
     it('changes an image source\'s image and corners', 0, async () => {
@@ -742,9 +738,10 @@ export default function styleTest(): void {
       }
     });
 
-    it('never asks for the images of the content or the library', 0, async () => {
+    it('never asks for the images of expressions or the library', 0, async () => {
       const pin = square(16);
-      testMap.content = icons(['pin', 'maplibre-arkui-pin', 'other'], [{ id: 'pin', image: pin }]);
+      testMap.content = icons(['pin', 'maplibre-arkui-pin', 'other'],
+        (id: string): Object => id === 'pin' ? styleImage(pin) : id);
       await until('the map asks for the other image', () => testMap.missingImages.includes('other'));
       await layOutAgain();
       expect(testMap.missingImages.join()).assertEqual('other');

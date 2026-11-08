@@ -17,9 +17,13 @@ in one way, for example as circles or lines. You declare both in a
 ## Draw GeoJSON data
 
 A `@Computed` getter builds the content from your component's state. This
-example draws a red circle for each place:
+example draws a circle for each place:
 
 <Code code={region(layers, "geojson")} lang="ts" />
+
+<Api of="color" display="color()" /> takes any ArkUI color, such as
+`Color.Red` or `$r('app.color.place')`. A resource color changes with the
+system's dark mode.
 
 Sources and layers take the same JSON as a style document, so the
 [MapLibre Style Specification][spec] lists every source type, layer type, and
@@ -65,10 +69,15 @@ To place a layer under a layer whose ID you know, pass the ID instead, such as
 
 ## Add icons
 
-To draw an icon, add a `PixelMap` to the content as a <Api of="StyleImage" />,
-and name it in a layer's `icon-image`. Keep the pixel map until the content no
-longer uses it:
+To draw an icon, pass an image to <Api of="image" display="image()" /> in a
+layer's `icon-image`. It takes the same sources as ArkUI's `Image`: a resource,
+a `PixelMap`, or a `DrawableDescriptor`.
 
 <Code code={region(layers, "image")} lang="ts" />
+
+To color a single-color icon from the layer, draw it as an SDF and set the
+layer's `icon-color`:
+
+<Code code={region(layers, "sdf")} lang="ts" />
 
 [spec]: https://maplibre.org/maplibre-style-spec/

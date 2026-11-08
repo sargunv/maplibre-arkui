@@ -1,27 +1,30 @@
+import { DrawableDescriptor } from '@ohos.arkui.drawableDescriptor';
 import image from '@ohos.multimedia.image';
 
-/** An image for icons and patterns, without an ID. */
-export interface ResolvedStyleImage {
-  /** The pixels, in `RGBA_8888` or `BGRA_8888` format. Other formats are rejected. */
-  image: image.PixelMap;
+/**
+ * An image for icons and patterns: the sources that ArkUI's `Image` takes,
+ * except strings, which name an image of the style. Closed.
+ *
+ * A pixel map draws at the display density, as an `Image` draws it. A resource
+ * or drawable descriptor draws at the size that an `Image` draws it, and a
+ * resource takes its dark-mode media while the system is in dark mode. Drawing
+ * a resource or drawable descriptor needs a UI context, which a `MaplibreMap`
+ * has and `renderSnapshot()` has only with its `uiContext`.
+ */
+export type StyleImageSource = image.PixelMap | Resource | DrawableDescriptor;
+
+/** How the map draws a `StyleImageSource`. */
+export interface StyleImageOptions {
   /**
-   * How many of the image's pixels make one vp. Finite and greater than 0. The
-   * display density by default, or a snapshot's `pixelRatio`.
+   * Whether to draw the image as a signed distance field from its alpha, so a
+   * layer can recolor it with `icon-color` and give it a halo. Suits
+   * single-color icons. False by default.
    */
-  pixelRatio?: number;
-  /** Whether the image is a signed distance field. False by default. */
-  sdf?: boolean;
+  drawAsSdf?: boolean;
 }
 
-/**
- * An image of the map's content, which layers name by its ID, such as in
- * `icon-image`. It replaces any image in the style with the same ID.
- *
- * Don't release the pixel map while the content has it. To change the pixels,
- * pass a new pixel map. An image that the map rejects is reported to `onError`
- * as a `ContentError`.
- */
-export interface StyleImage extends ResolvedStyleImage {
-  /** The ID that layers name the image by. */
-  id: string;
+/** An image for an ID that the style lacks, or that `MapStyle.setImage()` sets. */
+export interface ResolvedStyleImage extends StyleImageOptions {
+  /** The image. */
+  image: StyleImageSource;
 }

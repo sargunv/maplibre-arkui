@@ -11,8 +11,9 @@ import {
   StyleTransitionOptions as FfiTransitionOptions,
 } from '@maplibre/native-ffi';
 
-import { readPixelMap } from '../../content/internal/PixelMaps';
-import { StyleImage } from '../../content/StyleImage';
+import { StyleImagePixels } from '../../content/internal/StyleImages';
+import { ResolvedStyleImage } from '../../content/StyleImage';
+import { refsOf } from '../../expression/internal/StyleRefs';
 import { StyleSource } from '../../content/StyleSource';
 import { LayerHandle } from '../LayerHandle';
 import { MapStyle, StyleTransitionOptions } from '../MapStyle';
@@ -122,21 +123,17 @@ export class StyleApi implements MapStyle {
         .map((info: StyleLayerInfo): LayerHandle => new LayerHandle(new LayerKey(this.current, style, info))));
   }
 
-  setImage(item: StyleImage): Promise<boolean> {
-    checkId('image', item.id);
-    const ratio = item.pixelRatio;
-    if (ratio !== undefined && !(Number.isFinite(ratio) && ratio > 0)) {
-      throw new Error(`An image's pixelRatio must be finite and greater than 0: ${ratio}`);
-    }
-    const pixels = readPixelMap(item.image);
+  setImage(id: string, image: ResolvedStyleImage): Promise<boolean> {
+    checkId('image', id);
     const style = this.current();
     if (style === undefined) {
       return Promise.resolve(false);
     }
-    checkOwned(style.reconciler.ownsImage(item.id), 'image', item.id);
-    return write(() => this.current() === style, `setting image ${item.id}`,
-      () => style.map.setStyleImage(item.id, pixels,
-        { pixelRatio: ratio ?? style.reconciler.pixelRatio, sdf: item.sdf ?? false, keepUnused: true }));
+    const sdf = image.drawAsSdf ?? false;
+    // A pixel map's pixels are read before this returns.
+    return style.reconciler.stylePixels(image.image, sdf).then((pixels: StyleImagePixels) =>
+      write(() => this.current() === style, `setting image ${id}`,
+        () => style.map.setStyleImage(id, pixels.pixels, { pixelRatio: pixels.pixelRatio, sdf: sdf, keepUnused: true })));
   }
 
   removeImage(id: string): Promise<boolean> {
@@ -145,7 +142,6 @@ export class StyleApi implements MapStyle {
     if (style === undefined) {
       return Promise.resolve(false);
     }
-    checkOwned(style.reconciler.ownsImage(id), 'image', id);
     // The app can't know which images the sprite has, so one that the style
     // doesn't have is an answer, not a failure.
     return write(() => this.current() === style, `removing image ${id}`, () => style.map.removeStyleImage(id),
@@ -219,6 +215,7 @@ export class StyleApi implements MapStyle {
     if (style === undefined) {
       return Promise.resolve(false);
     }
+    style.reconciler.trackRefs(refsOf(value));
     return write(() => this.current() === style, `setting ${name} of the light`,
       () => style.map.setStyleLightProperty(name, propertyValue(name, value)));
   }

@@ -1,4 +1,5 @@
 import { LayerSummary } from '../content/StyleLayer';
+import { refsOf } from '../expression/internal/StyleRefs';
 import { LayerKey } from './internal/HandleKeys';
 import { checkOwned, propertyValue, read, write } from './internal/StyleCommands';
 
@@ -66,6 +67,7 @@ export class LayerHandle implements LayerSummary {
       return Promise.resolve(false);
     }
     checkOwned(key.style.reconciler.ownsLayer(this.id), 'layer', this.id);
+    key.style.reconciler.trackRefs(refsOf(value));
     return write(() => key.holds(), `setting ${name} of layer ${this.id}`,
       () => key.style.map.setStyleLayerProperty(this.id, name, propertyValue(name, value)));
   }
