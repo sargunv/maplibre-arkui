@@ -95,12 +95,12 @@ function square(size: number, r: number, g: number, b: number): image.PixelMap {
   });
 }
 
-// The color of the middle of a snapshot of `layers` over blue, at 1 px per vp,
-// with a point feature in the middle.
+// The color of the middle of a snapshot of `layers` over black, at 1 px per
+// vp, with a point feature in the middle.
 async function middleOf(layers: StyleLayer[]): Promise<string> {
   const center: GeoJsonGeometry = { type: 'Point', coordinates: [0, 0] };
   const snapshot = await renderSnapshot({
-    style: backgroundStyle('#0000ff'),
+    style: backgroundStyle('#000000'),
     content: { sources: [{ id: 'places', json: { 'type': 'geojson', 'data': center } }], layers: layers },
     width: 64, height: 32, pixelRatio: 1, camera: { center: { latitude: 0, longitude: 0 }, zoom: 0 },
     uiContext: testMap.context,
@@ -117,16 +117,6 @@ function fill(paint: Record<string, Object>): StyleLayer[] {
 function icon(layout: Record<string, Object>, paint: Record<string, Object> = {}): StyleLayer[] {
   layout['icon-allow-overlap'] = true;
   return [{ id: 'icon', type: 'symbol', source: 'places', layout: layout, paint: paint }];
-}
-
-// The message of what `block` throws, or 'nothing'.
-function thrown(block: () => Object): string {
-  try {
-    block();
-  } catch (error) {
-    return (error as Error).message;
-  }
-  return 'nothing';
 }
 
 // Whether the map reported a ContentError for `id`.
@@ -728,10 +718,6 @@ export default function contentTest(): void {
       }
     });
 
-    it('throws for a color that ArkUI can\'t resolve', 0, () => {
-      expect(thrown(() => color('not a color'))).assertContain('not a color');
-    });
-
     it('draws image() from a pixel map and from a resource', 0, async () => {
       const red = square(8, 255, 0, 0);
       expect(await middleOf(icon({ 'icon-image': styleImage(red) }))).assertEqual('255,0,0,255');
@@ -748,24 +734,42 @@ export default function contentTest(): void {
       red.release();
     });
 
-    it('throws for image() options with an image name', 0, () => {
-      expect(thrown(() => styleImage('pin', { drawAsSdf: true }))).assertContain('takes options only');
-    });
-
     it('adds an image while a layer uses it, and removes it after', 0, async () => {
       const red = square(8, 255, 0, 0);
       const name = imageName(red, false);
-      testMap.content = content(TWO, [{ id: 'icons', type: 'symbol', source: 'places',
-        layout: { 'icon-image': styleImage(red) } }]);
+      const icons = (id: string): StyleLayer => ({ id: id, type: 'symbol', source: 'places',
+        layout: { 'icon-image': styleImage(red) } });
+      testMap.content = content(TWO, [icons('a'), icons('b')]);
       const info = await eventually('the map has the image', async () =>
         withMap((ffi: MapHandle) => ffi.getStyleImage(name)));
       // At the display's density, and kept until no layer uses it.
       expectNear(info.pixelRatio, testMap.context!.vp2px(1), 0.001);
       expect(info.keepUnused).assertTrue();
+      // Kept while another layer uses it.
+      testMap.content = content(TWO, [icons('b')]);
+      await untilLayers('background,labels,b');
+      expect((await withMap((ffi: MapHandle) => ffi.getStyleImage(name)))?.width).assertEqual(8);
       testMap.content = content(TWO, [circles('dots', '#00ff00')]);
       await eventually('the image goes', async () =>
         (await withMap((ffi: MapHandle) => ffi.getStyleImage(name))) === undefined ? true : undefined);
       red.release();
+    });
+
+    it('gives a resource color on the map the value of each color mode', 0, async () => {
+      const values = async (): Promise<Object[]> =>
+        Object.values(await withMap((ffi: MapHandle) => ffi.getGlobalState()) as Record<string, Object>);
+      const holding = async (value: string): Promise<boolean | undefined> =>
+        (await values()).includes(value) ? true : undefined;
+      testMap.content = { layers: fill({ 'background-color': color($r('app.color.mode')) }) };
+      await eventually('the map has the light color', () => holding('rgba(255, 0, 0, 1)'));
+      const context = application.getApplicationContext();
+      context.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_DARK);
+      try {
+        await eventually('the map has the dark color', () => holding('rgba(0, 0, 255, 1)'));
+      } finally {
+        context.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
+        await until('dark mode ends', () => ColorMetrics.resourceColor($r('app.color.mode')).blue !== 255);
+      }
     });
   });
 }

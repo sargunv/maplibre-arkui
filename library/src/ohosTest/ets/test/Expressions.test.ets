@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@ohos/hypium';
 import {
-  abs, add, all, any, call, cases, ceil, coalesce, concat, cubicBezier, divide, downcase, eq,
+  abs, add, all, any, call, cases, ceil, coalesce, color, concat, cubicBezier, divide, downcase, eq,
   Expression, exponential, featureState, floor, format, fp, geometryType, get, globalState, gt, gte, has,
   heatmapDensity, id, image, interpolate, interpolateHcl, interpolateLab, JsonValue, linear,
   lineProgress, literal, lt, lte, match, max, min, mod, multiply, neq, not, pow, properties, rgb, rgba,
@@ -25,6 +25,16 @@ function evaluate(expression: Expression, kind: number, inputs?: StyleExpression
   } finally {
     handle.release();
   }
+}
+
+// The message of what `block` throws, or 'nothing'.
+function thrown(block: () => Object): string {
+  try {
+    block();
+  } catch (error) {
+    return (error as Error).message;
+  }
+  return 'nothing';
 }
 
 function atZoom(zoomLevel: number): StyleExpressionInputs {
@@ -286,6 +296,11 @@ export default function expressionsTest(): void {
       expect(evaluate(literal(['Open Sans', 'Arial']), StyleExpressionTypeKind.value))
         .assertEqual('["Open Sans","Arial"]');
       expect(evaluate(new Expression(['upcase', 'raw']), STRING)).assertEqual('"RAW"');
+    });
+
+    it('throws for a color that ArkUI can\'t resolve, and for image() options with a name', 0, () => {
+      expect(thrown(() => color('not a color'))).assertContain('not a color');
+      expect(thrown(() => image('pin', { drawAsSdf: true }))).assertContain('"pin"');
     });
 
     it('rejects an expression of the wrong type', 0, () => {
