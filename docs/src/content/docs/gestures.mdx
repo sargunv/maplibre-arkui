@@ -33,7 +33,7 @@ stays north-up and flat, and tells the app while the user moves it:
 <Code code={region(examples, "gestures")} lang="ts" />
 
 `onGestureStart` and `onGestureEnd` bracket each gesture: any input that moves
-the camera, with its momentum and a rotation's snap. The camera's move starts
+the camera, with its momentum and its snap. The camera's move starts
 with the map's `onCameraMoveStart` after `onGestureStart`, unless the camera was
 moving already, and ends with its `onCameraIdle` after `onGestureEnd`. To react
 to one movement,
@@ -63,10 +63,11 @@ says, and a touchpad swipe pans.
 A drag that lifts while it moves glides as a `List` flings, and a pinch, a
 twist, and a tilt glide briefly. Each movement's `momentum` changes how far and
 how long it glides, or turns its glide off. A rotation that ends within 7° of
-north eases to it, and each movement's `snap` chooses the values it settles on:
-every `interval` from `offset`, such as whole zoom levels or a city's street
-grid. `{ interval: 0 }` turns snapping off, which it is for zoom and pitch by
-default. The gesture ends, with `onGestureEnd`, once the glide and the snap do:
+north eases to it. The `snap` of zoom, rotate, and pitch chooses the values
+each settles on: every `interval` from `offset`, such as whole zoom levels or a
+city's street grid. `{ interval: 0 }` turns snapping off, which it is for zoom
+and pitch by default. The gesture ends, with `onGestureEnd`, once the glide and
+the snap do:
 
 <Code code={region(examples, "momentum")} lang="ts" />
 
