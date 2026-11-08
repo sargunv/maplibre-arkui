@@ -84,7 +84,7 @@ export class ContentReconciler {
   private failedImages: Set<string> = new Set<string>();
   // The colors and images of what the app set through the style API, which the
   // current style keeps.
-  private styleRefs: Map<string, StyleRef> = new Map<string, StyleRef>();
+  private styleRefs: Map<string, StyleRef[]> = new Map<string, StyleRef[]>();
   // Counts the color modes, so an image drawn in the last one is drawn again.
   private colorMode: number = 0;
   // What the map rejected, by ID, as text, so a pass skips it until it changes.
@@ -131,12 +131,16 @@ export class ContentReconciler {
     this.schedule();
   }
 
-  /** The app set a value that uses `refs` through the style API. */
-  trackRefs(refs: StyleRef[]): void {
-    if (refs.length === 0) {
+  /**
+   * The app set the property `owner` to a value that uses `refs` through the
+   * style API, in place of what it set before.
+   */
+  trackRefs(owner: string, refs: StyleRef[]): void {
+    if (refs.length > 0) {
+      this.styleRefs.set(owner, refs);
+    } else if (!this.styleRefs.delete(owner)) {
       return;
     }
-    refs.forEach((ref: StyleRef) => this.styleRefs.set(ref.name, ref));
     this.schedule();
   }
 
@@ -504,7 +508,8 @@ export class ContentReconciler {
   // The colors and images that the content's layers and the style API's values
   // use, by name.
   private refsOf(content: MapContent | undefined): Map<string, StyleRef> {
-    const refs = new Map<string, StyleRef>(this.styleRefs);
+    const refs = new Map<string, StyleRef>();
+    this.styleRefs.forEach((list: StyleRef[]) => list.forEach((ref: StyleRef) => refs.set(ref.name, ref)));
     const add = (value: Object | null | undefined): void => {
       refsOf(value).forEach((ref: StyleRef) => refs.set(ref.name, ref));
     };

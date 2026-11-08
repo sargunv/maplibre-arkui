@@ -232,7 +232,7 @@ export class StyleApi implements MapStyle {
     if (style === undefined) {
       return Promise.resolve(false);
     }
-    style.reconciler.trackRefs(refsOf(value));
+    style.reconciler.trackRefs(`light/${name}`, refsOf(value));
     return write(() => this.current() === style, `setting ${name} of the light`,
       () => style.map.setStyleLightProperty(name, propertyValue(name, value)));
   }

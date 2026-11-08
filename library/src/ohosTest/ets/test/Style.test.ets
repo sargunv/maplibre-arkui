@@ -32,6 +32,7 @@ import {
 } from '@maplibre/arkui';
 import { ContentReconciler } from '@maplibre/arkui/src/main/ets/content/internal/ContentReconciler';
 import { readPixelMap } from '@maplibre/arkui/src/main/ets/content/internal/PixelMaps';
+import { imageName } from '@maplibre/arkui/src/main/ets/expression/internal/StyleRefs';
 import { USER_LOCATION_LAYER } from '@maplibre/arkui/src/main/ets/location/internal/UserLocationLayer';
 import { LoadedStyle } from '@maplibre/arkui/src/main/ets/style/internal/LoadedStyle';
 import { StyleApi } from '@maplibre/arkui/src/main/ets/style/internal/StyleApi';
@@ -586,6 +587,23 @@ export default function styleTest(): void {
       expect(await removed).assertFalse();
       expect(await withMap((map: MapHandle) => map.getStyleImage('drawn'))).assertUndefined();
       expect((await withMap((map: MapHandle) => map.getStyleImage('kept')))?.width).assertEqual(1);
+    });
+
+    it('keeps the image of a property that the app sets only while the property uses it', 0, async () => {
+      const first = square(8);
+      const second = square(8);
+      const has = async (source: image.PixelMap): Promise<boolean> =>
+        (await withMap((ffi: MapHandle) => ffi.getStyleImage(imageName(source, false)))) !== undefined;
+      const background = await layerNamed('background');
+      expect(await background.setProperty('background-pattern', styleImage(first))).assertTrue();
+      await eventually('the first image goes in', async () => await has(first) ? true : undefined);
+      expect(await background.setProperty('background-pattern', styleImage(second))).assertTrue();
+      await eventually('the second image replaces it', async () =>
+        await has(second) && !(await has(first)) ? true : undefined);
+      expect(await background.setProperty('background-pattern', null)).assertTrue();
+      await eventually('the second image goes', async () => await has(second) ? undefined : true);
+      first.release();
+      second.release();
     });
 
     it('changes an image source\'s image and corners', 0, async () => {

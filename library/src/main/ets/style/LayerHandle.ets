@@ -67,7 +67,7 @@ export class LayerHandle implements LayerSummary {
       return Promise.resolve(false);
     }
     checkOwned(key.style.reconciler.ownsLayer(this.id), 'layer', this.id);
-    key.style.reconciler.trackRefs(refsOf(value));
+    key.style.reconciler.trackRefs(`layer/${this.id}/${name}`, refsOf(value));
     return write(() => key.holds(), `setting ${name} of layer ${this.id}`,
       () => key.style.map.setStyleLayerProperty(this.id, name, propertyValue(name, value)));
   }
