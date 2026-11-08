@@ -236,8 +236,8 @@ export struct MaplibreMap {
   @Event onGestureStart: () => void = () => {
   };
   /**
-   * The user's gesture stopped moving the camera, after its momentum and a
-   * rotation's snap, as `interactions.rotate.snap` says, so the camera
+   * The user's gesture stopped moving the camera, after its momentum and its
+   * snap to a bearing of `interactions.rotate.snap`, so the camera
    * comes to rest unless something else moves it. `InteractionOptions`
    * describes the order of the gesture events. Called on the UI thread; the
    * map logs what it throws.

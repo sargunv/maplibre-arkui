@@ -577,7 +577,7 @@ struct InteractionExample {
         // The wheel pans, and zooms with Ctrl.
         wheel: WheelAction.PAN,
         // A rotation settles on, and ticks at, north, east, south, and west.
-        rotate: { snap: { spacing: 90 }, haptics: { spacing: 90 } },
+        rotate: { snap: { interval: 90 }, haptics: { interval: 90 } },
       },
     })
     // #endregion interactions

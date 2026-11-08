@@ -219,7 +219,7 @@ export default function gestureInputTest(): void {
 
       await start();
       testMap.compass = true;
-      testMap.interactions = { rotate: { snap: { enabled: false } } };
+      testMap.interactions = { rotate: { snap: { interval: 0 } } };
       await gesture(async () => {
         await driver.injectMultiPointerAction(twist(c, 100, 10, 10, STILL_TWIST_HOLD), speed(200));
       });

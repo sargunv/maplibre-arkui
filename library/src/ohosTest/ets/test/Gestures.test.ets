@@ -2,7 +2,7 @@
 // in GestureInput.test.ets.
 
 import { describe, expect, it } from '@ohos/hypium';
-import { InteractionOptions, RotationOptions, WheelAction } from '@maplibre/arkui';
+import { InteractionOptions, WheelAction } from '@maplibre/arkui';
 import { CameraDelta, CameraTransitionOutcome, GesturePhase, ScreenPoint } from '@maplibre/native-ffi';
 import { GestureTarget, MapGestures, TouchPoint } from '@maplibre/arkui/src/main/ets/interaction/internal/MapGestures';
 import { playTick } from '@maplibre/arkui/src/main/ets/interaction/internal/Haptics';
@@ -30,8 +30,20 @@ class Recorder implements GestureTarget {
   clicks: ScreenPoint[] = [];
   long: boolean[] = [];
 
+  // Whether the gesture under way turned the map.
+  private turned: boolean = false;
+
+  // A gesture's end with nothing to glide or snap ends at once, as the map
+  // ends it.
   applyCameraDelta(delta: CameraDelta): void {
     this.deltas.push(delta);
+    this.turned = (delta.gesturePhase !== GesturePhase.begin && this.turned) || (delta.bearing ?? 0) !== 0;
+    const m = delta.momentum;
+    if (m !== undefined && (m.pan?.velocity?.x ?? 0) === 0 && (m.pan?.velocity?.y ?? 0) === 0 &&
+      (m.zoom?.velocity ?? 0) === 0 && (m.bearing?.velocity ?? 0) === 0 && (m.pitch?.velocity ?? 0) === 0 &&
+      (m.bearing?.snap === undefined || !this.turned)) {
+      this.endAnimation(delta);
+    }
   }
 
   // The IDs of the transitions that the gestures stopped.
@@ -223,8 +235,6 @@ export default function gesturesTest(): void {
         expectNear(pan?.decay?.minSpeed ?? NaN, 240 / px, 1e-9);
         expectNear(pan?.decay?.stopSpeed ?? NaN, 120 / px, 1e-9);
         expect(pan?.decay?.maxSpeed).assertEqual(9000);
-        expect(glide.momentum?.zoom).assertUndefined();
-        expect(glide.momentum?.bearing).assertUndefined();
         // The gesture lasts until the map ends the glide.
         expect(camera.ends).assertEqual(0);
         expect(gestures.idle).assertFalse();
@@ -657,11 +667,10 @@ export default function gesturesTest(): void {
       const gestures = new MapGestures(camera);
       let end = twist(gestures, 100, 60, 20);
       gestures.touch(end + 100, []);
-      // FFI's snap, to north within 7 degrees, settles a still rotation.
+      // North alone by default.
       const snap = camera.deltas[camera.deltas.length - 1];
       expect(snap.gesturePhase).assertEqual(GesturePhase.end);
-      expect(JSON.stringify(snap.momentum)).assertEqual('{"bearing":{"snap":{}}}');
-      expect(snap.animation?.durationMs).assertUndefined();
+      expect(JSON.stringify(snap.momentum?.bearing?.snap)).assertEqual('{"spacing":360,"offset":0}');
       expect(camera.ends).assertEqual(0);
       expect(gestures.idle).assertFalse();
       camera.endAnimation();
@@ -669,17 +678,16 @@ export default function gesturesTest(): void {
       expect(gestures.idle).assertTrue();
       expect(camera.starts).assertEqual(1);
 
-      // The options' intervals. A touch during the snap ends the gesture
+      // The options' bearings. A touch during the snap ends the gesture
       // first, and so does the app.
       for (const app of [false, true]) {
         const other = new Recorder();
         const snapping = new MapGestures(other);
-        snapping.options = { rotate: { snap: { spacing: 90, offset: 45, tolerance: 10, durationMs: 0 } } };
+        snapping.options = { rotate: { snap: { interval: 90, offset: 10 } } };
         end = twist(snapping, 100, 60, 20);
         snapping.touch(end + 100, []);
         const ease = other.deltas[other.deltas.length - 1];
-        expect(JSON.stringify(ease.momentum?.bearing?.snap))
-          .assertEqual('{"spacing":90,"offset":45,"tolerance":10,"durationMs":0}');
+        expect(JSON.stringify(ease.momentum?.bearing?.snap)).assertEqual('{"spacing":90,"offset":10}');
         if (app) {
           snapping.stop();
         } else {
@@ -693,46 +701,35 @@ export default function gesturesTest(): void {
         snapping.dispose();
       }
 
-      // Without snapping, a rotation ends at once, and so does a pan.
+      // Without snapping, a rotation ends at once.
       const still = new Recorder();
       const unsnapped = new MapGestures(still);
-      unsnapped.options = { rotate: { snap: { enabled: false } } };
+      unsnapped.options = { rotate: { snap: { interval: 0 } } };
       end = twist(unsnapped, 100, 60, 20);
       unsnapped.touch(end + 100, []);
-      expect(still.deltas[still.deltas.length - 1].momentum).assertUndefined();
+      expect(still.deltas[still.deltas.length - 1].momentum?.bearing?.snap).assertUndefined();
       expect(still.ends).assertEqual(1);
-      end = drag(unsnapped, 2000, [touch(1, 100, 100)], [touch(1, 100, 200)], 10, 50);
-      unsnapped.touch(end + 150, []);
-      expect(still.deltas[still.deltas.length - 1].momentum).assertUndefined();
-      expect(still.ends).assertEqual(2);
     });
 
-    it("reports the rotation's values out of range, and takes their defaults", 0, () => {
+    it("reports the rotation's invalid values, and takes their defaults", 0, () => {
       const camera = new Recorder();
-      camera.initialBearing = 50;
+      camera.initialBearing = 30;
       const gestures = new MapGestures(camera);
-      const rotate: RotationOptions = {
-        snap: { spacing: 0.5, offset: NaN, tolerance: -1, durationMs: Infinity },
-        haptics: { spacing: 0, offset: 390 },
-      };
-      gestures.options = { rotate: rotate };
-      expect(camera.errors.length).assertEqual(5);
-      expect(camera.errors[0].includes('0.5')).assertTrue();
-      expect(camera.errors[1].includes('NaN')).assertTrue();
-      expect(camera.errors[3].includes('Infinity')).assertTrue();
+      gestures.options = { rotate: { snap: { interval: NaN }, haptics: { interval: -90, offset: Infinity } } };
+      expect(JSON.stringify(camera.errors)).assertEqual(JSON.stringify([
+        'interactions.rotate.snap.interval must be finite and not negative: NaN',
+        'interactions.rotate.haptics.interval must be finite and not negative: -90',
+        'interactions.rotate.haptics.offset must be finite: Infinity',
+      ]));
       // The same options again, as `build()` writes them, report nothing new.
-      gestures.options = {
-        rotate: {
-          snap: { spacing: 0.5, offset: NaN, tolerance: -1, durationMs: Infinity },
-          haptics: { spacing: 0, offset: 390 },
-        },
-      };
-      expect(camera.errors.length).assertEqual(5);
-      // The twist from 50 to 2 ticks at 30, and FFI's snap takes its defaults.
+      gestures.options = { rotate: { snap: { interval: NaN }, haptics: { interval: -90, offset: Infinity } } };
+      expect(camera.errors.length).assertEqual(3);
+      // The twist from 30 to -18 ticks at north, and snaps there.
       const end = twist(gestures, 100, 60, 20);
       gestures.touch(end + 100, []);
       expect(camera.ticks).assertEqual(1);
-      expect(JSON.stringify(camera.deltas[camera.deltas.length - 1].momentum?.bearing?.snap)).assertEqual('{}');
+      expect(JSON.stringify(camera.deltas[camera.deltas.length - 1].momentum?.bearing?.snap))
+        .assertEqual('{"spacing":360,"offset":0}');
     });
 
     it("runs each movement's onStart as it starts", 0, () => {
@@ -1050,7 +1047,7 @@ export default function gesturesTest(): void {
       gestures.keyDown(KeyCode.KEYCODE_DPAD_LEFT, true);
       gestures.keyUp(KeyCode.KEYCODE_DPAD_LEFT);
       // The rotation's end goes to the map to snap.
-      await until('the steps end', () => camera.deltas[camera.deltas.length - 1]?.momentum !== undefined);
+      await until('the steps end', () => camera.phases().includes(GesturePhase.end));
       camera.endAnimation();
       expect(camera.ends).assertEqual(1);
       expectNear(camera.offsetX(), 100, 1e-6);
@@ -1074,7 +1071,7 @@ export default function gesturesTest(): void {
       gestures.keyUp(KeyCode.KEYCODE_DPAD_LEFT);
       gestures.keyDown(KeyCode.KEYCODE_DPAD_DOWN, true);
       gestures.keyUp(KeyCode.KEYCODE_DPAD_DOWN);
-      await until('the steps end', () => camera.deltas[camera.deltas.length - 1]?.momentum !== undefined);
+      await until('the steps end', () => camera.lastPhase() === GesturePhase.end && camera.pitch() < 0);
       camera.endAnimation();
       expect(camera.ends).assertEqual(2);
       expectNear(camera.bearing(), 15, 1e-6);
@@ -1131,8 +1128,8 @@ export default function gesturesTest(): void {
       expectNear(camera.bearing(), 40, 1e-9);
       expectNear(camera.pitch(), 10, 1e-9);
       gestures.mouse(MouseAction.Release, MouseButton.Right, 50, 170, 80);
-      // A rotation, whose end the map snaps, with no velocity to glide.
-      expect(JSON.stringify(camera.deltas[camera.deltas.length - 1].momentum)).assertEqual('{"bearing":{"snap":{}}}');
+      // A rotation, whose end the map snaps.
+      expect(camera.ends).assertEqual(0);
       camera.endAnimation();
       expect(camera.ends).assertEqual(1);
       const count = camera.deltas.length;
@@ -1150,7 +1147,6 @@ export default function gesturesTest(): void {
       gestures.mouse(MouseAction.Release, MouseButton.Right, 230, 200, 0);
       expectNear(camera.bearing(), 40, 1e-9);
       expectNear(camera.pitch(), 35, 1e-9);
-      expect(camera.deltas[camera.deltas.length - 1].momentum).assertUndefined();
       expect(camera.ends).assertEqual(2);
     });
 
@@ -1167,19 +1163,20 @@ export default function gesturesTest(): void {
       const silent = new Recorder();
       silent.initialBearing = 30;
       const quiet = new MapGestures(silent);
-      quiet.options = { rotate: { haptics: { enabled: false } } };
+      quiet.options = { rotate: { haptics: { interval: 0 } } };
       end = twist(quiet, 100, 60, 20);
       quiet.touch(end + 100, []);
       expect(silent.ticks).assertEqual(0);
 
-      // Starting at north is silent, and each crossing of a multiple of 30
-      // ticks.
+      // Starting at a notch is silent, and each crossing of one, every 30
+      // degrees from 10, ticks.
       const dragged = new Recorder();
+      dragged.initialBearing = 10;
       const dragging = new MapGestures(dragged);
-      dragging.options = { rotate: { haptics: { spacing: 30 } } };
+      dragging.options = { rotate: { haptics: { interval: 30, offset: 10 } } };
       dragging.mouse(MouseAction.Press, MouseButton.Right, 0, 100, 100);
       dragging.mouse(MouseAction.Move, MouseButton.Right, 100, 120, 100);
-      // 0.8 degrees per vp: to 20, 40, then back to -8.
+      // 0.8 degrees per vp: to 30, 50, then back to 2.
       dragging.mouse(MouseAction.Move, MouseButton.Right, 200, 145, 100);
       expect(dragged.ticks).assertEqual(0);
       dragging.mouse(MouseAction.Move, MouseButton.Right, 300, 170, 100);

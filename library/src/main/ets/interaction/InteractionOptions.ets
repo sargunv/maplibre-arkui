@@ -14,10 +14,9 @@
  *
  * A gesture is input on the map that moves the camera, as `interactions`
  * allows, until it and its momentum stop. A drag that lifts while it moves
- * glides on and slows down as ArkUI's `Scroll`, `List`, and `Grid` do after a
- * fling, and a pinch, twist, or tilt that lifts while it moves glides briefly
- * too. The overlay's `ZoomButtons` and
- * `CompassButton` move the camera through the controller, so they don't
+ * glides on and slows down as ArkUI's `Scroll` and `List` do after a fling,
+ * and a pinch, twist, or tilt glides briefly too. The overlay's `ZoomButtons`
+ * and `CompassButton` move the camera through the controller, so they don't
  * count. The map's `onGestureStart` and `onGestureEnd` bracket each gesture:
  *
  * - Each `onGestureStart` is followed by exactly one `onGestureEnd` before the
@@ -28,12 +27,9 @@
  *   camera was at rest. A gesture that starts while the camera moves, such as
  *   during an animation, takes the move over: `cameraMoveReason` becomes
  *   `GESTURE`, without another `onCameraMoveStart`.
- * - `onGestureEnd` comes before that gesture's `onCameraIdle`, and the
- *   controller's `cameraMoving` stays true until then, through the momentum
- *   and the snap.
- * - The end of a gesture that rotated the map can come a frame or more after
- *   the last input, once the map has settled the bearing as `rotate.snap`
- *   says.
+ * - `onGestureEnd` comes a frame or more after the last input, once the
+ *   momentum and a rotation's snap end, and before that gesture's
+ *   `onCameraIdle`. The controller's `cameraMoving` stays true until then.
  * - A camera change by the app that stops momentum or held keys ends the
  *   gesture, and `onGestureEnd` runs before that call returns.
  * - A touch sequence that the system cancels (`TouchType.Cancel`) ends with no
@@ -119,53 +115,33 @@ export interface MovementOptions {
 /** Rotation's options: those of each movement, and where it settles and ticks. */
 export interface RotationOptions extends MovementOptions {
   /**
-   * Where a rotation settles: once its momentum ends, a bearing near a snap
-   * bearing eases to it, as the last part of the gesture. North, within 7°,
-   * by default. `{ enabled: false }` turns snapping off.
+   * Where a rotation settles: one that ends within 7° of one of these bearings
+   * eases to it after its momentum, as the last part of the gesture. North by
+   * default; `{ interval: 0 }` turns snapping off.
    */
-  snap?: RotationSnapOptions;
+  snap?: BearingIntervalOptions;
   /**
    * Where a soft tick plays as a twist or a right-button drag turns the map
-   * across a bearing. North by default. `{ enabled: false }` turns the ticks
-   * off. Ticks need the app to declare `ohos.permission.VIBRATE`, and play
-   * only when the system's touch feedback is on.
+   * across one of these bearings. North by default; `{ interval: 0 }` turns the
+   * ticks off. Ticks need the app to declare `ohos.permission.VIBRATE`, and
+   * play only when the system's touch feedback is on.
    */
   haptics?: BearingIntervalOptions;
 }
 
 /**
- * Bearings every `spacing` degrees from `offset`, where a rotation snaps or
- * ticks. Each turn has the bearings `offset + k * spacing` that are less than
- * a turn from `offset`, so a spacing that doesn't divide 360 leaves a shorter
- * gap before `offset`.
+ * Bearings every `interval` degrees from `offset`. Each turn has the bearings
+ * `offset + k * interval` that are less than a turn from `offset`, so an
+ * interval that doesn't divide 360 leaves a shorter gap before `offset`.
  *
- * A value outside its range is reported to the map's `onError`, and its
- * default takes its place.
+ * A value that isn't finite, or an interval that is negative, is reported to
+ * the map's `onError`, and its default takes its place.
  */
 export interface BearingIntervalOptions {
-  /** Whether the rotation snaps or ticks at these bearings. On by default. */
-  enabled?: boolean;
-  /**
-   * The degrees from one bearing to the next, at least 1. 360, one bearing
-   * a turn, by default.
-   */
-  spacing?: number;
-  /** One of the bearings, in degrees, taken modulo 360. 0, north, by default. */
+  /** The degrees from one bearing to the next. 360 by default; 0 leaves none. */
+  interval?: number;
+  /** One of the bearings, in degrees. 0, north, by default. */
   offset?: number;
-}
-
-/** Where a rotation settles: the snap bearings, how near it snaps, and how fast. */
-export interface RotationSnapOptions extends BearingIntervalOptions {
-  /**
-   * How near a snap bearing, in degrees, a rotation that ends there snaps to
-   * it, at least 0. 7 by default.
-   */
-  tolerance?: number;
-  /**
-   * How long the ease to the snap bearing takes, at least 0. 300 ms by
-   * default; 0 settles at once.
-   */
-  durationMs?: number;
 }
 
 /**

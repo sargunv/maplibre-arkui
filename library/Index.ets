@@ -34,7 +34,6 @@ export type {
   InteractionOptions,
   MovementOptions,
   RotationOptions,
-  RotationSnapOptions,
 } from './src/main/ets/interaction/InteractionOptions';
 
 // Controls
