@@ -411,7 +411,7 @@ export default function styleTest(): void {
 
       expectThrow('maplibre-arkui-places',
         () => mapStyle().addSource({ id: 'maplibre-arkui-places', json: geoJson(PLACES) }));
-      expectThrow('maplibre-arkui-pin', () => mapStyle().setImage('maplibre-arkui-pin', { image: pin }));
+      expectThrow('maplibre-arkui-pin', () => mapStyle().setImage('maplibre-arkui-pin', pin));
       expectThrow('maplibre-arkui:font-scale', () => mapStyle().setGlobalStateProperty('maplibre-arkui:font-scale', 2));
       expect(await mapStyle().getGlobalStateProperty('maplibre-arkui:font-scale')).assertUndefined();
       pin.release();
@@ -427,7 +427,7 @@ export default function styleTest(): void {
       expect(await unused.getLightProperty('anchor')).assertUndefined();
       expect(await unused.addSource({ id: 'places', json: geoJson(PLACES) })).assertUndefined();
       const pin = pixel();
-      expect(await unused.setImage('pin', { image: pin })).assertFalse();
+      expect(await unused.setImage('pin', pin)).assertFalse();
       pin.release();
       expect(await unused.removeImage('pin')).assertFalse();
       expect(await unused.setGlobalStateProperty('mode', 'night')).assertFalse();
@@ -541,7 +541,7 @@ export default function styleTest(): void {
 
     it('sets and removes an image, from pixels that it copies', 0, async () => {
       const pin = pixel();
-      const set = mapStyle().setImage('dot', { image: pin });
+      const set = mapStyle().setImage('dot', pin);
       pin.release();
       expect(await set).assertTrue();
       expect((await withMap((ffi: MapHandle) => ffi.getStyleImage('dot')))?.pixelRatio)
@@ -549,6 +549,21 @@ export default function styleTest(): void {
       expect(await mapStyle().removeImage('dot')).assertTrue();
       expect(await withMap((ffi: MapHandle) => ffi.getStyleImage('dot'))).assertUndefined();
       expect(await mapStyle().removeImage('dot')).assertFalse();
+    });
+
+    it('applies image writes in call order, while one waits to draw', 0, async () => {
+      const pin = pixel();
+      const set = mapStyle().setImage('dot', $r('app.media.green_square'));
+      const replaced = mapStyle().setImage('dot', pin, { drawAsSdf: true });
+      pin.release();
+      expect(await set).assertTrue();
+      expect(await replaced).assertTrue();
+      expect((await withMap((ffi: MapHandle) => ffi.getStyleImage('dot')))?.sdf).assertTrue();
+      const again = mapStyle().setImage('dot', $r('app.media.green_square'));
+      const removed = mapStyle().removeImage('dot');
+      expect(await again).assertTrue();
+      expect(await removed).assertTrue();
+      expect(await withMap((ffi: MapHandle) => ffi.getStyleImage('dot'))).assertUndefined();
     });
 
     it('changes an image source\'s image and corners', 0, async () => {

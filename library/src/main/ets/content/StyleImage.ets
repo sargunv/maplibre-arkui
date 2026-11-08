@@ -2,14 +2,14 @@ import { DrawableDescriptor } from '@ohos.arkui.drawableDescriptor';
 import image from '@ohos.multimedia.image';
 
 /**
- * An image for icons and patterns: the sources that ArkUI's `Image` takes,
- * except strings, which name an image of the style. Closed.
+ * An image for icons and patterns. Types may be added in later releases.
  *
- * A pixel map draws at the display density, as an `Image` draws it. A resource
- * or drawable descriptor draws at the size that an `Image` draws it, and a
- * resource takes its dark-mode media while the system is in dark mode. Drawing
- * a resource or drawable descriptor needs a UI context, which a `MaplibreMap`
- * has and `renderSnapshot()` has only with its `uiContext`.
+ * A pixel map must be in `RGBA_8888` or `BGRA_8888` format, and draws one of
+ * its pixels per pixel of the screen, or of a snapshot. A resource or drawable
+ * descriptor draws at the size that ArkUI's `Image` gives it, and a resource
+ * takes the media of the current color mode. Drawing a resource or drawable
+ * descriptor needs a UI context, which a `MaplibreMap` has and
+ * `renderSnapshot()` has only with its `uiContext`.
  */
 export type StyleImageSource = image.PixelMap | Resource | DrawableDescriptor;
 
@@ -23,7 +23,7 @@ export interface StyleImageOptions {
   drawAsSdf?: boolean;
 }
 
-/** An image for an ID that the style lacks, or that `MapStyle.setImage()` sets. */
+/** An image for an ID that the style lacks. */
 export interface ResolvedStyleImage extends StyleImageOptions {
   /** The image. */
   image: StyleImageSource;

@@ -121,8 +121,9 @@ export struct MaplibreMap {
   /**
    * Called when the style uses an image that it doesn't have. Resolve the image
    * for `event.id` to add it to the style, or undefined to leave it out. The
-   * map asks for each ID at most once per style, and reads a pixel map when the
-   * promise resolves. Resolves undefined by default.
+   * map asks for each ID at most once per style, and copies a pixel map's
+   * pixels when the promise resolves. An image that the map can't draw is
+   * reported to `onError`. Resolves undefined by default.
    */
   @Event onStyleImageMissing: (event: StyleImageMissingEvent) => Promise<ResolvedStyleImage | undefined> =
     (event: StyleImageMissingEvent) => Promise.resolve(undefined);

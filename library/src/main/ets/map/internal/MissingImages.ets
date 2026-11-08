@@ -82,7 +82,7 @@ export class MissingImages {
       if (resolved === undefined || this.style !== style) {
         return;
       }
-      this.api.setImage(id, resolved).catch((error: Error) => this.onError(error));
+      this.api.setImage(id, resolved.image, resolved).catch((error: Error) => this.onError(error));
     }, (error: Error) => logError(`onStyleImageMissing rejected: ${error.message}`))
       .catch((error: Error) => this.onError(error));
   }

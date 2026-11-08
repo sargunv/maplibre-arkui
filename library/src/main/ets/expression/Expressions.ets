@@ -440,20 +440,25 @@ export function color(value: ResourceColor): Expression {
 
 /**
  * The `image` operator. A string or expression names an image of the style. A
- * `StyleImageSource` is an image that the map adds to the style while a layer
- * uses it, as `options` say; the same source and options share one image.
+ * `StyleImageSource` is an image that the map adds to the style, drawn as
+ * `options` say, while a layer uses it. Uses of the same source with the same
+ * options share one image, and an image from a resource follows the system's
+ * color mode.
  *
- * A layer property that uses a resource or drawable descriptor stays as it was
- * until the map has drawn the image. An image that the map can't draw is
- * reported to `onError`.
+ * Don't release a pixel map while a layer uses it. The map doesn't see changes
+ * to a pixel map's pixels, so pass a new pixel map to change them. The map's
+ * content waits to change until the map has drawn its images. An image that
+ * the map can't draw is reported as the content's errors are, and its layers
+ * draw without it.
  *
- * Throws an `Error` for `options` with a name.
+ * Throws an `Error` for `options` with a string or expression.
  */
 export function image(value: ExpressionInput | StyleImageSource, options?: StyleImageOptions): Expression {
   if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ||
     value instanceof Expression) {
     if (options !== undefined) {
-      throw new Error('image() takes options only with a pixel map, a resource, or a drawable descriptor');
+      throw new Error('image() takes options only with a pixel map, a resource, or a drawable descriptor, not ' +
+        JSON.stringify(value));
     }
     return call('image', value as ExpressionInput);
   }

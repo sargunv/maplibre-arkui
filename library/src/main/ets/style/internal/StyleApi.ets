@@ -12,7 +12,7 @@ import {
 } from '@maplibre/native-ffi';
 
 import { StyleImagePixels } from '../../content/internal/StyleImages';
-import { ResolvedStyleImage } from '../../content/StyleImage';
+import { StyleImageOptions, StyleImageSource } from '../../content/StyleImage';
 import { refsOf } from '../../expression/internal/StyleRefs';
 import { StyleSource } from '../../content/StyleSource';
 import { LayerHandle } from '../LayerHandle';
@@ -38,6 +38,8 @@ const DEFAULT_TRANSITION_MS = 300;
 export class StyleApi implements MapStyle {
   // The style that the map showing the controller has loaded, if any.
   readonly current: () => LoadedStyle | undefined;
+  // Settles once the image writes so far have.
+  private imageWrites: Promise<void> = Promise.resolve();
 
   constructor(current: () => LoadedStyle | undefined) {
     this.current = current;
@@ -123,17 +125,21 @@ export class StyleApi implements MapStyle {
         .map((info: StyleLayerInfo): LayerHandle => new LayerHandle(new LayerKey(this.current, style, info))));
   }
 
-  setImage(id: string, image: ResolvedStyleImage): Promise<boolean> {
+  setImage(id: string, image: StyleImageSource, options?: StyleImageOptions): Promise<boolean> {
     checkId('image', id);
     const style = this.current();
     if (style === undefined) {
       return Promise.resolve(false);
     }
-    const sdf = image.drawAsSdf ?? false;
-    // A pixel map's pixels are read before this returns.
-    return style.reconciler.stylePixels(image.image, sdf).then((pixels: StyleImagePixels) =>
+    const sdf = options?.drawAsSdf ?? false;
+    // A pixel map's pixels are read before this returns. A failure reaches the
+    // caller once the image writes before this one settle.
+    const drawn = style.reconciler.stylePixels(image, sdf);
+    drawn.catch((): void => {
+    });
+    return this.queued(this.imageWrites.then(() => drawn).then((pixels: StyleImagePixels) =>
       write(() => this.current() === style, `setting image ${id}`,
-        () => style.map.setStyleImage(id, pixels.pixels, { pixelRatio: pixels.pixelRatio, sdf: sdf, keepUnused: true })));
+        () => style.map.setStyleImage(id, pixels.pixels, { pixelRatio: pixels.pixelRatio, sdf: sdf, keepUnused: true }))));
   }
 
   removeImage(id: string): Promise<boolean> {
@@ -144,8 +150,17 @@ export class StyleApi implements MapStyle {
     }
     // The app can't know which images the sprite has, so one that the style
     // doesn't have is an answer, not a failure.
-    return write(() => this.current() === style, `removing image ${id}`, () => style.map.removeStyleImage(id),
-      (error: Error): boolean => failedWith(error, Status.notFound));
+    return this.queued(this.imageWrites.then(() => write(() => this.current() === style, `removing image ${id}`,
+      () => style.map.removeStyleImage(id), (error: Error): boolean => failedWith(error, Status.notFound))));
+  }
+
+  // Makes the image writes after this one wait for it, so they apply in call
+  // order while one waits for ArkUI to draw its image.
+  private queued(written: Promise<boolean>): Promise<boolean> {
+    this.imageWrites = written.then((): void => {
+    }, (): void => {
+    });
+    return written;
   }
 
   getGlobalStateProperty(name: string): Promise<Object | undefined> {

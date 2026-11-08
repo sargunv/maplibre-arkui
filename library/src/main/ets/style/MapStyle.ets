@@ -1,4 +1,4 @@
-import { ResolvedStyleImage } from '../content/StyleImage';
+import { StyleImageOptions, StyleImageSource } from '../content/StyleImage';
 import { StyleSource } from '../content/StyleSource';
 import { LayerHandle } from './LayerHandle';
 import { GeoJsonSourceHandle, ImageSourceHandle, SourceHandle, VectorSourceHandle } from './SourceHandle';
@@ -12,8 +12,8 @@ import { GeoJsonSourceHandle, ImageSourceHandle, SourceHandle, VectorSourceHandl
  * other writes resolve `false`. Changes last only for the current style: make
  * them again in each `onStyleLoaded`.
  *
- * The map's content owns the IDs of its sources, layers, and images, and the
- * library reserves IDs and global state names that start with
+ * The map's content owns the IDs of its sources and layers, and the library
+ * reserves IDs and global state names that start with
  * `maplibre-arkui`. Writes to those throw an `Error`.
  *
  * Call its methods on the UI thread. They apply in call order. Writes resolve
@@ -50,11 +50,11 @@ export interface MapStyle {
   getLayers(): Promise<LayerHandle[] | undefined>;
 
   /**
-   * Adds an image to the style under `id`, or replaces the style's image with
-   * that ID. The app can release a pixel map once the call returns. Rejects
-   * when the image can't be drawn.
+   * Adds an image to the style under `id`, drawn as `options` say, or replaces
+   * the style's image with that ID. The app can release a pixel map once the
+   * call returns. Rejects when the map can't draw the image.
    */
-  setImage(id: string, image: ResolvedStyleImage): Promise<boolean>;
+  setImage(id: string, image: StyleImageSource, options?: StyleImageOptions): Promise<boolean>;
 
   /** Removes the style's image with `id`. Resolves `false` when the style has none. */
   removeImage(id: string): Promise<boolean>;
