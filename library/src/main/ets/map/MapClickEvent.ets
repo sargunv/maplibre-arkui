@@ -2,14 +2,10 @@
 
 import { LatLng, ScreenPoint } from '../geometry/Geometry';
 
-/** Where the user clicked a map. The map creates it; fields may be added in later releases. */
+/** Where the user clicked the map. Fields may be added in later releases. */
 export interface MapClickEvent {
-  /**
-   * The coordinate under the click. Its longitude isn't wrapped to -180 to
-   * 180, so it names the copy of the world that the click is in, as
-   * `Viewport.unproject()` does.
-   */
+  /** The coordinate under the click. The longitude isn't wrapped to -180 to 180. */
   readonly coordinate: LatLng;
-  /** The click's position on the map, as `MapController.queryRenderedFeatures()` takes it. */
+  /** The screen point of the click, in vp from the map's top-left corner. */
   readonly point: ScreenPoint;
 }

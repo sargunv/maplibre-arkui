@@ -5,47 +5,40 @@
 export enum CameraTransitionMode {
   /** Moves the camera at once. */
   JUMP,
-  /** Animates the camera straight to the target. */
+  /** Animates the camera along a straight path to the target. */
   EASE,
   /** Zooms out, travels to the target, and zooms back in. */
   FLY,
 }
 
-/** How a camera move travels, and how long it takes. */
+/** How a camera move travels and how long it takes. */
 export interface CameraTransitionOptions {
   /** Whether the camera jumps, eases, or flies. Jumps by default. */
   mode?: CameraTransitionMode;
   /**
-   * How long an ease or a fly takes, in ms, finite and at least 0. An ease
-   * takes 300 by default; a fly takes a time that follows from the distance.
-   * A jump ignores it.
+   * How long an ease or a fly takes. Must be finite and at least 0. By default,
+   * an ease takes 300 ms and a fly takes longer for longer distances.
    */
   durationMs?: number;
 }
 
 /**
- * How `fitCameraToBounds()` and the other fit methods of `MapController`
- * move the camera.
+ * How the fit methods of `MapController`, such as `fitCameraToBounds()`, move
+ * the camera.
  */
 export interface FitCameraOptions extends CameraTransitionOptions {
-  /** The bearing of the camera, in degrees. Keeps the camera's by default. */
+  /** The bearing after the fit, in degrees. Keeps the current bearing by default. */
   bearing?: number;
-  /** The pitch of the camera, in degrees. Keeps the camera's by default. */
+  /** The pitch after the fit, in degrees. Keeps the current pitch by default. */
   pitch?: number;
   /**
-   * Space to keep between what the camera fits and the edges of the part of
-   * the map that the viewport insets and the camera padding leave. The camera
-   * keeps it only for the fit; it doesn't stay in the camera's padding. None
-   * by default. Each side is a length of at least 0, not a percentage. A
-   * `LocalizedPadding`'s `start` and `end` follow the app's language, not an
-   * ancestor's `.direction()`.
+   * Space around what the camera fits, for this fit only. None by default.
+   * Each side is at least 0, not a percentage.
    */
   fitPadding?: Padding | LocalizedPadding;
   /**
-   * The padding of the camera after the fit, which stays as `updateCamera()`
-   * sets it. Keeps the camera's padding by default. Each side is a length of
-   * at least 0, not a percentage. A `LocalizedPadding`'s `start` and `end`
-   * follow the app's language, not an ancestor's `.direction()`.
+   * The camera's padding after the fit. Keeps the current padding by default.
+   * Each side is at least 0, not a percentage.
    */
   cameraPadding?: Padding | LocalizedPadding;
 }

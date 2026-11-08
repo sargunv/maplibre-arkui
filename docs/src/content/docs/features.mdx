@@ -1,0 +1,69 @@
+---
+title: Query and highlight features
+description: Find the features on screen or in a source, highlight a selected feature, and expand clusters.
+---
+
+import { Code } from "@astrojs/starlight/components";
+import Api from "../../components/Api.astro";
+import { region } from "../../snippets";
+
+import features from "../../../../demo/entry/src/main/ets/docs/Features.ets?raw";
+
+A feature is one point, line, or polygon in a source, with its properties. You
+can ask the map which features it draws at a point on the screen, or which
+features a source has loaded. You can also attach values such as `selected` to
+one feature and draw that feature differently.
+
+To respond when the user taps a feature in one of your own layers, give the
+layer an `onClick` handler instead; see
+[Respond to clicks on a layer](/maplibre-arkui/interaction/#respond-to-clicks-on-a-layer).
+
+## Find features on screen
+
+<Api of="MapController.queryRenderedFeatures" display="queryRenderedFeatures()" /> returns
+the features that the map draws at a point, such as where the user clicked. This
+example lists the places near a click, from the point-of-interest layers of the
+OpenFreeMap Liberty style:
+
+<Code code={region(features, "query-rendered")} lang="ts" />
+
+Without `layers`, the result includes every layer, such as roads, water, and
+labels.
+
+## Find features in a source
+
+<Api of="MapController.querySourceFeatures" display="querySourceFeatures()" /> returns
+the features of a source, such as every café in the loaded tiles:
+
+<Code code={region(features, "query-source")} lang="ts" />
+
+The result includes only the tiles that the map has loaded for its current
+view. The source and source layer names come from the style.
+
+## Highlight a selected feature
+
+Feature state is a set of values that your app attaches to one feature. A layer
+reads it with <Api of="featureState" display="featureState()" /> and draws that
+feature differently. This layer draws places in blue and the selected place in
+red:
+
+<Code code={region(features, "highlight-paint")} lang="ts" />
+
+Change feature state through the source's handle, which you get from
+<Api of="MapController.style" /> once the style loads:
+
+<Code code={region(features, "highlight-handle")} lang="ts" />
+
+Then mark the selected place, and clear the previous one:
+
+<Code code={region(features, "highlight-select")} lang="ts" />
+
+Feature state finds a feature by its `id`, so give each feature an ID.
+
+## Expand clusters
+
+A GeoJSON source with `cluster` set groups nearby points into clusters. A click
+on a cluster can zoom in until it splits, with
+<Api of="GeoJsonSourceHandle.getClusterExpansionZoom" display="getClusterExpansionZoom()" />:
+
+<Code code={region(features, "clusters")} lang="ts" />

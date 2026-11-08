@@ -11,12 +11,12 @@ function turnFromNorth(bearing: number): number {
 }
 
 /**
- * A compass that points north, and turns the map north and flat when tapped.
- * It always shows; `DisappearingCompassButton` shows only while the map is
- * rotated or tilted.
+ * A compass that points north. Tapping it turns the map to face north and
+ * look straight down. It always shows; `DisappearingCompassButton` shows only
+ * while the map is rotated or tilted.
  *
- * Place it in a `MaplibreMap`'s overlay. Anywhere else, it logs an error and
- * draws nothing.
+ * Works only in a `MaplibreMap`'s trailing closure. Elsewhere, it logs an
+ * error and draws nothing.
  */
 @ComponentV2
 export struct CompassButton {
@@ -64,17 +64,17 @@ export struct CompassButton {
 
 /**
  * A `CompassButton` that fades in while the map is rotated or tilted, and
- * fades out once the map faces north and looks straight down again.
+ * fades out after the map faces north and looks straight down again.
  *
- * Place it in a `MaplibreMap`'s overlay. Anywhere else, it logs an error and
- * draws nothing.
+ * Works only in a `MaplibreMap`'s trailing closure. Elsewhere, it logs an
+ * error and draws nothing.
  */
 @ComponentV2
 export struct DisappearingCompassButton {
   /**
-   * How long it stays after the map turns back north and flat, in ms: at least
-   * 0, or Infinity to stay. 1000 by default. Another value logs an error, and
-   * 1000 takes its place.
+   * How long the button stays after the map faces north and looks straight
+   * down again, in ms. At least 0, or `Infinity` to stay. 1000 by default; an
+   * invalid value logs an error and uses the default.
    */
   @Param visibilityDurationMs: number = 1000;
   @Local scope: MapScope | undefined = undefined;

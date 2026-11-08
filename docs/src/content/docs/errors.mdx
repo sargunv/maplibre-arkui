@@ -1,35 +1,27 @@
 ---
-title: Errors
-description: How the camera methods, the map, and snapshots report failures.
+title: Handle errors and logs
+description: Respond to map errors, and send MapLibre's logs to your own code.
 ---
 
 import { Code } from "@astrojs/starlight/components";
 import Api from "../../components/Api.astro";
 import { region } from "../../snippets";
 
-import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
+import errors from "../../../../demo/entry/src/main/ets/docs/Errors.ets?raw";
 
-- Methods throw an `Error` for an invalid argument, such as a zoom that isn't
-  finite, before they start any work.
+## Handle map errors
 
-- Work that finishes later returns a promise. A camera move resolves with
-  whether the camera got there; being stopped, such as by the user's input, is
-  `false`, not a failure. A promise rejects with an `Error` when the work fails,
-  such as a move or a query that the map rejects. The FFI map's own methods
-  reject with FFI's errors, which extend `Error`.
+When something fails on the map with no call to reject, such as a style that
+doesn't load, the map passes a <Api of="MapError" /> to its
+<Api of="MaplibreMap.onError" display="onError" />. Check its class to tell the
+kinds apart, and keep a fallback for the others:
 
-- What goes wrong while the map runs, with no caller waiting for it, goes to
-  the map's `onError` and to the log as a <Api of="MapError" />: a style that
-  fails to load is a <Api of="StyleLoadError" />, and a source, layer, or image
-  of the content that the map rejects is a <Api of="ContentError" /> with its
-  ID. Other failures, such as a frame that fails to render, a runtime that
-  fails to open, or an invalid `viewportInsets` or `cameraBounds`, arrive as a
-  plain `MapError`, and later releases may add kinds, so keep a fallback:
+<Code code={region(errors, "on-error")} lang="ts" />
 
-  <Code code={region(examples, "map-errors")} lang="ts" />
+## Read MapLibre's logs
 
-- An invalid map parameter goes to `onError` too, and the map uses its default
-  or its last valid value in its place.
+To receive the library's and MapLibre Native's logs in your code, such as for a
+crash reporter, set a handler with
+<Api of="MapRuntime.setLogHandler" display="MapRuntime.setLogHandler()" />:
 
-- `renderSnapshot()` throws for invalid options, such as a size of 0, and
-  rejects when the style or a resource it needs fails to load.
+<Code code={region(errors, "logs")} lang="ts" />

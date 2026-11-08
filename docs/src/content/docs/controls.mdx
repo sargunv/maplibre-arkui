@@ -1,80 +1,67 @@
 ---
-title: Controls and ArkUI content
-description: Choose the map's controls, add your own, and place ArkUI content on coordinates.
+title: Overlay ArkUI content
+description: Choose the map controls, add your own, and place ArkUI content on map coordinates.
 ---
 
-import { Code } from "@astrojs/starlight/components";
+import { Aside, Code } from "@astrojs/starlight/components";
 import Api from "../../components/Api.astro";
 import { region } from "../../snippets";
 
-import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
+import controls from "../../../../demo/entry/src/main/ets/docs/Controls.ets?raw";
 
 <Api of="MaplibreMap" /> draws ArkUI content over the map from its trailing
-closure, its overlay. Without a closure, it draws <Api of="DefaultControls" />:
-a scale bar and a compass along the top edge, and the MapLibre logo and an
-attribution button along the bottom edge. The scale bar shows for a moment as
-the zoom changes, and the compass while the map is rotated or tilted. The
-controls follow dark mode, and their labels and accessibility text are in the
-app's language. They come from the library's resources, whose names start with
-`maplibre_`; those names aren't part of the API and can change.
+closure. Without a closure, it draws <Api of="DefaultControls" />: a scale bar
+and a compass along the top edge, and the MapLibre logo and an attribution
+button along the bottom edge.
 
 ## Choose a preset
 
 Put a preset in the closure to choose the controls.
-<Api of="FullControls" /> adds zoom buttons to the default controls, for users
-with a mouse and for accessibility. <Api of="AttributionControls" /> keeps only
-the logo and the attribution button.
+<Api of="FullControls" /> adds zoom buttons to the default controls, which helps
+users with a mouse. <Api of="AttributionControls" /> keeps only the logo and the
+attribution button.
 
-<Code code={region(examples, "overlay-preset")} lang="ts" />
+<Code code={region(controls, "preset")} lang="ts" />
 
-An empty closure draws nothing. The sources' terms usually require their
-attribution, so show the controller's `attributions` elsewhere. They're HTML,
-which <Api of="AttributionText" /> shows as text with working links:
+## Show no controls
 
-<Code code={region(examples, "overlay-none")} lang="ts" />
+An empty closure draws nothing:
 
-The presets keep their controls clear of the map's `viewportInsets`, as
-[the camera](/maplibre-arkui/camera/#keep-the-camera-clear-of-your-ui)
-describes.
+<Code code={region(controls, "no-controls")} lang="ts" />
+
+<Aside type="caution">
+  Most tile providers require you to show their attribution. If you remove the
+  attribution button, show the attribution somewhere else, as this example does
+  with <Api of="AttributionText" />.
+</Aside>
 
 ## Add your own controls
 
-The closure lays out its children in a `Stack` the size of the map. Each control
-is a component that finds its map wherever it is in the closure, so it needs no
-controller: <Api of="CompassButton" />, <Api of="ZoomButtons" />,
-<Api of="ScaleBar" />, <Api of="AttributionButton" />,
-<Api of="MaplibreLogo" />, and the ones that show only while they matter,
+The closure lays out its children in a `Stack` that covers the map, so place the
+controls the way you place any ArkUI component. Make containers transparent to
+touches, so touches between the controls reach the map:
+
+<Code code={region(controls, "custom-controls")} lang="ts" />
+
+The controls need no controller. Besides those above, there are
+<Api of="AttributionButton" />, <Api of="MaplibreLogo" />, and versions of the
+compass and scale bar that appear only when they're useful:
 <Api of="DisappearingCompassButton" /> and <Api of="DisappearingScaleBar" />.
-Lay them out as you would any ArkUI component, and let touches between them
-through to the map with `hitTestBehavior(HitTestMode.Transparent)`:
-
-<Code code={region(examples, "overlay-custom")} lang="ts" />
-
-The controls, presets, and markers work only in the closure. ArkUI draws the
-builders of `bindSheet`, `bindPopup`, and `bindContextMenu` outside the map,
-even when they're attached to a component in the closure, so those don't count
-as the overlay. Outside it, a control logs an error that names it and draws
-nothing. The logo is the exception: it works anywhere.
 
 ## Pin content to a coordinate
 
-<Api of="Marker" /> puts its content on a coordinate and moves it with the map.
-Its `alignment` picks the point of the content that sits on the coordinate;
-`Alignment.Bottom` stands a label on it. The marker is the size of its content,
-so taps beside it reach the map. Chain attributes such as `.onClick()` on the
-content rather than on the marker:
+<Api of="Marker" /> places its content at a coordinate and moves it with the
+map. `alignment` chooses which point of the content sits on the coordinate:
 
-<Code code={region(examples, "marker")} lang="ts" />
+<Code code={region(controls, "marker")} lang="ts" />
+
+To draw many points, add them to the map's content as a layer instead; see
+[Add data to the map](/maplibre-arkui/layers/).
 
 ## Point to a coordinate off the screen
 
-<Api of="PointerPinButton" /> shows a pin on an oval inside the map that points
-towards a coordinate off the screen, and hides while the coordinate is inside
-the oval. Its `label` is what screen readers read for it. The oval fills the
-content box of its parent, so size the parent to the map and pad it to move the
-oval in from the map's edges:
+<Api of="PointerPinButton" /> shows a pin near the edge of the map that points
+toward a coordinate off the screen. Pad its parent to keep the pin away from the
+map's edges:
 
-<Code code={region(examples, "offscreen-marker")} lang="ts" />
-
-To draw your own pointer, put it in <Api of="OffscreenMarker" />, whose
-`onAngleChange` gives the direction to turn it.
+<Code code={region(controls, "pointer-pin")} lang="ts" />

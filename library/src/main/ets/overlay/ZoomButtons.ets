@@ -11,11 +11,11 @@ interface ZoomStep {
 }
 
 /**
- * Buttons that zoom the map in and out by one level. Quick presses in one
- * direction add up, so three zoom three levels.
+ * Buttons that zoom the map in and out by one level. Quick presses in the same
+ * direction add up, so three presses zoom three levels.
  *
- * Place them in a `MaplibreMap`'s overlay. Anywhere else, they log an error
- * and draw nothing.
+ * Works only in a `MaplibreMap`'s trailing closure. Elsewhere, it logs an
+ * error and draws nothing.
  */
 @ComponentV2
 export struct ZoomButtons {

@@ -6,14 +6,15 @@ export interface LatLng {
   latitude: number;
   /**
    * Degrees east of the prime meridian. Any finite value; values past ±180
-   * name another copy of the world.
+   * are on a repeated copy of the world.
    */
   longitude: number;
 }
 
 /**
- * A rectangle of positions. To cross the antimeridian, give
- * `northeast.longitude` past 180 (east is always greater than west).
+ * A geographic rectangle. The east longitude is always greater than the west,
+ * so a rectangle that crosses the antimeridian has `northeast.longitude` past
+ * 180.
  */
 export interface LatLngBounds {
   /** The corner with the lowest latitude and longitude. */
@@ -22,10 +23,7 @@ export interface LatLngBounds {
   northeast: LatLng;
 }
 
-/**
- * A position on a map, in vp from its top-left corner, as an ArkUI
- * `ClickEvent`'s `x` and `y` are. It can be outside the map.
- */
+/** A position on a map, in vp from its top-left corner. It can be outside the map. */
 export interface ScreenPoint {
   /** The distance from the map's left edge, in vp. */
   x: number;

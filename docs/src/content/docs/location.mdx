@@ -1,66 +1,44 @@
 ---
-title: The user's location
-description: Show the user's location from Location Kit and their heading from the compass, and let the camera follow them.
+title: Show the user's location
+description: Show the user's location and heading on the map, and let the camera follow them.
 ---
 
 import { Code } from "@astrojs/starlight/components";
 import Api from "../../components/Api.astro";
 import { region } from "../../snippets";
 
-import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
+import location from "../../../../demo/entry/src/main/ets/docs/Location.ets?raw";
 
-The map shows the location that the app passes as `userLocation`, a Location Kit
-`geoLocationManager.Location`, as a dot in a circle of its accuracy, with an
-arrow for its course while it moves.
+The map draws the location that you pass as its
+<Api of="MaplibreMap.userLocation" display="userLocation" />: a dot in a circle
+that shows the location's accuracy.
 
-<Api of="MapController.followUserLocation" display="followUserLocation()" />
+## Show the location
 
-moves the camera with each new location until the user pans, the app moves the
-camera's center, or the app calls `stopFollowingUserLocation()`. The
-controller's observable `followingUserLocation` shows whether it follows, so a
-Locate me button can offer it again:
+Get locations from Location Kit, and pass each one to the map. Your app asks for
+the location permission itself:
 
-<Code code={region(examples, "location")} lang="ts" />
+<Code code={region(location, "location")} lang="ts" />
 
-While the camera follows, the user can zoom, pitch, and rotate. Zoom and
-rotation keep the location at the center, and two fingers zoom and rotate
-without panning. The camera waits for the user's input to end, then catches up
-with the location, after `onGestureEnd`. To keep the user from stopping it, turn
-pan off with
-[`interactions`](/maplibre-arkui/gestures/#choose-the-cameras-movements).
+## Follow the user
 
-The library declares no permission and starts no location request, so apps that
-don't show a location don't ask for one. An app that does declares
-`ohos.permission.APPROXIMATELY_LOCATION` and `ohos.permission.LOCATION` in its
-`module.json5`, with a `reason`, asks for them when the user wants to see their
-location, and listens until the page goes away:
+<Api of="MapController.followUserLocation" display="followUserLocation()" /> moves
+the camera to the location, and then with each new one, until the user pans.
+This button shows while the camera isn't following:
 
-<Code code={region(examples, "location-updates")} lang="ts" />
+<Code code={region(location, "follow")} lang="ts" />
 
-## Heading
+## Show the heading
 
-The arrow points where the device faces while the app passes a heading as
-`userHeading`, in degrees clockwise from north, and shows the course again once
-it's `undefined`. The compass needs no permission. An app reads it from
-`@ohos.sensor`'s orientation sensor while the page shows, and turns the map with
-it by following with `FollowBearing.HEADING`.
+To show where the device faces, pass the compass direction as the map's
+`userHeading`. To turn the map with it, follow with `FollowBearing.HEADING`:
 
-A rotation by the user keeps following but stops turning the map, and so does a
-camera move by the app that sets the bearing, such as a tap on the
-<Api of="CompassButton" display="compass button" />. The
-controller's observable `followedBearing` becomes `undefined`, so a button can
-turn the map with the heading again:
+<Code code={region(location, "heading")} lang="ts" />
 
-<Code code={region(examples, "heading")} lang="ts" />
+## Style the location indicator
 
-## Style the indicator
+<Api of="UserLocationIndicatorOptions" /> changes the indicator's colors and
+images, and places it under other layers. This indicator is red and draws under
+the style's labels:
 
-`userLocationIndicator` changes the color of the default dot and arrow, which
-the accuracy circle takes too unless it has colors of its own. It puts images of
-the style's own, or of the map's [content](/maplibre-arkui/content/), in place
-of the default dot, arrow, and shadow, and puts the indicator under a layer of
-the base style or the content with `below`. An image name of `''` draws none:
-
-<Code code={region(examples, "location-indicator")} lang="ts" />
-
-See <Api of="UserLocationIndicatorOptions" /> for every option.
+<Code code={region(location, "indicator")} lang="ts" />

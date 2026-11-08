@@ -1,0 +1,58 @@
+---
+title: Style the map
+description: Choose a map style, switch it at runtime, and change the loaded style from code.
+---
+
+import { Code } from "@astrojs/starlight/components";
+import Api from "../../components/Api.astro";
+import { region } from "../../snippets";
+
+import styling from "../../../../demo/entry/src/main/ets/docs/Styling.ets?raw";
+
+A style is a JSON document that tells the map what to draw. It lists the data
+sources, such as vector tiles, and the layers that draw that data: roads, water,
+buildings, and labels. The format is the [MapLibre Style Specification][spec].
+
+## Choose a style
+
+You usually get a style from a map tile provider, which serves the style and the
+tiles it uses. The [awesome-maplibre] list names free and commercial providers.
+The examples in this documentation use [OpenFreeMap], which needs no account. To
+design your own style, edit one in [Maputnik].
+
+## Use a style
+
+Pass the style's URL as the map's <Api of="MaplibreMap.style" display="style" />:
+
+<Code code={region(styling, "style-url")} lang="ts" />
+
+To build a style in code, pass the style document as a `Record<string, Object>`
+instead.
+
+## Switch styles at runtime
+
+When `style` changes, the map loads the new style. This example switches to a
+dark map:
+
+<Code code={region(styling, "switch-style")} lang="ts" />
+
+Your own data stays on the map when the style changes; see
+[Add data to the map](/maplibre-arkui/layers/).
+
+## Change the loaded style
+
+Use <Api of="MapController.style" /> to change the style that the map has
+loaded, once the map calls `onStyleLoaded`. This example recolors the water:
+
+<Code code={region(styling, "edit-layer")} lang="ts" />
+
+Each new style starts from its own document, so make the changes again in each
+`onStyleLoaded`. See <Api of="MapStyle" /> for what else you can change.
+
+[spec]: https://maplibre.org/maplibre-style-spec/
+
+[awesome-maplibre]: https://github.com/maplibre/awesome-maplibre#maptile-providers
+
+[OpenFreeMap]: https://openfreemap.org/
+
+[Maputnik]: https://maputnik.github.io/

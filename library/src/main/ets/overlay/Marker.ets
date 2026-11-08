@@ -33,8 +33,7 @@ function anchorOf(alignment: Alignment): ScreenPoint {
 }
 
 /**
- * ArkUI content pinned to a coordinate, which follows the map as its camera
- * moves. Place it in a `MaplibreMap`'s overlay, its trailing closure:
+ * ArkUI content pinned to a coordinate, which moves with the map.
  *
  * ```ets
  * MaplibreMap({ controller: this.map, style: STYLE }) {
@@ -46,32 +45,26 @@ function anchorOf(alignment: Alignment): ScreenPoint {
  * }
  * ```
  *
- * The marker is the size of its content, so taps beside the content reach
- * what's under it. Its parent, the overlay or a container in it, should cover
- * the map, as `.width('100%').height('100%')` does, because ArkUI doesn't
- * give a node the taps outside its parent. Chain universal attributes, such
- * as `.onClick()` and `.accessibilityText()`, on the content, not on the
- * marker: ArkUI puts a custom component's attributes on a node of their own,
- * which the parent lays out by its own rules, not where the marker puts the
- * content.
+ * Taps beside the content reach what's under it. Its parent must cover the
+ * map. Put attributes such as `.onClick()` on the content, not on the marker.
  *
- * Its content hides until the map shows a frame, and while it's entirely off
- * the map. It moves in the ArkUI frame after the map draws, so it can trail
- * the map by a frame. Anywhere but a map's overlay, it logs an error and draws
- * nothing.
+ * The content is hidden until the map shows a frame, and while it's off the
+ * map.
+ *
+ * Works only in a `MaplibreMap`'s trailing closure. Elsewhere, it logs an
+ * error and draws nothing.
  */
 @ComponentV2
 export struct Marker {
-  /** Where the content goes. A new value moves it. */
+  /** The coordinate that the content sits on. */
   @Require @Param coordinate: LatLng;
   /**
-   * The point of the content that sits on the coordinate. The default is its
-   * center; `Alignment.Bottom` stands it on the coordinate, as for a pin.
-   * Start and end follow the direction of the app's language, not a
-   * `.direction()` on an ancestor.
+   * The point of the content that sits on the coordinate. The center by
+   * default; `Alignment.Bottom` stands the content on the coordinate, like a
+   * pin.
    */
   @Param alignment: Alignment = Alignment.Center;
-  /** The content, in the trailing closure. */
+  /** The content. */
   @BuilderParam content: () => void = noContent;
   @Local scope: MapScope | undefined = undefined;
   private readonly nodeId: string = controlKey();

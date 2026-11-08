@@ -144,26 +144,22 @@ const HALO: ShadowOptions[] = [[1, 0], [-1, 0], [0, 1], [0, -1]].map((offset: nu
 }));
 
 /**
- * A scale bar for the distance at the map's center, which updates as the map
- * zooms and pans. Its label is in the app's language. It always shows once
- * the map shows a frame; `DisappearingScaleBar` shows only for a moment after
- * the zoom changes.
+ * A scale bar for the map's center, with a label in the app's language. It
+ * shows once the map shows a frame; `DisappearingScaleBar` shows only for a
+ * moment after the zoom changes.
  *
- * Place it in a `MaplibreMap`'s overlay. Anywhere else, it logs an error and
- * draws nothing.
+ * Works only in a `MaplibreMap`'s trailing closure. Elsewhere, it logs an
+ * error and draws nothing.
  */
 @ComponentV2
 export struct ScaleBar {
   /**
-   * The units. By default, the ones of the system's region: feet and miles in
-   * the United States and the regions that share its units, yards and miles
-   * in the United Kingdom and the regions that share its units, and metric
-   * elsewhere.
+   * The units. By default, the units of the system's region.
    */
   @Param units: ScaleBarUnits = defaultScaleBarUnits();
   /**
-   * The longest the bar grows, in vp: finite and above 0. 100 by default.
-   * Another value logs an error, and 100 takes its place.
+   * The longest the bar grows, in vp. Finite and above 0. 100 by default; an
+   * invalid value logs an error and uses the default.
    */
   @Param maxWidth: number = DEFAULT_MAX_WIDTH;
   @Local scope: MapScope | undefined = undefined;
@@ -205,23 +201,23 @@ export struct ScaleBar {
 }
 
 /**
- * A `ScaleBar` that fades in as the map shows its first frame and as the zoom
- * changes, and fades out once the zoom stays the same for
+ * A `ScaleBar` that fades in when the map shows its first frame and when the
+ * zoom changes, and fades out after the zoom stays the same for
  * `visibilityDurationMs`.
  *
- * Place it in a `MaplibreMap`'s overlay. Anywhere else, it logs an error and
- * draws nothing.
+ * Works only in a `MaplibreMap`'s trailing closure. Elsewhere, it logs an
+ * error and draws nothing.
  */
 @ComponentV2
 export struct DisappearingScaleBar {
-  /** The units, which `ScaleBar.units` describes. */
+  /** The units. See `ScaleBar.units`. */
   @Param units: ScaleBarUnits = defaultScaleBarUnits();
-  /** The longest the bar grows, which `ScaleBar.maxWidth` describes. */
+  /** The longest the bar grows, in vp. See `ScaleBar.maxWidth`. */
   @Param maxWidth: number = DEFAULT_MAX_WIDTH;
   /**
-   * How long it stays after the zoom last changed, in ms: at least 0, or
-   * Infinity to stay. 3000 by default. Another value logs an error, and 3000
-   * takes its place.
+   * How long the bar stays after the zoom last changed, in ms. At least 0, or
+   * `Infinity` to stay. 3000 by default; an invalid value logs an error and
+   * uses the default.
    */
   @Param visibilityDurationMs: number = 3000;
   @Local scope: MapScope | undefined = undefined;

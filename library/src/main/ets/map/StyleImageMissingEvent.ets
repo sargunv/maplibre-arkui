@@ -1,10 +1,10 @@
 // What a map's onStyleImageMissing receives.
 
 /**
- * The style uses an image that it doesn't have. The map creates it; fields may
- * be added in later releases.
+ * What `MaplibreMap.onStyleImageMissing` receives. Fields may be added in later
+ * releases.
  */
 export interface StyleImageMissingEvent {
-  /** The ID that the style names the image by, such as in a symbol layer's `icon-image`. */
+  /** The ID of the missing image, as the style names it. */
   readonly id: string;
 }

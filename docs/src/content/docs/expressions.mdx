@@ -1,5 +1,5 @@
 ---
-title: Expressions
+title: Expressions in ArkTS
 description: Build style expressions with functions named after their operators.
 ---
 
@@ -7,25 +7,31 @@ import { Code } from "@astrojs/starlight/components";
 import Api from "../../components/Api.astro";
 import { region } from "../../snippets";
 
-import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
+import expressions from "../../../../demo/entry/src/main/ets/docs/Expressions.ets?raw";
 
-Build [style expressions] with functions named after their operators, such as
-<Api of="get" />, <Api of="match" />, <Api of="interpolate" />, and
-<Api of="featureState" /> for `feature-state`. Symbols get words (`eq` for `==`,
-`add` for `+`), and `case` is <Api of="cases" />, which takes a list of
-<Api of="Condition" /> pairs. Use them in the `filter`, `paint`, and `layout` of a
-layer in the [content](/maplibre-arkui/content/), and as the `filter` of a
-[feature query](/maplibre-arkui/style/#query-features):
+An expression computes a value for each feature, or for the current zoom level.
+Layers use expressions in their `filter`, `paint`, and `layout`. The
+[MapLibre Style Specification][spec] lists every operator.
 
-<Code code={region(examples, "expressions")} lang="ts" />
+## Write an expression
 
-<Api of="fp" display="fp(value)" /> isn't an operator: it scales a `text-size`
-by the font scale that the map sets, as ArkUI scales `fp` sizes.
+Each operator has a function with its name, such as <Api of="get" />,
+<Api of="match" />, and <Api of="interpolate" />. Operators written with symbols
+get words instead, such as <Api of="eq" /> for `==` and <Api of="add" /> for
+`+`. `case` is <Api of="cases" />, and `feature-state` is
+<Api of="featureState" />.
 
-<Api of="call" display="call(operator, ...args)" /> and
-<Api of="Expression" display="new Expression(json)" /> cover the operators that
-have no function. Expressions are untyped: MapLibre checks their types as the
-map applies them, and an invalid expression in the content goes to the map's
-`onError`.
+<Code code={region(expressions, "expressions")} lang="ts" />
 
-[style expressions]: https://maplibre.org/maplibre-style-spec/expressions/
+Wrap array and object values in <Api of="literal" display="literal()" />, since
+a bare array reads as an expression.
+
+## Use an operator without a function
+
+<Api of="call" display="call()" /> builds any operator from its name and
+arguments, and <Api of="Expression" display="new Expression()" /> takes an
+expression's JSON:
+
+<Code code={region(expressions, "raw")} lang="ts" />
+
+[spec]: https://maplibre.org/maplibre-style-spec/expressions/

@@ -3,28 +3,28 @@ title: Build from source
 description: Build the library, the demo, and this site, and run the tests.
 ---
 
-[mise] installs everything, including the OpenHarmony SDK and an Oniro emulator
+[mise] installs every tool, including the OpenHarmony SDK and an Oniro emulator
 image:
 
 ```sh
 mise install
-mise run demo           # build the demo and start it on an emulator
-mise run test           # run the hypium suite on the emulator
-mise run check
+mise run demo    # build the demo and start it on an emulator
+mise run test    # run the hypium suite on the emulator
+mise run check   # run every formatter and linter
 ```
 
-`mise run demo --device <key>` and `mise run test --device <key>` run on another
-device, such as DevEco Studio's emulator, with the HAP built for its ABI. Both
-bundle FFI's OpenGL backend; `--backend vulkan` bundles its Vulkan backend
-instead, which the Oniro emulator has no driver for.
-`mise run docs:dev` serves this site, with the API reference, and
-`mise run docs:build` builds it into `docs/dist`.
+`mise tasks` lists the other tasks. `--device <key>` runs the demo or the tests
+on another device, such as DevEco Studio's emulator. Both bundle FFI's OpenGL
+backend; `--backend vulkan` bundles the Vulkan backend instead, which the Oniro
+emulator has no driver for.
 
-[AGENTS.md] describes the layout, the tasks, how the build works without hvigor,
-and how to release. [API guidelines](/maplibre-arkui/api-guidelines/) has the
-API's conventions. The demo's [`docs/`][examples] pages hold this site's
-examples, which the demo build compiles; each page cuts its examples out of
-them by region, and the site build fails on a region that's missing.
+`mise run docs:dev` serves this site with the API reference. The site's code
+examples are regions of the demo's [`ets/docs/`][examples] files, so the demo
+build compiles them, and the site build fails if a region is missing.
+
+Before you change the public API, read the
+[API guidelines](/maplibre-arkui/api-guidelines/). [AGENTS.md] has the rest of
+the guidance for contributors.
 
 [AGENTS.md]: https://github.com/sargunv/maplibre-arkui/blob/main/AGENTS.md
 

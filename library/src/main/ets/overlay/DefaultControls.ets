@@ -47,12 +47,12 @@ const BOTTOM_END: LocalizedAlignRuleOptions = {
 };
 
 /**
- * A `MaplibreLogo` at the map's bottom start, and an `AttributionButton` at
- * its bottom end. Most sources' terms require their attribution, so a map
- * keeps these unless the app shows the attribution elsewhere.
+ * A `MaplibreLogo` at the map's bottom start and an `AttributionButton` at its
+ * bottom end.
  *
- * Place it in a `MaplibreMap`'s overlay, where it fills its parent. Anywhere
- * else, it logs an error and draws nothing.
+ * Fills its parent, and keeps clear of the map's `viewportInsets`.
+ * Works only in a `MaplibreMap`'s trailing closure. Elsewhere, it logs an
+ * error and draws nothing.
  */
 @ComponentV2
 export struct AttributionControls {
@@ -95,13 +95,13 @@ export struct AttributionControls {
 }
 
 /**
- * What a `MaplibreMap` draws without an overlay of the app's own: a
- * `DisappearingScaleBar` at the map's top start and a
- * `DisappearingCompassButton` at its top end, which show only while they
- * matter, and the controls of `AttributionControls` along the bottom.
+ * The controls that a `MaplibreMap` draws when it has no trailing closure: a
+ * `DisappearingScaleBar` at the top start, a `DisappearingCompassButton` at
+ * the top end, and the controls of `AttributionControls` along the bottom.
  *
- * Place it in a `MaplibreMap`'s overlay, where it fills its parent. Anywhere
- * else, it logs an error and draws nothing.
+ * Fills its parent, and keeps clear of the map's `viewportInsets`.
+ * Works only in a `MaplibreMap`'s trailing closure. Elsewhere, it logs an
+ * error and draws nothing.
  */
 @ComponentV2
 export struct DefaultControls {
@@ -136,11 +136,12 @@ export struct DefaultControls {
 }
 
 /**
- * The controls of `DefaultControls`, and `ZoomButtons` in the middle of the
- * map's end edge, for users with a mouse and for accessibility.
+ * The controls of `DefaultControls`, with `ZoomButtons` in the middle of the
+ * end edge.
  *
- * Place it in a `MaplibreMap`'s overlay, where it fills its parent. Anywhere
- * else, it logs an error and draws nothing.
+ * Fills its parent, and keeps clear of the map's `viewportInsets`.
+ * Works only in a `MaplibreMap`'s trailing closure. Elsewhere, it logs an
+ * error and draws nothing.
  */
 @ComponentV2
 export struct FullControls {

@@ -5,35 +5,22 @@ import { LatLng, ScreenPoint } from '../geometry/Geometry';
 import { CameraPosition } from './CameraPosition';
 
 /**
- * One frame that a map drew: its camera and size, and the conversions between
- * its screen points and coordinates. `MapController.viewport` holds the
- * latest. The map creates it; members may be added in later releases.
- *
- * Each member answers for the frame that it came with, also after later
- * frames replace it. Screen points are in vp from the map's top-left corner,
- * and can be outside the map.
+ * A frame that the map drew: its camera, its size, and conversions between
+ * screen points and coordinates. Screen points are in vp from the map's
+ * top-left corner. Members may be added in later releases.
  */
 export interface Viewport {
-  /**
-   * The camera of the frame. Its `padding` is the app's, as
-   * `MapController.camera` reports it, without the map's `viewportInsets`.
-   */
+  /** The camera of the frame. */
   readonly camera: CameraPosition;
   /** The size of the map, in vp. */
   readonly size: Size;
 
-  /**
-   * Where `coordinate` is on the map, in the copy of the world nearest the
-   * camera's center.
-   */
+  /** The screen point of `coordinate`, in the copy of the world nearest the camera's center. */
   project(coordinate: LatLng): ScreenPoint;
 
-  /**
-   * The coordinate at `point`. Its longitude isn't wrapped to -180 to 180, so
-   * it names the copy of the world that the point is in.
-   */
+  /** The coordinate at `point`. The longitude isn't wrapped to -180 to 180. */
   unproject(point: ScreenPoint): LatLng;
 
-  /** How many meters one vp covers at `latitude`, at the frame's zoom, ignoring pitch. */
+  /** How many meters one vp covers at `latitude` and the frame's zoom, ignoring pitch. */
   metersPerVpAtLatitude(latitude: number): number;
 }

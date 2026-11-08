@@ -10,7 +10,7 @@ import {
   PointerPinButton,
 } from '@maplibre/arkui';
 
-import { DocExamples } from '../docs/Examples';
+import { DocExamples } from '../docs/DocExamples';
 import { LIBERTY, PANEL } from './common';
 import { LocationDemo } from './LocationDemo';
 import { RuntimeDemo } from './RuntimeDemo';

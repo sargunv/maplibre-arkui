@@ -1,28 +1,31 @@
 /**
- * Which direction `MapController.followUserLocation()` turns the map to point
- * up. Values may be added in later releases; give a `switch` over it a
+ * A direction that the map turns to point up while it follows the user's
+ * location. Values may be added in later releases; give a `switch` over it a
  * `default` branch.
  */
 export enum FollowBearing {
-  /** The direction of travel, while the location has one: a `speed` above 0. */
+  /**
+   * The direction of travel, while the location has one: while its `speed` is
+   * above 0.
+   */
   COURSE,
-  /** The map's `userHeading`, the direction that the device faces, while it has one. */
+  /**
+   * The direction that the device faces, from the map's `userHeading`, while
+   * it has one.
+   */
   HEADING,
 }
 
-/** How `MapController.followUserLocation()` moves the camera. */
+/** Options for `MapController.followUserLocation()`. */
 export interface FollowUserLocationOptions {
   /**
-   * The zoom that the camera eases to with its first move to the location.
-   * Keeps the zoom by default. A zoom by the user or the app before that move
-   * takes its place.
+   * The zoom for the first move to the location. Keeps the current zoom by
+   * default.
    */
   zoom?: number;
   /**
-   * The direction that the map turns to point up, which
-   * `MapController.followedBearing` reports until the user or the app turns
-   * the map. While there is none, and by default, the camera keeps its
-   * bearing.
+   * The direction that the map turns to point up. Turning stops when the user
+   * or the app turns the map. By default, the camera keeps its bearing.
    */
   bearing?: FollowBearing;
 }

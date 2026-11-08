@@ -2,39 +2,43 @@
 
 import { LatLng } from '../geometry/Geometry';
 
-/** Camera fields to change; fields left out keep their values. */
+/** A change to the camera. Fields left out keep their current values. */
 export interface CameraUpdate {
-  /** The position at the middle of the part of the map that the padding leaves. */
+  /** The coordinate at the center of the padded area of the map. */
   center?: LatLng;
-  /** The zoom level. Each level doubles the map's scale; 0 shows the whole world in 512 vp. */
+  /**
+   * The zoom level. At zoom 0 the world is 512 vp wide, and each level doubles
+   * the scale.
+   */
   zoom?: number;
-  /** The direction at the top of the map, in degrees clockwise from north. */
+  /**
+   * The compass direction at the top of the map, in degrees clockwise from
+   * north.
+   */
   bearing?: number;
   /** The tilt toward the horizon, in degrees. 0 looks straight down. */
   pitch?: number;
   /**
-   * The space around the part of the map that the camera centers in, inside
-   * the map's `viewportInsets`. Each side is a length of at least 0, not a
-   * percentage; a side left out is 0. A `LocalizedPadding`'s `start` and
-   * `end` follow the app's language, not an ancestor's `.direction()`.
+   * Space at the edges of the map, inside the map's `viewportInsets`, that the
+   * camera centers away from. Each side is at least 0, not a percentage, and 0
+   * when left out.
    */
   padding?: Padding | LocalizedPadding;
 }
 
-/**
- * Where the camera is: a complete `CameraUpdate`, so a reported or JSON-parsed
- * camera passes back as it is. Only a `CameraPosition`, not every
- * `CameraUpdate`, survives `JSON.stringify()` and `JSON.parse()`.
- */
+/** Where the camera is: a `CameraUpdate` with every field set. */
 export interface CameraPosition extends CameraUpdate {
-  /** The position at the middle of the part of the map that the padding leaves. */
+  /** The coordinate at the center of the padded area of the map. */
   center: LatLng;
   /** The zoom level. */
   zoom: number;
-  /** The direction at the top of the map, in degrees clockwise from north. */
+  /**
+   * The compass direction at the top of the map, in degrees clockwise from
+   * north.
+   */
   bearing: number;
   /** The tilt toward the horizon, in degrees. 0 looks straight down. */
   pitch: number;
-  /** The app's padding: all four sides are numbers of vp; never includes `viewportInsets`. */
+  /** The camera's padding, in vp, without the map's `viewportInsets`. */
   padding: Padding;
 }

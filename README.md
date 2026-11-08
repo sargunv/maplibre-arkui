@@ -4,32 +4,12 @@
 [![API Reference](https://img.shields.io/badge/API_Reference-blue?logo=typescript&logoColor=white)](https://code.sargunv.dev/maplibre-arkui/api/)
 [![License](https://img.shields.io/github/license/sargunv/maplibre-arkui?label=License)](./LICENSE)
 
-An ArkUI library for [MapLibre Native] on HarmonyOS and OpenHarmony, built on
-the ArkTS bindings of [MapLibre Native FFI]. It is a cousin of [MapLibre
-Compose]. The package, `@maplibre/arkui`, has a `MaplibreMap` component that
-moves with touch, mouse, touchpad, and keyboard gestures, a `MapController` that
-reads and moves its camera, localized controls, ArkUI content placed on
-coordinates, the user's location, map content that the app declares from its
-state, a style API that reads and changes the loaded style, style expressions,
-and snapshots. It lends FFI's map for what it doesn't cover, and passes on FFI's
-request handlers, offline regions, and logs as they are.
+Interactive vector maps for ArkUI apps on HarmonyOS and OpenHarmony, rendered by
+[MapLibre Native] through [MapLibre Native FFI]. Its sibling library, [MapLibre
+Compose], brings the same engine to Compose Multiplatform.
 
-It's a preview, and it isn't on [ohpm] yet ([#26]).
-
-The [documentation] has the guides and the API reference.
-
-## Install
-
-The library is a source HAR for API 20 and later. Once it and FFI are on ohpm,
-install it with one FFI backend, whose version must be the one that
-`@maplibre/arkui` names:
-
-```sh
-ohpm install @maplibre/arkui @maplibre/native-ffi-opengl@<FFI version>
-```
-
-Until then, build the library and the demo from this repository (see [Build from
-source]). [Getting started] has the details.
+The library is a preview and isn't on [ohpm] yet ([#26]). Until then, build it
+from this repository; see [Build from source].
 
 ## Quick start
 
@@ -65,21 +45,17 @@ struct MapPage {
 }
 ```
 
-The library uses state management V2 only: put it in `@ComponentV2` structs. The
-[documentation] goes on from here: the map and its camera, gestures, controls
-and ArkUI content, map content and expressions, the style API, the user's
-location, snapshots, requests, offline regions, and logs.
+The [documentation] has the guides and the API reference.
 
 ## Developing
 
-[mise] installs everything, including the OpenHarmony SDK and an Oniro emulator
-image. [Build from source] lists the tasks, and [AGENTS.md](AGENTS.md) describes
-the layout, how the build works without hvigor, and how to release.
+[mise] installs every tool, including the OpenHarmony SDK and an emulator image.
+[Build from source] lists the everyday tasks, and [AGENTS.md](AGENTS.md) has the
+guidance for contributors.
 
 [#26]: https://github.com/sargunv/maplibre-arkui/issues/26
 [Build from source]: https://code.sargunv.dev/maplibre-arkui/development/
 [documentation]: https://code.sargunv.dev/maplibre-arkui/
-[Getting started]: https://code.sargunv.dev/maplibre-arkui/getting-started/
 [MapLibre Compose]: https://maplibre.org/maplibre-compose/
 [MapLibre Native]: https://github.com/maplibre/maplibre-native
 [MapLibre Native FFI]: https://maplibre.org/maplibre-native-ffi/
