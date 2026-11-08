@@ -8,9 +8,8 @@ const MAPLIBRE_URL = 'https://maplibre.org/';
 const LOGO_HEIGHT = 23;
 
 /**
- * The MapLibre wordmark, 88 by 23 vp, with a shadow that reads on light and
- * dark maps. A tap opens maplibre.org in the browser. It needs no map, so it
- * works anywhere.
+ * The MapLibre logo. Tapping it opens maplibre.org in the browser. Works
+ * anywhere, without a map.
  */
 @ComponentV2
 export struct MaplibreLogo {

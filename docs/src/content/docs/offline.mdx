@@ -1,0 +1,41 @@
+---
+title: Use maps offline
+description: Download an area for offline use, and choose when maps use the network.
+---
+
+import { Code } from "@astrojs/starlight/components";
+import Api from "../../components/Api.astro";
+import { region } from "../../snippets";
+
+import offline from "../../../../demo/entry/src/main/ets/docs/Offline.ets?raw";
+
+Maps cache what they load, so places the user has seen can show again without
+the network. To make an area available before the user goes there, download it
+as an offline region.
+
+## Download a region
+
+<Api of="MapRuntime.createOfflineRegion" display="createOfflineRegion()" /> stores
+a region: a style, an area, and a zoom range. `startDownload()` downloads it,
+and the region's `status` shows the progress:
+
+<Code code={region(offline, "download")} lang="ts" />
+
+Maps use the region when they load its style URL, even while the device is
+offline. Keep regions small, since each zoom level needs about four times as
+many tiles as the one before it.
+
+## List downloaded regions
+
+<Api of="MapRuntime.getOfflineRegions" display="getOfflineRegions()" /> lists the
+regions that the app has stored. The `metadata` that you pass when you create a
+region is a good place for its name:
+
+<Code code={region(offline, "list-regions")} lang="ts" />
+
+## Keep maps offline
+
+To keep maps from using the network, such as for a setting that saves mobile
+data, set a <Api of="ConnectivityMode" />:
+
+<Code code={region(offline, "connectivity")} lang="ts" />

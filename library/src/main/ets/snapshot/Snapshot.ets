@@ -27,113 +27,71 @@ import { MapRuntime } from '../runtime/MapRuntime';
 
 /** What `renderSnapshot()` renders. */
 export interface MapSnapshotOptions {
-  /**
-   * The style, as `MaplibreMap` takes it: a URL, or a style document as
-   * style-spec JSON. A string is always a URL.
-   */
+  /** The style: a URL, or a style document as style-spec JSON. A string is always a URL. */
   style: string | Record<string, Object>;
-  /**
-   * The image's width in vp, rounded to a whole vp. Finite and at least 1
-   * after rounding.
-   */
+  /** The image's width in vp, rounded to a whole number. At least 1 after rounding. */
   width: number;
-  /**
-   * The image's height in vp, rounded to a whole vp. Finite and at least 1
-   * after rounding.
-   */
+  /** The image's height in vp, rounded to a whole number. At least 1 after rounding. */
   height: number;
   /**
-   * Sources, layers, and images to draw over the style, as `MaplibreMap`
-   * takes them. A source, layer, or image that the map rejects is left out
-   * and logged. Layers' click handlers do nothing. Images' `pixelRatio`
-   * defaults to the snapshot's `pixelRatio`. None by default.
+   * Sources, layers, and images to draw over the style. One that MapLibre
+   * rejects is left out and logged. An image's `pixelRatio` defaults to the
+   * snapshot's. None by default.
    */
   content?: MapContent;
   /**
-   * Where the camera looks. Fields it leaves out take MapLibre's defaults, as
-   * those of `MapControllerOptions.camera` do: center 0, 0, zoom 0, bearing 0,
-   * pitch 0, and no padding. Its padding is space in the image's vp, and the
-   * camera's values must be valid as `MapController.updateCamera()` takes
-   * them.
+   * Where the camera looks. Fields left out default to center 0, 0, zoom 0,
+   * bearing 0, pitch 0, and no padding. The values must be valid for
+   * `MapController.updateCamera()`.
    */
   camera?: CameraUpdate;
   /**
-   * The UI that the image is for, such as `this.getUIContext()` of the
-   * component that shows it. It sets the defaults of `pixelRatio` and
-   * `fontScale`, and converts the camera padding's lengths to vp. Without
-   * it, the default display's density sets `pixelRatio`, `fontScale` is 1, a
-   * padding length in px is a pixel of the image, one in fp scales by
-   * `fontScale`, and one in lpx throws.
+   * The UI that will show the image, which sets the defaults of `pixelRatio`
+   * and `fontScale`. Without it, they default to the default display's density
+   * and 1.
    */
   uiContext?: UIContext;
   /**
-   * The image's pixels in each vp. Finite and greater than 0. Defaults to
-   * `vp2px(1)` of `uiContext`, so the image is as sharp as a map of the same
-   * size in that UI.
+   * The number of image pixels per vp. Finite and greater than 0. Defaults to
+   * the density of `uiContext`.
    */
   pixelRatio?: number;
   /**
-   * How much the sizes that `fp()` gives scale. Finite and greater than 0.
-   * Defaults to `fp2px(1) / vp2px(1)` of `uiContext`, as a `MaplibreMap` in
-   * that UI scales them.
+   * The scale of sizes given with `fp()`. Finite and greater than 0. Defaults
+   * to the font scale of `uiContext`.
    */
   fontScale?: number;
-  /**
-   * The runtime that loads the style and its resources, with that runtime's
-   * cache, offline regions, and request handling. The default runtime by
-   * default.
-   */
+  /** The runtime that loads the style and its resources. The default runtime by default. */
   runtime?: MapRuntime;
 }
 
-/**
- * A still image of a map, which `renderSnapshot()` resolves with. The library
- * creates it, and later releases may add fields.
- */
+/** A still image of a map. Fields may be added in later releases. */
 export interface MapSnapshot {
   /**
-   * The image: `width × pixelRatio` by `height × pixelRatio` pixels, each
-   * rounded up to a whole pixel, in the premultiplied `RGBA_8888` format. The
-   * caller owns it: release it once nothing shows it.
+   * The image, `width × pixelRatio` by `height × pixelRatio` pixels rounded
+   * up, in premultiplied `RGBA_8888`. The caller owns it and must release it.
    */
   readonly image: image.PixelMap;
   /**
-   * The attribution of the style's sources, as HTML, without repeats, in the
-   * order the style lists them, as `MapController.attributions` gives it. Show
-   * it with the image, as the sources' terms usually require, such as with
-   * `AttributionText`.
+   * The attributions of the style's sources, as HTML, without duplicates, in
+   * the style's order.
    */
   readonly attributions: string[];
 }
 
 /**
- * Renders a still image of a map without showing it, for an `Image` to show,
- * or to save or share.
+ * Renders a still image of a map without showing it on screen. The image has
+ * the style and content only, with no user location indicator or ArkUI
+ * controls. Call it on the UI thread.
  *
- * ```ets
- * const preview = await renderSnapshot({ style: STYLE_URL, width: 320, height: 180,
- *   camera: { center: { latitude: 48.8584, longitude: 2.2945 }, zoom: 14 },
- *   uiContext: this.getUIContext() });
- * // In build(): Image(preview.image), and AttributionText({ attributions: preview.attributions })
- * ```
+ * Throws an `Error` for an invalid size, `pixelRatio`, or `fontScale`, for a
+ * camera that `MapController.updateCamera()` would throw for, or for a camera
+ * padding that can't convert to vp.
  *
- * Call it on the UI thread. It throws an `Error` with the value for a size,
- * `pixelRatio`, or `fontScale` that isn't valid, and for a camera that
- * `MapController.updateCamera()` would throw for or whose padding can't
- * convert to vp.
- *
- * The promise resolves once every resource that the image needs has loaded,
- * so it stays pending for as long as one of them does, such as while
- * `MapRuntime.setConnectivityMode()` keeps MapLibre offline. It rejects with
- * an `Error` when the style fails to load, when a style document is one that
- * MapLibre rejects, when a resource that the image needs fails to load, and
- * when the runtime fails to open or is released.
- *
- * The image holds the style and the content only: no user location indicator
- * and no ArkUI controls. To capture what a `MaplibreMap` shows, pass its
- * style, its content, and its controller's camera. Snapshots render at the
- * same time, each with a GPU session of its own, so render many one after
- * another.
+ * Resolves once every resource the image needs has loaded, so it stays
+ * pending while MapLibre is offline and a resource isn't cached. Rejects with
+ * an `Error` if the style or a needed resource fails to load, or if the
+ * runtime fails to open or is released.
  */
 export function renderSnapshot(options: MapSnapshotOptions): Promise<MapSnapshot> {
   const width = checkSize(options.width, 'width');

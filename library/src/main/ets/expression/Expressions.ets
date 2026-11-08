@@ -17,48 +17,32 @@ export type JsonValue = string | number | boolean | null | JsonValue[] | JsonObj
 export interface JsonObject extends Record<string, JsonValue> {}
 
 /**
- * An argument to an expression function: another expression, or a plain
- * number, string, boolean, or null, which the style reads as itself. A string
- * stands for a color where the expression expects one, as CSS writes it:
- * `'#ff0000'`, `'rgba(255, 0, 0, 0.5)'`, or `'#ff000080'`, whose alpha comes
- * last, unlike ArkUI's `'#80ff0000'`. An array isn't an argument; wrap it in
- * `literal()`.
+ * An argument to an expression function: an expression, or a plain number,
+ * string, boolean, or null. Wrap arrays and objects in `literal()`.
  */
 export type ExpressionInput = Expression | string | number | boolean | null;
 
 /**
- * A style expression, which the map evaluates for each feature or zoom level.
- *
- * Build one with the functions of this module, such as `get()`,
- * `interpolate()`, and `match()`. For an operator that they don't
- * cover, use `call()`, or construct an expression from its style-spec
- * JSON. Use it in a `StyleLayer`'s `filter`, `paint`, and `layout`, and as
- * the `filter` of a feature query.
- *
- * MapLibre checks the expression's types when the map applies it, not this
- * library: an invalid expression in the content goes to
- * `MaplibreMap.onError`. An expression is immutable.
+ * A style expression. Expressions are immutable. The map checks an expression
+ * when it uses it; an invalid expression in the map's content is reported to
+ * `onError`.
  */
 export class Expression {
   private readonly json: JsonValue;
   private readonly key: string;
 
-  /**
-   * Creates an expression from its style-spec JSON, such as
-   * `new Expression(['get', 'name'])`. The expression keeps a copy, so later
-   * changes to `json` don't change it.
-   */
+  /** Creates an expression from its style-spec JSON, such as `['get', 'name']`. */
   constructor(json: JsonValue) {
     this.key = JSON.stringify(json);
     this.json = JSON.parse(this.key) as JsonValue;
   }
 
-  /** The style-spec JSON, which `JSON.stringify` writes for the expression. */
+  /** The expression's style-spec JSON. */
   toJSON(): JsonValue {
     return this.json;
   }
 
-  /** The style-spec JSON as text, which two expressions share only when their JSON is the same. */
+  /** The expression's style-spec JSON as text. */
   toString(): string {
     return this.key;
   }
@@ -68,11 +52,7 @@ function jsonOf(input: ExpressionInput): JsonValue {
   return input instanceof Expression ? input.toJSON() : input;
 }
 
-/**
- * Calls the style-spec operator `operator` with `args`. For an operator that
- * this module has no function for, such as
- * `call('in', get('class'), literal(['park', 'garden']))`.
- */
+/** Any style-spec operator, with arguments, for an operator that has no function. */
 export function call(operator: string, ...args: ExpressionInput[]): Expression {
   const json: JsonValue[] = [operator];
   for (const arg of args) {
@@ -81,83 +61,66 @@ export function call(operator: string, ...args: ExpressionInput[]): Expression {
   return new Expression(json);
 }
 
-/**
- * A literal value. Arrays and objects need it, since the style reads a bare
- * array as an expression: `literal(['Open Sans Regular'])`.
- */
+/** The `literal` operator: a value as it is. Array and object arguments need it. */
 export function literal(value: JsonValue): Expression {
   return new Expression(['literal', value]);
 }
 
 // Feature data and inputs
 
-/** The feature's property `name`, or of `object` when given. */
+/** The `get` operator: a property of the feature, or of `object` when given. */
 export function get(name: ExpressionInput, object?: Expression): Expression {
   return object === undefined ? call('get', name) : call('get', name, object);
 }
 
-/** Whether the feature has the property `name`, or `object` does when given. */
+/** The `has` operator: whether the feature, or `object` when given, has a property. */
 export function has(name: ExpressionInput, object?: Expression): Expression {
   return object === undefined ? call('has', name) : call('has', name, object);
 }
 
-/**
- * The feature's state property `name`, which the app sets with the
- * `setFeatureState()` of a source's handle, such as
- * `GeoJsonSourceHandle.setFeatureState()`. Only paint properties can read it.
- */
+/** The `feature-state` operator: a value of the feature's state. */
 export function featureState(name: ExpressionInput): Expression {
   return call('feature-state', name);
 }
 
-/**
- * The style's global state property `name`, which the app can set with
- * `MapStyle.setGlobalStateProperty()`. The library reserves the names that
- * start with `maplibre-arkui:`, such as the one that `fp()` reads.
- */
+/** The `global-state` operator: a global state property of the style. */
 export function globalState(name: ExpressionInput): Expression {
   return call('global-state', name);
 }
 
-/** The feature's properties, as an object. */
+/** The `properties` operator: the feature's properties, as an object. */
 export function properties(): Expression {
   return call('properties');
 }
 
-/** The feature's ID. */
+/** The `id` operator: the feature's ID. */
 export function id(): Expression {
   return call('id');
 }
 
-/** The feature's geometry type: `'Point'`, `'LineString'`, or `'Polygon'`. */
+/** The `geometry-type` operator: `'Point'`, `'LineString'`, or `'Polygon'`. */
 export function geometryType(): Expression {
   return call('geometry-type');
 }
 
-/**
- * The map's zoom level. MapLibre accepts it only as the input of a top-level
- * `interpolate()` or `step()`.
- */
+/** The `zoom` operator: the map's zoom level. */
 export function zoom(): Expression {
   return call('zoom');
 }
 
-/** The heatmap's density at a pixel, for `heatmap-color`. */
+/** The `heatmap-density` operator. */
 export function heatmapDensity(): Expression {
   return call('heatmap-density');
 }
 
-/** The progress along a line, for `line-gradient`. */
+/** The `line-progress` operator. */
 export function lineProgress(): Expression {
   return call('line-progress');
 }
 
 // Ramps
 
-/**
- * How `interpolate()` computes the values between its stops. Create one
- * with `linear()`, `exponential()`, or `cubicBezier()`.
- */
+/** How `interpolate()` computes values between stops. */
 export class Interpolation {
   private readonly json: JsonValue[];
 
@@ -166,7 +129,7 @@ export class Interpolation {
     this.json = json;
   }
 
-  /** The style-spec JSON, which `JSON.stringify` writes for the interpolation. */
+  /** The interpolation's style-spec JSON. */
   toJSON(): JsonValue[] {
     return this.json;
   }
@@ -177,20 +140,17 @@ export function linear(): Interpolation {
   return new Interpolation(['linear']);
 }
 
-/**
- * Interpolates exponentially. The higher `base` is, the more the output rises
- * toward the end of each range; 1 is linear.
- */
+/** Interpolates exponentially with `base`. */
 export function exponential(base: number): Interpolation {
   return new Interpolation(['exponential', base]);
 }
 
-/** Interpolates along the cubic Bézier curve with these control points, each from 0 to 1. */
+/** Interpolates along a cubic Bézier curve. */
 export function cubicBezier(x1: number, y1: number, x2: number, y2: number): Interpolation {
   return new Interpolation(['cubic-bezier', x1, y1, x2, y2]);
 }
 
-/** An input value and the output at it, for `interpolate()` and `step()`. */
+/** An input and its output, for `interpolate()` and `step()`. */
 export type Stop = [number, ExpressionInput];
 
 // Appends the stops to `json`, the start of a ramp, as the spec's flat list.
@@ -202,40 +162,25 @@ function ramp(json: JsonValue[], stops: Stop[]): Expression {
   return new Expression(json);
 }
 
-/**
- * Interpolates between the outputs of `stops`, whose inputs must increase.
- * Outside them, it's the first or the last output. Outputs can be numbers,
- * colors, or arrays of numbers.
- *
- * ```ts
- * interpolate(exponential(2), zoom(), [[10, 1], [18, 32]])
- * ```
- */
+/** The `interpolate` operator: a value between the outputs of the stops around `input`. */
 export function interpolate(type: Interpolation, input: ExpressionInput,
   stops: Stop[]): Expression {
   return ramp(['interpolate', type.toJSON(), jsonOf(input)], stops);
 }
 
-/** Interpolates colors like `interpolate()`, in the HCL color space. */
+/** The `interpolate-hcl` operator. */
 export function interpolateHcl(type: Interpolation, input: ExpressionInput,
   stops: Stop[]): Expression {
   return ramp(['interpolate-hcl', type.toJSON(), jsonOf(input)], stops);
 }
 
-/** Interpolates colors like `interpolate()`, in the CIELAB color space. */
+/** The `interpolate-lab` operator. */
 export function interpolateLab(type: Interpolation, input: ExpressionInput,
   stops: Stop[]): Expression {
   return ramp(['interpolate-lab', type.toJSON(), jsonOf(input)], stops);
 }
 
-/**
- * The output of the last stop whose input is at most `input`, or `fallback`
- * below the first stop. The stops' inputs must increase.
- *
- * ```ts
- * step(get('population'), 2, [[1000, 4], [100000, 8]])
- * ```
- */
+/** The `step` operator: the output of the last stop at or below `input`, or `fallback`. */
 export function step(input: ExpressionInput, fallback: ExpressionInput,
   stops: Stop[]): Expression {
   return ramp(['step', jsonOf(input), jsonOf(fallback)], stops);
@@ -243,20 +188,13 @@ export function step(input: ExpressionInput, fallback: ExpressionInput,
 
 // Decisions
 
-/** A label of a `match()` case: one value, or any of several. */
+/** The label of a `match()` case: one value, or several. */
 export type MatchLabel = string | number | string[] | number[];
 
-/** A label and the output of a `match()` when the input equals it. */
+/** A `match()` case: a label and its output. */
 export type MatchCase = [MatchLabel, ExpressionInput];
 
-/**
- * The output of the case whose label equals `input`, or `fallback`. Labels
- * are plain strings or numbers, all of one type, each in one case.
- *
- * ```ts
- * match(get('class'), [['park', '#8c8'], [['lake', 'river'], '#88c']], '#ccc')
- * ```
- */
+/** The `match` operator: the output of the case whose label equals `input`, or `fallback`. */
 export function match(input: ExpressionInput, cases: MatchCase[],
   fallback: ExpressionInput): Expression {
   const json: JsonValue[] = ['match', jsonOf(input)];
@@ -268,17 +206,10 @@ export function match(input: ExpressionInput, cases: MatchCase[],
   return new Expression(json);
 }
 
-/** A condition and the output of `cases()` when it's the first true one. */
+/** A `cases()` case: a condition and its output. */
 export type Condition = [ExpressionInput, ExpressionInput];
 
-/**
- * The output of the first true condition, or `fallback`: the style spec's
- * `case`, which is a reserved word in ArkTS.
- *
- * ```ts
- * cases([[not(has('mag')), '#888'], [gt(get('mag'), 5), '#f00']], '#fa0')
- * ```
- */
+/** The `case` operator: the output of the first true condition, or `fallback`. */
 export function cases(conditions: Condition[], fallback: ExpressionInput): Expression {
   const json: JsonValue[] = ['case'];
   for (const condition of conditions) {
@@ -289,224 +220,200 @@ export function cases(conditions: Condition[], fallback: ExpressionInput): Expre
   return new Expression(json);
 }
 
-/** The first of `values` that isn't null. */
+/** The `coalesce` operator: the first value that isn't null. */
 export function coalesce(...values: ExpressionInput[]): Expression {
   return call('coalesce', ...values);
 }
 
-/** Whether `a` equals `b`. */
+/** The `==` operator: whether `a` equals `b`. */
 export function eq(a: ExpressionInput, b: ExpressionInput): Expression {
   return call('==', a, b);
 }
 
-/** Whether `a` doesn't equal `b`. */
+/** The `!=` operator: whether `a` doesn't equal `b`. */
 export function neq(a: ExpressionInput, b: ExpressionInput): Expression {
   return call('!=', a, b);
 }
 
-/** Whether `a` is less than `b`. */
+/** The `<` operator: whether `a` is less than `b`. */
 export function lt(a: ExpressionInput, b: ExpressionInput): Expression {
   return call('<', a, b);
 }
 
-/** Whether `a` is at most `b`. */
+/** The `<=` operator: whether `a` is at most `b`. */
 export function lte(a: ExpressionInput, b: ExpressionInput): Expression {
   return call('<=', a, b);
 }
 
-/** Whether `a` is greater than `b`. */
+/** The `>` operator: whether `a` is greater than `b`. */
 export function gt(a: ExpressionInput, b: ExpressionInput): Expression {
   return call('>', a, b);
 }
 
-/** Whether `a` is at least `b`. */
+/** The `>=` operator: whether `a` is at least `b`. */
 export function gte(a: ExpressionInput, b: ExpressionInput): Expression {
   return call('>=', a, b);
 }
 
-/** Whether `value` is false. */
+/** The `!` operator: whether `value` is false. */
 export function not(value: ExpressionInput): Expression {
   return call('!', value);
 }
 
-/** Whether every one of `values` is true. */
+/** The `all` operator: whether every value is true. */
 export function all(...values: ExpressionInput[]): Expression {
   return call('all', ...values);
 }
 
-/** Whether any of `values` is true. */
+/** The `any` operator: whether any value is true. */
 export function any(...values: ExpressionInput[]): Expression {
   return call('any', ...values);
 }
 
 // Math
 
-/** The sum of `values`. */
+/** The `+` operator: the sum of the values. */
 export function add(...values: ExpressionInput[]): Expression {
   return call('+', ...values);
 }
 
-/** `a` minus `b`. */
+/** The `-` operator: `a` minus `b`. */
 export function subtract(a: ExpressionInput, b: ExpressionInput): Expression {
   return call('-', a, b);
 }
 
-/** The product of `values`. */
+/** The `*` operator: the product of the values. */
 export function multiply(...values: ExpressionInput[]): Expression {
   return call('*', ...values);
 }
 
-/** `a` divided by `b`. */
+/** The `/` operator: `a` divided by `b`. */
 export function divide(a: ExpressionInput, b: ExpressionInput): Expression {
   return call('/', a, b);
 }
 
-/** The remainder of `a` divided by `b`. */
+/** The `%` operator: the remainder of `a` divided by `b`. */
 export function mod(a: ExpressionInput, b: ExpressionInput): Expression {
   return call('%', a, b);
 }
 
-/** `base` to the power of `exponent`. */
+/** The `^` operator: `base` to the power of `exponent`. */
 export function pow(base: ExpressionInput, exponent: ExpressionInput): Expression {
   return call('^', base, exponent);
 }
 
 /**
- * `value`, a size in vp, scaled by the font scale, as ArkUI scales a size in
- * fp: for `text-size`, so labels follow the user's font size setting as the
- * app's text does.
- *
- * ```ts
- * fp(14)
- * interpolate(linear(), zoom(), [[10, fp(12)], [16, fp(18)]])
- * ```
- *
- * It multiplies `value` by the global state property
- * `maplibre-arkui:font-scale`, or by 1 where nothing sets it. `MaplibreMap`
- * sets it on each style it loads, to `fp2px(1) / vp2px(1)` of its UI context,
- * and again when that changes; `renderSnapshot()` sets it to its `fontScale`. Like
- * ArkUI's text, it follows the user's setting only in an app that opts in with
- * `"fontSizeScale": "followSystem"` in its configuration profile. Since
- * `zoom()` must be the input of a top-level `interpolate()` or `step()`, scale
- * each stop's output rather than the ramp.
+ * Scales a text size by the font scale, as ArkUI's `fp` unit does. A map uses
+ * the font scale of its UI context, and `renderSnapshot()` uses its
+ * `fontScale`. Not a style-spec operator.
  */
 export function fp(value: ExpressionInput): Expression {
   return multiply(value, call('number', globalState(FONT_SCALE_STATE), 1));
 }
 
-/** The square root of `value`. */
+/** The `sqrt` operator: the square root of `value`. */
 export function sqrt(value: ExpressionInput): Expression {
   return call('sqrt', value);
 }
 
-/** The absolute value of `value`. */
+/** The `abs` operator: the absolute value of `value`. */
 export function abs(value: ExpressionInput): Expression {
   return call('abs', value);
 }
 
-/** `value` rounded to the nearest integer, halves away from zero. */
+/** The `round` operator: `value` rounded to the nearest integer. */
 export function round(value: ExpressionInput): Expression {
   return call('round', value);
 }
 
-/** The largest integer at most `value`. */
+/** The `floor` operator: the largest integer at most `value`. */
 export function floor(value: ExpressionInput): Expression {
   return call('floor', value);
 }
 
-/** The smallest integer at least `value`. */
+/** The `ceil` operator: the smallest integer at least `value`. */
 export function ceil(value: ExpressionInput): Expression {
   return call('ceil', value);
 }
 
-/** The smallest of `values`. */
+/** The `min` operator: the smallest value. */
 export function min(...values: ExpressionInput[]): Expression {
   return call('min', ...values);
 }
 
-/** The largest of `values`. */
+/** The `max` operator: the largest value. */
 export function max(...values: ExpressionInput[]): Expression {
   return call('max', ...values);
 }
 
 // Conversions and strings
 
-/** The first of `values` that converts to a number, or an error. */
+/** The `to-number` operator: the first value that converts to a number. */
 export function toNumber(...values: ExpressionInput[]): Expression {
   return call('to-number', ...values);
 }
 
-/** `value` converted to a string. */
+/** The `to-string` operator: `value` as a string. */
 export function toString(value: ExpressionInput): Expression {
   return call('to-string', value);
 }
 
-/** Whether `value` is truthy. */
+/** The `to-boolean` operator: whether `value` is truthy. */
 export function toBoolean(value: ExpressionInput): Expression {
   return call('to-boolean', value);
 }
 
-/** The first of `values` that converts to a color, or an error. */
+/** The `to-color` operator: the first value that converts to a color. */
 export function toColor(...values: ExpressionInput[]): Expression {
   return call('to-color', ...values);
 }
 
-/** `values` converted to strings and joined. */
+/** The `concat` operator: the values as strings, joined. */
 export function concat(...values: ExpressionInput[]): Expression {
   return call('concat', ...values);
 }
 
-/** `value` in uppercase. */
+/** The `upcase` operator: `value` in uppercase. */
 export function upcase(value: ExpressionInput): Expression {
   return call('upcase', value);
 }
 
-/** `value` in lowercase. */
+/** The `downcase` operator: `value` in lowercase. */
 export function downcase(value: ExpressionInput): Expression {
   return call('downcase', value);
 }
 
 // Colors, text, and images
 
-/** The color with these red, green, and blue components, from 0 to 255. */
+/** The `rgb` operator: a color from red, green, and blue. */
 export function rgb(red: ExpressionInput, green: ExpressionInput, blue: ExpressionInput): Expression {
   return call('rgb', red, green, blue);
 }
 
-/** The color with these red, green, and blue components, from 0 to 255, and alpha, from 0 to 1. */
+/** The `rgba` operator: a color from red, green, blue, and alpha. */
 export function rgba(red: ExpressionInput, green: ExpressionInput, blue: ExpressionInput,
   alpha: ExpressionInput): Expression {
   return call('rgba', red, green, blue, alpha);
 }
 
-/**
- * The style's image named `name`, for `icon-image` or a `format()` section.
- *
- * Its name clashes with `@ohos.multimedia.image`, the module of a `StyleImage`'s
- * `PixelMap`, so a file that uses both imports one under another name.
- */
+/** The `image` operator: the style's image with this ID. */
 export function image(name: ExpressionInput): Expression {
   return call('image', name);
 }
 
-/** A section of `format()` text and how it overrides the layer's text style. */
+/** A section of `format()` text, with its own text style. */
 export interface FormatSection {
-  /** The section's text, or an `image()`. */
+  /** The text, or an `image()`. */
   text: ExpressionInput;
-  /** Scales the layer's `text-size`. */
+  /** A factor for the layer's `text-size`. */
   fontScale?: ExpressionInput;
-  /** The fonts, such as `literal(['Open Sans Bold'])`. */
+  /** The fonts. */
   textFont?: Expression;
+  /** The text color. */
   textColor?: ExpressionInput;
 }
 
-/**
- * Text in sections with styles of their own, for `text-field`.
- *
- * ```ts
- * format({ text: get('name') }, { text: '\n' }, { text: get('ref'), fontScale: 0.8 })
- * ```
- */
+/** The `format` operator: text in sections with their own styles. */
 export function format(...sections: FormatSection[]): Expression {
   const json: JsonValue[] = ['format'];
   for (const section of sections) {

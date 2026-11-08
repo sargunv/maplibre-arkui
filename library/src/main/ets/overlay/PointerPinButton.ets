@@ -28,10 +28,11 @@ class AccessibilityLabel implements AttributeModifier<ButtonAttribute> {
 }
 
 /**
- * A button shaped like a map pin, on the edge of the map towards a coordinate
- * off the screen, which `OffscreenMarker` places. The pin turns to point at
+ * A button shaped like a map pin that points towards a coordinate that's off
+ * the screen. It sits on the edge of the map as `OffscreenMarker` places it,
+ * and hides while the coordinate is inside the oval. The pin turns to point at
  * the coordinate, and its content, such as a 24 vp icon, stays upright in its
- * round part. It hides while the coordinate is on the screen.
+ * round part.
  *
  * ```ets
  * PointerPinButton({
@@ -43,26 +44,25 @@ class AccessibilityLabel implements AttributeModifier<ButtonAttribute> {
  * }
  * ```
  *
- * It takes its label and click handler as parameters, rather than as
- * `.accessibilityText()` and `.onClick()`, because ArkUI would put those on a
- * node that the parent lays out by its own rules, not on the pin, as for
- * `Marker`.
+ * Its parent sets the oval, as for `OffscreenMarker`. Use `label` and
+ * `onPinClick` instead of `.accessibilityText()` and `.onClick()`.
  *
- * Place it in a `MaplibreMap`'s overlay; its parent sets the oval, as for
- * `OffscreenMarker`. It's the size of the pin, so taps beside it reach what's
- * under it. Anywhere but a map's overlay, it logs an error that names
- * `OffscreenMarker`, and draws nothing.
+ * Works only in a `MaplibreMap`'s trailing closure. Elsewhere, it logs an
+ * error that names `OffscreenMarker`, and draws nothing.
  */
 @ComponentV2
 export struct PointerPinButton {
   /** The coordinate that the pin points at. */
   @Require @Param coordinate: LatLng;
-  /** What the pin leads to, which screen readers read as the button's text. */
+  /** The text that screen readers read for the button. */
   @Require @Param label: ResourceStr;
-  /** The user clicked the pin. Called on the UI thread; the button logs what it throws. */
+  /**
+   * Called when the user clicks the pin. Runs on the UI thread. If it throws,
+   * the button logs the error.
+   */
   @Event onPinClick: () => void = () => {
   };
-  /** The content, in the trailing closure. */
+  /** The content of the pin's round part. */
   @BuilderParam content: () => void = noContent;
   @Local angle: number = 0;
 

@@ -1,110 +1,90 @@
 ---
-title: The camera
-description: Read and move the camera with a MapController.
+title: Control the camera
+description: Set where the map starts, move it from code, fit an area on screen, and limit where users can go.
 ---
 
 import { Code } from "@astrojs/starlight/components";
 import Api from "../../components/Api.astro";
 import { region } from "../../snippets";
 
-import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
+import camera from "../../../../demo/entry/src/main/ets/docs/Camera.ets?raw";
 
-<Api of="MapController" /> reads and moves the camera from anywhere, as a
-`Scroller` does for a list. Create one, pass it to one map, and keep it; when
-the map leaves the screen and comes back, the new map starts where the old one
-left the camera. Its getters are observable, so a component that reads them
-updates when they change.
+The camera decides which part of the map is on screen. A
+<Api of="CameraPosition" /> has a center coordinate, a zoom level, a bearing,
+and a pitch. At zoom 0 the whole world is 512 vp wide, and each zoom level
+doubles the scale. Bearing is the compass direction at the top of the screen, in
+degrees clockwise from north. Pitch tilts the map, in degrees away from looking
+straight down.
 
-## Where the camera is
+A <Api of="MapController" /> reads and moves the camera, the way a `Scroller`
+does for a list. Create one, pass it to the map, and keep it.
 
-<Api of="MapController.camera" display="camera" /> is where the camera is, and
-changes with every frame of a move or a gesture. It's always there: before a map
-shows the controller, it's the camera that the controller starts with. The
-map's `onCameraIdle` tells you where the camera comes to rest.
-<Api of="MapController.viewport" display="viewport" /> is the latest frame that
-the map drew, a <Api of="Viewport" />, with the same camera:
+## Set the starting position
 
-<Code code={region(examples, "camera-observable")} lang="ts" />
+Pass a `camera` to the controller's constructor:
 
-A viewport also converts between the frame's screen points and coordinates, as
-the library's controls and markers do. It changes every frame, so read it in
-`@Computed` getters of the components that need it.
-
-## While the camera moves
-
-<Api of="MapController.cameraMoving" display="cameraMoving" /> is true while
-the camera moves, from the map's `onCameraMoveStart` until its `onCameraIdle`,
-and <Api of="MapController.cameraMoveReason" display="cameraMoveReason" />
-says what moved it last: `CameraMoveReason.GESTURE` for the user's input on
-the map, and `CameraMoveReason.PROGRAMMATIC` for the app, such as a move, a
-control, or following the user's location. Both are observable, so a panel can
-step aside while the user moves the map, and stay while the app moves it:
-
-<Code code={region(examples, "camera-moving")} lang="ts" />
+<Code code={region(camera, "start-position")} lang="ts" />
 
 ## Move the camera
 
 <Api of="MapController.updateCamera" display="updateCamera()" /> changes the
-fields of the camera that you give it, and its options choose whether it jumps,
-eases, or flies (<Api of="CameraTransitionMode" />):
+fields that you pass and keeps the others. A <Api of="CameraTransitionMode" />
+chooses how the camera gets there. `EASE` moves straight to the target, which
+suits short moves such as zooming in:
 
-<Code code={region(examples, "camera-move")} lang="ts" />
+<Code code={region(camera, "ease")} lang="ts" />
 
-`fitCameraToBounds()`, `fitCameraToCoordinates()`, and `fitCameraToGeometry()`
-fit an area, coordinates, or a GeoJSON geometry. Each move resolves `true` when
-the camera got there, and `false` when something stopped it first:
+`FLY` zooms out, travels, and zooms back in, which suits moves between places
+that are far apart. `JUMP`, the default, moves at once:
 
-<Code code={region(examples, "camera-fit")} lang="ts" />
+<Code code={region(camera, "fly")} lang="ts" />
 
-A move that the app makes before a map shows the controller waits: the map
-makes it once it shows its first frame at its size, so a fit fits the map's real
-size. Moves wait while no map shows the controller, and go in the order the app
-made them; `cancelCameraTransitions()` stops them.
+## Fit an area on screen
 
-## Padding
+To show a whole route or a set of search results, use
+<Api of="MapController.fitCameraToBounds" display="fitCameraToBounds()" />.
+`fitPadding` keeps space between the area and the edges of the map:
 
-The camera's `padding` is space, in vp, around the part of the map that it
-centers in. `updateCamera()` sets it with the rest of the camera, and it stays
-until a move or a fit changes it:
+<Code code={region(camera, "fit")} lang="ts" />
 
-<Code code={region(examples, "camera-padding")} lang="ts" />
+The promise resolves `false` if something, such as the user's touch, stops the
+camera before it arrives. To fit coordinates or a GeoJSON geometry instead, use
+`fitCameraToCoordinates()` or `fitCameraToGeometry()`.
 
-A fit's `fitPadding` is a margin around what it fits, for that fit alone. Its
-`cameraPadding` sets the padding that the camera keeps after the fit; without
-it, the camera keeps its own. See <Api of="FitCameraOptions" />.
+## Read the camera
+
+<Api of="MapController.camera" /> is where the camera is now. A component that
+reads it updates as the camera moves:
+
+<Code code={region(camera, "read-camera")} lang="ts" />
+
+To act only when the camera stops, use the map's
+<Api of="MaplibreMap.onCameraIdle" display="onCameraIdle" />:
+
+<Code code={region(camera, "camera-idle")} lang="ts" />
+
+## React while the user moves the map
+
+<Api of="MapController.cameraMoving" /> is true while the camera moves, and
+<Api of="MapController.cameraMoveReason" /> says whether the user or the app
+moved it. This panel hides while the user moves the map:
+
+<Code code={region(camera, "camera-moving")} lang="ts" />
 
 ## Keep the camera clear of your UI
 
-When your UI covers part of the map, such as a bottom panel, pass the edges it
-covers to the map's `viewportInsets`. The control presets, such as
-<Api of="DefaultControls" />, keep their controls
-clear of them, and each move and fit centers in the part of the map that the
-user sees:
+When your UI covers part of the map, such as a panel at the bottom, pass the
+covered edges as the map's
+<Api of="MaplibreMap.viewportInsets" display="viewportInsets" />. Camera moves
+then center in the part of the map that the user can see, and the controls stay
+clear of the panel:
 
-<Code code={region(examples, "viewport-insets")} lang="ts" />
+<Code code={region(camera, "viewport-insets")} lang="ts" />
 
-The insets add to the camera's padding on the map, but the controller leaves
-them out of every camera it reports. So the camera you read or save doesn't
-change with the panel, and a saved camera restores the same way under another
-panel.
+## Limit where the camera can go
 
-## Save the camera
+Pass <Api of="CameraBoundsOptions" /> as the map's `cameraBounds` to keep the
+camera inside an area and inside zoom and pitch ranges. This map stays over
+Switzerland and stays flat:
 
-The controller keeps the camera while the app runs. The system can end the
-app's process in the background, and start it again when the user returns. To
-bring the camera back then, save it in the ability's `onSaveState()`, and start
-the controller from it: a <Api of="CameraPosition" /> survives JSON as it is.
-Here the page keeps its controller in `AppStorageV2`, where the ability can reach
-it:
-
-<Code code={region(examples, "save-camera")} lang="ts" />
-
-The system keeps that state only while the app is in the background. To reopen
-where the user left the camera after they close the app, keep the saved camera
-in `PersistenceV2` instead.
-
-## What the library doesn't cover
-
-<Api of="MapController.withFfiMap" display="withFfiMap()" /> lends the FFI map
-and its render session to a callback, for what the library doesn't cover yet.
-See [The style API](/maplibre-arkui/style/).
+<Code code={region(camera, "camera-bounds")} lang="ts" />

@@ -1,13 +1,9 @@
 // The failures that a running map reports to its `onError`.
 
 /**
- * A failure of a running map that no caller waits for, which the map reports
- * to its `onError` and to the log.
- *
- * Subclasses may be added in later releases; match them with `instanceof` and
- * keep a fallback. Failures without a subclass, such as a frame that fails to
- * render, a runtime that fails to open or that the app released, or an invalid
- * parameter, arrive as a plain `MapError`.
+ * A failure that a map reports to `MaplibreMap.onError`. Subclasses may be
+ * added in later releases, so match them with `instanceof` and keep a
+ * fallback.
  */
 export class MapError extends Error {
   /** Creates an error with `message`, which describes the failure. */
@@ -17,10 +13,7 @@ export class MapError extends Error {
   }
 }
 
-/**
- * The map's style failed to load: its URL failed, or MapLibre rejected the
- * document. The map keeps no style until the next one loads.
- */
+/** The map's style failed to load. */
 export class StyleLoadError extends MapError {
   /** Creates an error with `message`, which describes the failure. */
   constructor(message: string) {
@@ -30,14 +23,14 @@ export class StyleLoadError extends MapError {
 }
 
 /**
- * The map rejected a source, layer, or image of its `content`, which stays out
- * of the style until it changes.
+ * The map rejected a source, layer, or image of its `content`. It stays off the
+ * map until the app changes it.
  */
 export class ContentError extends MapError {
-  /** The ID of the source, layer, or image that the map rejected. */
+  /** The ID of the rejected source, layer, or image. */
   readonly id: string;
 
-  /** Creates an error for the content with `id`, with `message`, which describes the failure. */
+  /** Creates an error for the content with `id`. */
   constructor(id: string, message: string) {
     super(message);
     this.name = 'ContentError';

@@ -2,14 +2,13 @@ import { controlKey, findScope, MapScope } from '../map/internal/MapScope';
 import { AttributionText } from './AttributionText';
 
 /**
- * The attribution of the map's sources, which the sources' terms usually
- * require, behind a button. It starts expanded; a tap on the button folds or
- * unfolds it, and it folds as the user starts a gesture. It shows the
- * attribution as `AttributionText` does. It draws nothing while the style has
- * no attribution.
+ * A button that shows and hides the attribution of the map's sources. The
+ * attribution starts shown. Tapping the button toggles it, and it hides when
+ * the user starts a gesture. Draws nothing while the style has no
+ * attribution.
  *
- * Place it in a `MaplibreMap`'s overlay. Anywhere else, it logs an error and
- * draws nothing.
+ * Works only in a `MaplibreMap`'s trailing closure. Elsewhere, it logs an
+ * error and draws nothing.
  */
 @ComponentV2
 export struct AttributionButton {

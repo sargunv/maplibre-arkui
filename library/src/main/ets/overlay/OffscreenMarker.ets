@@ -4,11 +4,11 @@ import { callHandler } from '../runtime/internal/Log';
 import { noContent } from './internal/NoContent';
 import { Layout, LayoutReader, positionAt } from './internal/Placement';
 
-/** What `OffscreenMarker.onAngleChange` reports. */
+/** The event of `OffscreenMarker.onAngleChange`. */
 export interface OffscreenMarkerAngleEvent {
   /**
-   * The direction from the oval's center towards the coordinate, in degrees
-   * clockwise from up: at least 0, and less than 360.
+   * The direction from the oval's center to the coordinate, in degrees
+   * clockwise from up: at least 0 and less than 360.
    */
   readonly angle: number;
 }
@@ -46,34 +46,29 @@ function ovalCrossing(width: number, height: number, target: ScreenPoint): Towar
 }
 
 /**
- * ArkUI content on the edge of an oval that fills its parent's content box,
- * on the line from the oval's center towards a coordinate, for a coordinate
- * off the screen. The content hides while the coordinate is inside the oval,
- * and until the map shows a frame. The point of the content's own inscribed
- * oval that faces the coordinate touches the parent's oval, so round content
- * stays inside it.
+ * ArkUI content that points towards a coordinate that's off the screen. The
+ * content sits on the edge of an oval that fills its parent's content box, on
+ * the line from the oval's center to the coordinate. It's hidden while the
+ * coordinate is inside the oval, and until the map shows a frame.
  *
- * Place it in a `MaplibreMap`'s overlay. The marker is the size of its
- * content, so its parent, the overlay or a container in it, sets the oval:
- * size the container to the map, as `.width('100%').height('100%')` does, and
- * pad it to move the oval in from the map's edges. A percentage in the
- * parent's padding counts as 0. Chain universal attributes on the content, as
- * for `Marker`. Anywhere but a map's overlay, it logs an error and draws
- * nothing. `onAngleChange` gives the direction towards the coordinate, to
- * turn the content with it, as `PointerPinButton` does.
+ * Size the parent to the map, and pad it to move the oval in from the map's
+ * edges. Put attributes such as `.onClick()` on the content, not on the marker.
+ *
+ * Works only in a `MaplibreMap`'s trailing closure. Elsewhere, it logs an
+ * error and draws nothing.
  */
 @ComponentV2
 export struct OffscreenMarker {
   /** The coordinate that the content points towards. */
   @Require @Param coordinate: LatLng;
   /**
-   * The direction towards the coordinate changed. It's called as the content
-   * first shows, and as the direction changes, on the UI thread. The marker
-   * logs what it throws.
+   * Called when the content first shows, and each time the direction to the
+   * coordinate changes. Runs on the UI thread. If it throws, the marker logs
+   * the error.
    */
   @Event onAngleChange: (event: OffscreenMarkerAngleEvent) => void = (event: OffscreenMarkerAngleEvent) => {
   };
-  /** The content, in the trailing closure. */
+  /** The content. */
   @BuilderParam content: () => void = noContent;
   @Local scope: MapScope | undefined = undefined;
   private readonly nodeId: string = controlKey();

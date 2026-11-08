@@ -1,45 +1,53 @@
 ---
 title: Getting started
-description: Install the library and show a map.
+description: Add the library to your app and show your first map.
 ---
 
 import { Code } from "@astrojs/starlight/components";
+import Api from "../../components/Api.astro";
 import { region } from "../../snippets";
 
 import quickStart from "../../../../demo/entry/src/main/ets/docs/QuickStart.ets?raw";
 
-## Install
+MapLibre ArkUI needs API 20 or later and ArkUI's state management V2.
 
-The library is a source HAR for API 20 and later. It depends on FFI's facade,
-`@maplibre/native-ffi`, and the app installs one backend package next to it,
-since ohpm has no peer dependencies. Once they are on ohpm:
+## Install the library
+
+The library isn't on ohpm yet. Until it is, build it from this repository; see
+[Build from source](/maplibre-arkui/development/). Once it's published, install
+it with a rendering backend of MapLibre Native FFI:
 
 ```sh
 ohpm install @maplibre/arkui @maplibre/native-ffi-opengl@<FFI version>
 ```
 
-The backend's version must be the facade's, which `@maplibre/arkui`'s
-`oh-package.json5` names; `ohpm list` shows it. OpenGL is the backend that FFI
-tests; `@maplibre/native-ffi-vulkan` is the other. Until then, build the library
-and the demo from the repository (see
-[Build from source](/maplibre-arkui/development/)).
+The backend's version must match the version of `@maplibre/native-ffi` that
+`@maplibre/arkui` depends on, which `ohpm list` shows.
 
-An app that loads styles or tiles from the network requests the internet
-permission in its `module.json5`, and the network information permission, so
-that maps wait for a connection instead of failing their requests while the
-device is offline:
+## Request permissions
 
-```json5
+The library declares no permissions. To load styles and tiles from the network,
+declare these in your app's `module.json5`. With the second one, maps wait for a
+connection instead of failing while the device is offline.
+
+```json5 title="module.json5"
 "requestPermissions": [
   { "name": "ohos.permission.INTERNET" },
   { "name": "ohos.permission.GET_NETWORK_INFO" }
 ]
 ```
 
-Both install with the app, without a dialog.
+## Show a map
 
-## Quick start
+Add a <Api of="MaplibreMap" /> to a `@ComponentV2` struct and give it a style
+URL. A <Api of="MapController" /> sets where the camera starts and moves it
+later:
 
 <Code code={region(quickStart, "quick-start")} lang="ts" title="MapPage.ets" />
 
-The library uses state management V2 only: put it in `@ComponentV2` structs.
+## Next steps
+
+- [Style the map](/maplibre-arkui/styling/): choose what the map looks like.
+- [Control the camera](/maplibre-arkui/camera/): move the map from your code.
+- [Add data to the map](/maplibre-arkui/layers/): draw your own points, lines,
+  and shapes.

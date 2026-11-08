@@ -1,0 +1,28 @@
+---
+title: Use MapLibre Native FFI
+description: Reach the underlying MapLibre Native FFI map for features the library doesn't cover yet.
+---
+
+import { Code } from "@astrojs/starlight/components";
+import Api from "../../components/Api.astro";
+import { region } from "../../snippets";
+
+import expressions from "../../../../demo/entry/src/main/ets/docs/Expressions.ets?raw";
+
+For a feature that the library doesn't cover yet, such as debug overlays,
+<Api of="MapController.withFfiMap" display="withFfiMap()" /> lends your code
+the [MapLibre Native FFI] map:
+
+<Code code={region(expressions, "ffi-map")} lang="ts" />
+
+FFI's [TypeScript reference] describes its API. Don't use it to change what the
+library manages, such as the style or your content.
+
+If you need the FFI map for something often, [open an issue] so the library can
+cover it.
+
+[MapLibre Native FFI]: https://maplibre.org/maplibre-native-ffi/
+
+[TypeScript reference]: https://maplibre.org/maplibre-native-ffi/reference/typescript/
+
+[open an issue]: https://github.com/sargunv/maplibre-arkui/issues

@@ -1,88 +1,45 @@
 ---
-title: Requests, offline regions, and logs
-description: Rewrite and serve requests, download offline regions, take MapLibre's logs, and choose when MapLibre uses the network.
+title: Rewrite or serve map requests
+description: Add API keys to request URLs, serve resources from your app, and send custom headers.
 ---
 
 import { Code } from "@astrojs/starlight/components";
 import Api from "../../components/Api.astro";
 import { region } from "../../snippets";
 
-import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
+import requests from "../../../../demo/entry/src/main/ets/docs/Requests.ets?raw";
 
-Maps and snapshots load their styles, tiles, and other resources through a
-<Api of="MapRuntime" />, which holds the cache and decides how requests load.
-They share the default runtime, from
-<Api of="MapRuntime.getDefault" display="MapRuntime.getDefault()" />, unless
-the app passes its own.
+Maps load their styles, tiles, fonts, and icons through a
+<Api of="MapRuntime" />, which holds the cache and decides how each request
+loads. Every map and snapshot uses the default runtime unless you pass another.
 
 ## Rewrite URLs
 
-To add an API key to tile URLs, give the default runtime a `rewriteUrl` before
-the first map, such as in the ability's `onCreate()`, with
-<Api of="MapRuntime.configureDefault" display="MapRuntime.configureDefault()" />:
+To add an API key to tile URLs, give the default runtime a `rewriteUrl`
+function with
+<Api of="MapRuntime.configureDefault" display="MapRuntime.configureDefault()" />.
+Call it before the first map appears, such as in your ability's `onCreate()`:
 
-<Code code={region(examples, "resource-transform")} lang="ts" />
+<Code code={region(requests, "rewrite-url")} lang="ts" />
 
-`rewriteUrl` answers at once, so it only computes URLs. To load a resource in
-another way, use a resource provider.
+## Serve resources from your app
 
-## Serve requests
+A <Api of="MapResourceProvider" /> loads the requests whose URLs match its
+patterns, in place of MapLibre. This provider serves styles from the app's
+`rawfile/styles` directory:
 
-A <Api of="MapResourceProvider" /> loads the requests that its URL patterns
-match, in place of MapLibre: from the app's files, a database, or another
-client. This one serves styles from the app's rawfile directory, on a runtime
-of the page's own:
+<Code code={region(requests, "provider")} lang="ts" />
 
-<Code code={region(examples, "resource-provider")} lang="ts" />
+## Use your own runtime
 
-A runtime that the app creates holds its cache in memory unless it has a
-`cachePath`. Keep it in a field, pass it to each map and snapshot that uses it,
-and release it once they're gone.
+To use a provider on some maps only, create a runtime for them and pass it as
+the map's `runtime`. Release it when no map uses it anymore:
 
-A provider also adds HTTP headers, such as a token. MapLibre Native FFI can't
-add headers to MapLibre's own requests on OpenHarmony, so fetch those requests
-in a provider with `@ohos.net.http`:
+<Code code={region(requests, "runtime")} lang="ts" />
 
-<Code code={region(examples, "headers")} lang="ts" />
+## Send custom headers
 
-A provider that rejects with a <Api of="MapResourceError" /> gives MapLibre a
-reason: a tile that isn't found draws nothing, and MapLibre tries again after
-server and connection failures.
+MapLibre's own requests can't carry custom headers, such as an authorization
+token. To send them, load those URLs in a provider:
 
-## Offline regions
-
-The default runtime keeps its cache database, `maplibre-cache.db`, in the app's
-files directory, so offline regions last between launches. The runtime's
-<Api of="MapRuntime.createOfflineRegion" display="createOfflineRegion()" /> stores
-a region, and its `startDownload()` downloads it. Its `status` is observable,
-so a component shows the progress as it goes:
-
-<Code code={region(examples, "offline")} lang="ts" />
-
-Maps on the runtime use the region's resources once they load its style URL,
-also while the device is offline.
-<Api of="MapRuntime.getOfflineRegions" display="getOfflineRegions()" /> lists
-the regions of earlier launches.
-
-## Logs
-
-MapLibre logs to hilog: the library with the prefix `MapLibre:`, and MapLibre
-Native with the tag `MapLibreNative`. To take the log too, such as for a crash
-reporter, set a handler with
-<Api of="MapRuntime.setLogHandler" display="MapRuntime.setLogHandler()" />:
-
-<Code code={region(examples, "logs")} lang="ts" />
-
-## Connectivity
-
-While the device has no network, MapLibre starts no requests and shows what its
-cache and offline regions hold; the requests wait until the device connects
-again. To follow the device, the library needs
-`ohos.permission.GET_NETWORK_INFO` (see
-[Getting started](/maplibre-arkui/getting-started/)); without it, MapLibre
-always tries the network. To keep maps offline, or online, whatever the device
-does, set a mode with
-<Api of="MapRuntime.setConnectivityMode" display="MapRuntime.setConnectivityMode()" />.
-The mode applies to every runtime of the app.
-
-<Code code={region(examples, "connectivity")} lang="ts" />
+<Code code={region(requests, "headers")} lang="ts" />

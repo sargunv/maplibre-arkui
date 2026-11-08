@@ -1,0 +1,84 @@
+---
+title: Handle gestures and clicks
+description: Limit how users move the map, react when they move it, and respond to clicks on the map and its layers.
+---
+
+import { Code } from "@astrojs/starlight/components";
+import Api from "../../components/Api.astro";
+import { region } from "../../snippets";
+
+import interaction from "../../../../demo/entry/src/main/ets/docs/Interaction.ets?raw";
+
+Users can pan, zoom, rotate, and pitch the map with touch, a mouse, a touchpad,
+and the keyboard:
+
+- **Touch**: drag to pan, pinch to zoom, twist to rotate, and drag two fingers
+  up or down to pitch. Double tap to zoom in, and tap with two fingers to zoom
+  out.
+- **Mouse**: drag to pan, and drag with the right button to rotate and pitch.
+  Scroll the wheel to zoom.
+- **Touchpad**: swipe with two fingers to pan, and pinch to zoom.
+- **Keyboard**: use the arrow keys to pan, Shift and the arrow keys to rotate
+  and pitch, and plus and minus to zoom.
+
+The map's <Api of="MaplibreMap.interactions" display="interactions" /> changes
+what input does; see <Api of="InteractionOptions" />.
+
+## Restrict camera movement
+
+Turn off a movement when your map must stay a certain way, such as north-up and
+flat. This map can be panned and zoomed, but not rotated or pitched:
+
+<Code code={region(interaction, "restrict")} lang="ts" />
+
+To keep the camera inside an area or a zoom range instead, see
+[Limit where the camera can go](/maplibre-arkui/camera/#limit-where-the-camera-can-go).
+
+## React when the user moves the map
+
+Some behavior should stop when the user moves the map, such as following a
+vehicle. Give a movement an `onStart`, and the map calls it when the user starts
+that movement:
+
+<Code code={region(interaction, "pan-start")} lang="ts" />
+
+## Respond to map clicks
+
+A tap is a click, and a long press or a right click is a long click. Use the
+map's <Api of="MaplibreMap.onMapClick" display="onMapClick" /> or
+<Api of="MaplibreMap.onMapLongClick" display="onMapLongClick" /> to get the
+coordinate that the user clicked, for example to drop a pin there:
+
+<Code code={region(interaction, "map-click")} lang="ts" />
+
+Return `true` to consume the click, or `false` to let your layers handle it.
+
+## Respond to clicks on a layer
+
+Give a layer an `onClick` handler to let users select its features. This map
+shows the name of the place that the user taps, and clears it when they tap
+anywhere else:
+
+<Code code={region(interaction, "layer-click")} lang="ts" />
+
+The handler receives a <Api of="FeatureClickEvent" /> with the features under
+the click. `hitPadding` makes small circles and thin lines easier to tap. When
+no handler consumes a click, the map calls
+<Api of="MaplibreMap.onUnhandledClick" display="onUnhandledClick" />.
+
+## Put the map in a scrolling page
+
+A map inside a `Scroll` or `List` takes the drags that start on it. With
+`cooperative`, one-finger drags scroll the page instead, and the user moves the
+map with two fingers:
+
+<Code code={region(interaction, "cooperative")} lang="ts" />
+
+## Tick while rotating
+
+As the user rotates the map past north, the device plays a soft tick. Ticks need
+the vibrator permission in your app's `module.json5`:
+
+```json5 title="module.json5"
+"requestPermissions": [{ "name": "ohos.permission.VIBRATE" }]
+```

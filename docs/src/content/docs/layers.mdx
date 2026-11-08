@@ -1,0 +1,74 @@
+---
+title: Add data to the map
+description: Draw your own data with sources and layers, place it under the style's labels, and add icons.
+---
+
+import { Code } from "@astrojs/starlight/components";
+import Api from "../../components/Api.astro";
+import { region } from "../../snippets";
+
+import layers from "../../../../demo/entry/src/main/ets/docs/Layers.ets?raw";
+
+To draw your own data, you add a source and at least one layer. A source holds
+data, such as points, lines, or shapes. A layer draws the data from one source
+in one way, for example as circles or lines. You declare both in a
+<Api of="MapContent" /> and pass it to the map as `content`.
+
+## Draw GeoJSON data
+
+A `@Computed` getter builds the content from your component's state. This
+example draws a red circle for each place:
+
+<Code code={region(layers, "geojson")} lang="ts" />
+
+Sources and layers take the same JSON as a style document, so the
+[MapLibre Style Specification][spec] lists every source type, layer type, and
+property. Layers draw in the order that you list them. The content stays on the
+map when the style changes.
+
+## Update the data
+
+When your state changes, the getter returns new content, and the map updates.
+To change GeoJSON data, assign a new object rather than changing the one the
+map has:
+
+<Code code={region(layers, "update-data")} lang="ts" />
+
+## Style a layer with expressions
+
+Layer properties can take expressions instead of plain values. An expression
+can compute a value for each feature, or for the current zoom level. Here the
+circles grow as the user zooms in:
+
+<Code code={region(layers, "expressions")} lang="ts" />
+
+[Expressions in ArkTS](/maplibre-arkui/expressions/) explains how to write them.
+
+## Add labels
+
+A `symbol` layer draws text from a feature's properties. Use
+<Api of="fp" display="fp()" /> for text sizes, so labels scale with the user's
+font size like ArkUI text:
+
+<Code code={region(layers, "labels")} lang="ts" />
+
+## Draw under the labels
+
+Your layers draw above the whole base style, so a large circle covers street
+and place names. Use `below` to put a layer lower. This layer draws under all
+of the base style's labels and icons:
+
+<Code code={region(layers, "below")} lang="ts" />
+
+To place a layer under a layer whose ID you know, pass the ID instead, such as
+`below: 'water'`.
+
+## Add icons
+
+To draw an icon, add a `PixelMap` to the content as a <Api of="StyleImage" />,
+and name it in a layer's `icon-image`. Keep the pixel map until the content no
+longer uses it:
+
+<Code code={region(layers, "image")} lang="ts" />
+
+[spec]: https://maplibre.org/maplibre-style-spec/

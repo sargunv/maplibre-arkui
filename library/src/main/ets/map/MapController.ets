@@ -20,44 +20,22 @@ import { checkHitPadding } from './internal/Queries';
 /** Options for a new `MapController`. */
 export interface MapControllerOptions {
   /**
-   * Where the camera starts. Fields it leaves out take MapLibre's defaults:
-   * center 0, 0, zoom 0, bearing 0, pitch 0, and no padding. A saved
-   * `CameraPosition` restores the camera as it was.
-   *
-   * Its padding's lengths in px and fp convert to vp at the default display's
-   * density and font scale. The constructor throws an `Error` for a camera
-   * that `updateCamera()` would throw for, and for a padding side in lpx,
-   * which needs a UI context.
+   * Where the camera starts. Fields left out are 0. The constructor throws an
+   * `Error` for a camera that `updateCamera()` throws for, and for padding in
+   * lpx.
    */
   camera?: CameraUpdate;
 }
 
 /**
- * Reads and moves the camera of a `MaplibreMap`, from inside or outside the
- * component, as a `Scroller` does for a list.
+ * Reads and moves the camera of a `MaplibreMap`.
  *
- * Create one, pass it to a `MaplibreMap`, and keep it. It shows in one map at a
- * time: the one that appeared last. When the map leaves the screen and comes
- * back, such as after a navigation, the new map starts where the old one left
- * the camera.
+ * Pass it to one map at a time. It's attached to the map that appeared last,
+ * and a new map that shows it starts where the camera was.
  *
- * Its getters are observable, so a component that reads them updates when
- * they change. The app can't set them: the map, the user's input, and the
- * controller's methods change them, such as a pan that stops
- * `followingUserLocation` and a rotation that clears `followedBearing`.
- *
- * The camera methods check their arguments first, and throw an `Error` for an
- * invalid one. A move then waits until a map shows the controller at its
- * size, and the moves go to the map in the order the app makes them. They
- * keep waiting while no map shows the controller, until
- * `cancelCameraTransitions()`.
- *
- * The camera's `padding` is the app's: the space, in vp, around the part of
- * the map that the camera centers in. It's what `updateCamera()` or a fit last
- * set, even while an animation still moves the map toward it. The map's
- * `viewportInsets` add to it on the map, but never show in a camera that the
- * controller reports, so a saved camera restores the same way under different
- * insets.
+ * The camera methods throw an `Error` for an invalid argument. A move made
+ * while no map is attached waits for one, and moves run in the order they're
+ * made.
  */
 @ObservedV2
 export class MapController {
@@ -71,133 +49,100 @@ export class MapController {
     registerControllerState(this, state);
   }
 
-  /**
-   * Where the camera is: the camera of the frame on screen while a map shows
-   * one, and otherwise where the camera last was, or, before any map showed
-   * the controller, the start camera of `MapControllerOptions` with MapLibre's
-   * defaults for the fields it leaves out. Observable: it changes with every
-   * frame while the camera moves, so read it in `@Computed` getters of the
-   * components that follow the map. The map's `onCameraIdle` reports where the
-   * camera comes to rest.
-   */
+  /** Where the camera is, updated on every frame of a move. Observable. */
   get camera(): CameraPosition {
     return this.state.camera;
   }
 
   /**
-   * The latest frame that the map drew, with its camera and projection.
-   * Undefined while no map shows a frame. Observable: it changes with every
-   * frame that the view changes in, so read it in `@Computed` getters of the
-   * components that follow the map. Its camera is `camera`.
+   * The latest frame that the map drew, or undefined before the attached map
+   * draws one. Observable.
    */
   get viewport(): Viewport | undefined {
     return this.state.viewport;
   }
 
   /**
-   * Whether the camera is moving: from the map's `onCameraMoveStart` until
-   * its `onCameraIdle`, through a gesture's momentum and snap too. False while
-   * no map shows the controller. Observable.
+   * Whether the camera is moving, from `onCameraMoveStart` until
+   * `onCameraIdle`. False while the controller isn't attached to a map.
+   * Observable.
    */
   get cameraMoving(): boolean {
     return this.state.cameraMoving;
   }
 
   /**
-   * What moved the camera last: what started the move, or what took it over
-   * since, such as a gesture that stops an animation. It stays after the
-   * camera comes to rest. Undefined while no map shows the controller, and
-   * before the camera of the map that shows it first moves. Observable.
+   * What moved the camera last. It keeps its value after the camera stops.
+   * Undefined until the attached map's camera first moves. Observable.
    */
   get cameraMoveReason(): CameraMoveReason | undefined {
     return this.state.cameraMoveReason;
   }
 
   /**
-   * Whether the map's style has loaded, so its layers and sources exist, with
-   * the map's content. Observable.
+   * Whether the map's style has loaded, with the map's `content` added to it.
+   * Observable.
    */
   get styleLoaded(): boolean {
     return this.state.styleLoaded;
   }
 
   /**
-   * Reads and changes the style that the map has loaded, from its
-   * `onStyleLoaded` until the next style, as `MapStyle` describes.
+   * Reads and changes the map's loaded style, from `onStyleLoaded` until the
+   * next style loads.
    */
   get style(): MapStyle {
     return this.mapStyle;
   }
 
   /**
-   * The attribution of the style's sources, as HTML, without repeats, in the
-   * order the style lists them. Empty until the style loads. Show it with
-   * `AttributionText`, or an `AttributionButton` in the map's overlay, as the
-   * sources' terms require. Observable.
+   * The attributions of the style's sources, as HTML, without duplicates.
+   * Empty until the style loads. Observable.
    */
   get attributions(): string[] {
     return this.state.attributions;
   }
 
   /**
-   * Whether the camera follows the map's `userLocation`: from
-   * `followUserLocation()` until `stopFollowingUserLocation()`, a pan by the
-   * user, or a camera move by the app that sets a center, as
-   * `followUserLocation()` describes. Observable.
+   * Whether the camera follows the map's `userLocation`, from
+   * `followUserLocation()` until following stops. Observable.
    */
   get followingUserLocation(): boolean {
     return this.state.followingUserLocation;
   }
 
   /**
-   * The direction that the camera turns to while it follows the map's
-   * `userLocation`, as `followUserLocation()` set it. Undefined while the
-   * camera doesn't follow, or follows without turning: a rotation by the user,
-   * or a camera move by the app that sets a bearing, such as a
-   * `CompassButton`'s, clears it. Observable.
+   * The bearing that the camera turns with while it follows the map's
+   * `userLocation`, or undefined while it doesn't turn. A rotation by the user,
+   * or a camera move that sets a bearing, clears it. Observable.
    */
   get followedBearing(): FollowBearing | undefined {
     return this.state.followedBearing;
   }
 
   /**
-   * Moves the camera, at once or with an animation, as `options` says. A
-   * `padding` replaces the camera's padding, inside the map's
-   * `viewportInsets`; without one, the camera keeps its padding. A `center`
-   * goes to the middle of what they leave.
+   * Moves the camera, at once or animated, as `options` says. A `padding`
+   * replaces the camera's padding; without one, the padding stays.
    *
-   * ```ets
-   * controller.updateCamera({ zoom: 12 }, { mode: CameraTransitionMode.EASE });
-   * ```
+   * Throws an `Error` for a field that isn't finite, a latitude outside -90 to
+   * 90, a padding side below 0 or in percent, or a `durationMs` below 0.
    *
-   * It throws an `Error` for a field that isn't finite, a `center` latitude
-   * outside -90 to 90, a padding side below 0 or in percent, or a `durationMs`
-   * below 0. Otherwise the move waits for a map, as the class describes, and
-   * the promise resolves when the move ends: `true` once the camera gets
-   * there, or `false` when `cancelCameraTransitions()`, the user's input, a
-   * later camera change, or the map leaving or starting again at a new
-   * density stopped it first. It rejects when the map rejects the move.
+   * Resolves `true` when the camera arrives, and `false` when something stops
+   * the move first, such as the user's input or another move. Rejects when the
+   * map rejects the move.
    */
   updateCamera(update: CameraUpdate, options?: CameraTransitionOptions): Promise<boolean> {
     return this.state.updateCamera(checkCamera(update), checkTransition(options));
   }
 
   /**
-   * Moves the camera so `bounds` fits in the part of the map that the
+   * Moves the camera so `bounds` fits in the area that the map's
    * `viewportInsets`, the camera's padding, and `options.fitPadding` leave.
    *
-   * ```ets
-   * controller.fitCameraToBounds(bounds, {
-   *   mode: CameraTransitionMode.EASE,
-   *   fitPadding: { top: 24, left: 24, bottom: 24, right: 24 },
-   * });
-   * ```
-   *
-   * It throws an `Error` for bounds with a value that isn't finite, a latitude
-   * outside -90 to 90, or a southwest corner north or east of the northeast,
-   * and for `options` that `updateCamera()` would throw for, or with a bearing
-   * or pitch that isn't finite. Otherwise it waits and resolves as
-   * `updateCamera()` does, and also rejects when the padding leaves no room.
+   * Throws an `Error` for bounds with a value that isn't finite, a latitude
+   * outside -90 to 90, or a southwest corner north or east of the northeast
+   * corner, and for invalid `options`. Resolves like `updateCamera()`, and also
+   * rejects when the padding leaves no room.
    */
   fitCameraToBounds(bounds: LatLngBounds, options?: FitCameraOptions): Promise<boolean> {
     const checked = checkBounds(bounds);
@@ -206,9 +151,9 @@ export class MapController {
   }
 
   /**
-   * Moves the camera so `coordinates` fit, as `fitCameraToBounds()` does. It
-   * throws an `Error` for an empty array, or a coordinate that `updateCamera()`
-   * would throw for as a `center`.
+   * Moves the camera so all of `coordinates` fit, like `fitCameraToBounds()`.
+   * Throws an `Error` for an empty array, or for a coordinate that isn't a
+   * valid `center`.
    */
   fitCameraToCoordinates(coordinates: LatLng[], options?: FitCameraOptions): Promise<boolean> {
     const checked = checkCoordinates(coordinates);
@@ -217,9 +162,9 @@ export class MapController {
   }
 
   /**
-   * Moves the camera so `geometry` fits, as `fitCameraToBounds()` does. It
-   * throws an `Error` for a geometry with no position, or with a position
-   * whose longitude isn't finite or whose latitude is outside -90 to 90.
+   * Moves the camera so `geometry` fits, like `fitCameraToBounds()`. Throws an
+   * `Error` for a geometry without positions, or with a longitude that isn't
+   * finite or a latitude outside -90 to 90.
    */
   fitCameraToGeometry(geometry: GeoJsonGeometry, options?: FitCameraOptions): Promise<boolean> {
     const checked = checkGeometry(geometry);
@@ -228,79 +173,38 @@ export class MapController {
   }
 
   /**
-   * Stops every camera move, those that wait for a map too, and a gesture's
-   * momentum. An animation stops where it is. Each move that it stops
-   * resolves `false`.
+   * Stops every camera move, including waiting moves and a gesture's momentum.
+   * Each stopped move resolves `false`.
    */
   cancelCameraTransitions(): void {
     this.state.cancelCameraTransitions();
   }
 
   /**
-   * Moves the camera to the map's `userLocation`, and then to each new one,
-   * and to each new `userHeading` too while it follows the heading, until
-   * following stops. Without a location yet, the camera moves once the map
-   * gets one, after the camera moves that wait for the map. A new call
-   * replaces the options of the last.
+   * Moves the camera to the map's `userLocation`, and then with each new one,
+   * keeping it at the center. Calling it again replaces the options.
    *
-   * ```ets
-   * this.controller.followUserLocation({ zoom: 16, bearing: FollowBearing.HEADING });
-   * ```
-   *
-   * Each move is a 1000 ms ease with MapLibre's default curve, as the
-   * indicator's move to the location is, so the location stays at the
-   * center. It moves the center, the first move also to `options.zoom`, and
-   * each to the bearing of `followedBearing` while there is one; the rest of
-   * the camera stays as it is. An app that draws its own `location-indicator`
-   * layer, with `userLocationIndicator.visible` false, matches it with a
-   * 1000 ms `location-transition`.
-   *
-   * While it follows, the user's input and the app's camera moves change it:
-   *
-   * - A pan by the user, in any way that `interactions.pan` allows, stops
-   *   following. Two fingers pan only after they drag 400 vp, so a pinch or a
-   *   twist that drifts keeps following.
-   * - A rotation by the user clears `followedBearing`, and the camera keeps
-   *   the bearing that the user leaves it at.
-   * - The user's zoom and pitch keep following, and zoom and rotation keep
-   *   the location at the center.
-   * - Both changes happen before `onGestureStart` and the movement's
-   *   `onStart`, so those see the new state. The camera waits for the user's
-   *   input to end, after `onGestureEnd`, then catches up with the location.
-   * - A camera move by the app that sets `center`, and every fit, stops
-   *   following. One that sets `bearing`, such as a `CompassButton`'s, clears
-   *   `followedBearing`. Others, such as those of `ZoomButtons`, keep
-   *   following.
-   * - A zoom by the user or the app before the first move takes the place of
-   *   `options.zoom`.
-   *
-   * To lock the camera to the location, turn the movements off: with
-   * `interactions.pan.enabled` false, the user can't stop following, and with
-   * `interactions.rotate.enabled` false, the user can't clear the bearing.
+   * Following stops when the user pans, when a camera move sets `center`, on
+   * any fit, and on `stopFollowingUserLocation()`. The user can zoom, rotate,
+   * and pitch while the camera follows.
    */
   followUserLocation(options?: FollowUserLocationOptions): void {
     this.state.followUserLocation(options);
   }
 
-  /**
-   * Stops following the map's `userLocation`, so the camera stays where it is
-   * when the location changes, and clears `followedBearing`. A move to the
-   * location that's under way finishes.
-   */
+  /** Stops following the map's `userLocation`. */
   stopFollowingUserLocation(): void {
     this.state.stopFollowingUserLocation();
   }
 
   /**
-   * Finds the features that the map drew at `point` of its latest frame, or
-   * within `options.hitPadding` of it: each layer's features front first, as
-   * the map draws them, and the layers in no set order. A feature that several
-   * layers draw comes once for each. Resolves undefined
-   * while no map shows a frame, and when the map leaves before it answers.
+   * Finds the features that the map drew at `point`, or within
+   * `options.hitPadding` of it. A feature that several layers draw comes once
+   * for each.
    *
-   * It throws an `Error` for a `hitPadding` below 0 or that isn't finite. It
-   * rejects when the map rejects the query, such as for a `filter` that isn't
-   * a valid filter expression.
+   * Throws an `Error` for a `hitPadding` below 0 or not finite. Resolves
+   * undefined while no map is drawing. Rejects when the map rejects the query,
+   * such as for an invalid `filter`.
    */
   queryRenderedFeatures(point: ScreenPoint,
     options?: RenderedFeatureQueryOptions): Promise<RenderedFeature[] | undefined> {
@@ -309,42 +213,24 @@ export class MapController {
   }
 
   /**
-   * Finds the features of the source with `sourceId` in the tiles that it has
-   * loaded for the map's view, which a source loads only while a visible
-   * layer draws it. Resolves undefined while no map shows a frame, and when
-   * the map leaves before it answers. It rejects when the map rejects the
-   * query.
+   * Finds the features of the source with `sourceId` in the tiles it has loaded
+   * for the current view. Resolves undefined while no map is drawing. Rejects
+   * when the map rejects the query.
    */
   querySourceFeatures(sourceId: string, options?: SourceFeatureQueryOptions): Promise<SourceFeature[] | undefined> {
     return this.state.querySourceFeatures(sourceId, options);
   }
 
   /**
-   * Lends `block` the MapLibre Native FFI map that shows the controller, and
-   * its render session while it has a surface, for what this library doesn't
-   * cover, such as debug overlays. It returns what `block` returns, or
-   * undefined without calling it when no map shows the controller. What
-   * `block` throws reaches the caller.
+   * Calls `block` with the attached map's MapLibre Native FFI map, and its
+   * render session while it has one. Returns what `block` returns, or undefined
+   * without calling it while no map is attached.
    *
-   * ```ets
-   * controller.withFfiMap((map: MapHandle) => map.discarding.setDebugFlags(MapDebugFlag.tileBorders));
-   * ```
-   *
-   * `block` runs at once. Don't keep the map or the session, or use them after
-   * `block` returns, including after an `await` in it: the map can release
-   * them at any time after. Don't release them either.
-   *
-   * The library owns some of the map's state, which `block` must not change:
-   * the style, which the map's `style` sets; the sources, layers, and images
-   * of the map's `content`, and those whose IDs start with `maplibre-arkui`;
-   * the camera padding, which `updateCamera()` sets; the camera bounds, which
-   * the map's `cameraBounds` set; the runtime's event handler; and the map's
-   * event mask. What `block` adds to the style, such as a source, is gone in
-   * the next style.
-   *
-   * The types are those of `@maplibre/native-ffi`. An app that imports it
-   * must use the version that this library depends on, and FFI's types may
-   * change in any release.
+   * Use the map and session only inside `block`, before any `await`. Don't
+   * change what the library manages through them: the style, the map's
+   * `content`, IDs that start with `maplibre-arkui`, the camera padding and
+   * bounds, the runtime's event handler, and the map's event mask. FFI's types
+   * may change in any release.
    */
   withFfiMap<T>(block: (map: MapHandle, session: RenderSessionHandle | undefined) => T): T | undefined {
     return this.state.withFfiMap(block);
@@ -354,50 +240,55 @@ export class MapController {
 /** Which features `MapController.queryRenderedFeatures()` finds. */
 export interface RenderedFeatureQueryOptions {
   /**
-   * How far from the point, in vp, features count as under it: the query
-   * covers a square of this many vp on each side of the point. Finite and at
-   * least 0; 0 by default, which covers the point alone.
+   * How far from the point, in vp, a feature still counts. Must be finite and
+   * at least 0. 0 by default.
    */
   hitPadding?: number;
   /** The IDs of the layers to query. Every layer by default. */
   layers?: string[];
-  /** Which features count: those for which it's true. Every feature by default. */
+  /** Keeps only the features for which this is true. Every feature by default. */
   filter?: Expression;
 }
 
 /**
- * A feature that a layer drew, as `MapController.queryRenderedFeatures()`
- * finds it. The map creates it; fields may be added in later releases.
+ * A feature that `MapController.queryRenderedFeatures()` found. Fields may be
+ * added in later releases.
  */
 export interface RenderedFeature {
-  /** The feature, with the geometry as the layer drew it. */
+  /** The feature, with its geometry as the layer drew it. */
   readonly feature: GeoJsonFeature;
   /** The ID of the layer that drew the feature. */
   readonly layerId: string;
   /** The ID of the feature's source. */
   readonly sourceId: string;
-  /** The layer of a vector source that the feature is in, or undefined for a source without layers. */
+  /**
+   * The source layer of a vector source that holds the feature, or undefined
+   * for other sources.
+   */
   readonly sourceLayer: string | undefined;
-  /** The feature's state, by name. Empty for a feature without state. */
+  /** The feature's state. Empty for a feature without state. */
   readonly state: Record<string, Object>;
 }
 
 /** Which features `MapController.querySourceFeatures()` finds. */
 export interface SourceFeatureQueryOptions {
-  /** The layers of a vector source to query. A vector source finds features only in those named here. */
+  /** The source layers of a vector source to query. It finds features only in these. */
   sourceLayers?: string[];
-  /** Which features count: those for which it's true. Every feature by default. */
+  /** Keeps only the features for which this is true. Every feature by default. */
   filter?: Expression;
 }
 
 /**
- * A feature of a source, as `MapController.querySourceFeatures()` finds it.
- * The map creates it; fields may be added in later releases.
+ * A feature that `MapController.querySourceFeatures()` found. Fields may be
+ * added in later releases.
  */
 export interface SourceFeature {
-  /** The feature, with the geometry as its tiles hold it. */
+  /** The feature, with its geometry as its tiles hold it. */
   readonly feature: GeoJsonFeature;
-  /** The layer of a vector source that the feature is in, or undefined for a source without layers. */
+  /**
+   * The source layer of a vector source that holds the feature, or undefined
+   * for other sources.
+   */
   readonly sourceLayer: string | undefined;
 }
 

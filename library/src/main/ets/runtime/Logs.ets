@@ -7,17 +7,17 @@
 export enum MapLogLevel {
   /** Progress that needs no action. */
   INFO,
-  /** Something unexpected that MapLibre worked around. */
+  /** Something unexpected that MapLibre recovered from. */
   WARN,
   /** A failure. */
   ERROR,
 }
 
-/** One message of the log, which the library creates; fields may be added in later releases. */
+/** One message of the log. Fields may be added in later releases. */
 export interface MapLogRecord {
   /** How severe the message is. */
   readonly level: MapLogLevel;
-  /** The message, without the library's `MapLibre:` hilog prefix. */
+  /** The message text. */
   readonly message: string;
   /**
    * MapLibre Native's category for the message, such as `'database'` or
@@ -27,5 +27,5 @@ export interface MapLogRecord {
   readonly category: string | undefined;
 }
 
-/** Takes each record of the log; see `MapRuntime.setLogHandler()`. */
+/** Receives each log record. */
 export type MapLogHandler = (record: MapLogRecord) => void;

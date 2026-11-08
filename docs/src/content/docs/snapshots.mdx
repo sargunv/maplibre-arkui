@@ -1,37 +1,30 @@
 ---
-title: Snapshots
-description: Render a still image of a map that isn't on screen.
+title: Capture a map image
+description: Render a still image of a map without showing it on screen.
 ---
 
 import { Code } from "@astrojs/starlight/components";
 import Api from "../../components/Api.astro";
 import { region } from "../../snippets";
 
-import examples from "../../../../demo/entry/src/main/ets/docs/Examples.ets?raw";
+import snapshots from "../../../../demo/entry/src/main/ets/docs/Snapshots.ets?raw";
 
 <Api of="renderSnapshot" display="renderSnapshot()" /> renders a still image of
-a map that isn't on screen. It resolves a <Api of="MapSnapshot" />: the image,
-as a `PixelMap` for an `Image`, and the attribution of the style's sources,
-which the sources' terms usually require you to show with it, such as with
-<Api of="AttributionText" />. The app owns the image, so release it once nothing
-shows it:
+a map that isn't on screen, such as a thumbnail in a list or an image to share.
 
-<Code code={region(examples, "snapshot")} lang="ts" />
+## Render an image
 
-Pass `uiContext` so the image is as sharp, and its text as large, as a map in
-that UI.
+Pass the style, the image size, and the camera. The result's `image` is a
+`PixelMap` that an `Image` can show; release it when you no longer show it:
 
-## An image of a map on screen
+<Code code={region(snapshots, "snapshot")} lang="ts" />
 
-ArkUI's `componentSnapshot.createFromBuilder()` can't capture a `MaplibreMap`.
-Render a snapshot instead, with the map's style, its content, and where its
-controller's camera is now:
+Most tile providers require their attribution next to the image, so show the
+snapshot's `attributions` too.
 
-<Code code={region(examples, "snapshot-of")} lang="ts" />
+## Capture what a map shows
 
-The snapshot holds the style and the content only: it has no user location
-indicator and none of the map's ArkUI controls or markers. The example leaves
-out the camera's padding, which keeps the center clear of the map's own UI.
+To capture a map on screen, render a snapshot with the map's style, content, and
+camera:
 
-Snapshots that the app starts together render at the same time, each with a GPU
-session of its own, so render many one after another.
+<Code code={region(snapshots, "snapshot-of-map")} lang="ts" />

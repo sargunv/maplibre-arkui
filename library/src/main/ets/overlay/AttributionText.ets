@@ -3,20 +3,14 @@ import { LengthMetrics } from '@ohos.arkui.node';
 import { logError } from '../runtime/internal/Log';
 
 /**
- * Attribution HTML as text: 12 vp, in the theme's secondary font color, with
- * underlined links that open in the browser. It shows the attributions that
- * `MapController.attributions` and `MapSnapshot.attributions` give, which the
- * sources' terms usually require. It needs no map, so it works anywhere.
- *
- * ```ets
- * AttributionText({ attributions: this.controller.attributions })
- * ```
+ * Shows attribution HTML as text, with links that open in the browser. Works
+ * anywhere, without a map.
  */
 @ComponentV2
 export struct AttributionText {
   /**
-   * The attributions, each an HTML fragment. Empty by default, which shows no
-   * text. A list with the same strings as the last changes nothing.
+   * The attributions, each an HTML fragment, such as
+   * `MapController.attributions`. Empty by default.
    */
   @Param attributions: string[] = [];
   private text: TextController = new TextController();

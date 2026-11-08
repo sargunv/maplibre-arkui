@@ -2,13 +2,9 @@
 
 import { LatLngBounds } from '../geometry/Geometry';
 
-/**
- * Limits on the camera of a `MaplibreMap`: an area that its center stays
- * within, and ranges of zoom and pitch. Each limit left out takes its default,
- * not the map's earlier limit.
- */
+/** Limits on where the camera of a `MaplibreMap` can go. */
 export interface CameraBoundsOptions {
-  /** The area that the camera's center stays within. The whole world by default. */
+  /** The area that the camera's center stays inside. The whole world by default. */
   bounds?: LatLngBounds;
   /** The lowest zoom. 0 by default. */
   minZoom?: number;

@@ -1,24 +1,8 @@
 # @maplibre/arkui
 
-ArkUI components for [MapLibre Native] maps on HarmonyOS and OpenHarmony, built
-on [MapLibre Native FFI]:
-
-- `MaplibreMap`, a map that moves with touch, mouse, touchpad, and keyboard
-  gestures, with localized controls that follow dark mode: a compass, scale bar,
-  attribution, logo, and zoom buttons, in presets or placed by the app
-- `MapController`, which reads and moves the camera, with observable state
-- `Marker` and `PointerPinButton`, ArkUI content pinned to a coordinate, or
-  pointing to one off the screen
-- The user's location from Location Kit, and a camera that follows it
-- Map content (sources, layers, and images) declared as data from the app's
-  state, and functions that build style expressions
-- `renderSnapshot()`, a still image of a map, with its attribution
-- A style API that reads and changes the loaded style, feature queries, and
-  MapLibre Native FFI's map for the rest
-- MapLibre Native FFI's request handlers, offline regions, and logs
-
-This is a preview. It uses state management V2 (`@ComponentV2`) and needs API 20
-or later.
+Interactive vector maps for ArkUI apps on HarmonyOS and OpenHarmony, rendered by
+[MapLibre Native] through [MapLibre Native FFI]. Needs API 20 or later and
+ArkUI's state management V2.
 
 ## Install
 
@@ -26,15 +10,10 @@ or later.
 ohpm install @maplibre/arkui @maplibre/native-ffi-opengl@<FFI version>
 ```
 
-`@maplibre/arkui` depends on FFI's facade, `@maplibre/native-ffi`, and the app
-installs one backend for it, `@maplibre/native-ffi-opengl`, since ohpm has no
-peer dependencies. The backend's version must be the facade's, which this
-package's `oh-package.json5` names; `ohpm list` shows it.
-
-An app that loads styles or tiles from the network requests
-`ohos.permission.INTERNET` in its `module.json5`, and
-`ohos.permission.GET_NETWORK_INFO`, so that maps follow the device's
-connectivity.
+The backend's version must match the version of `@maplibre/native-ffi` that this
+package depends on; `ohpm list` shows it. To load styles and tiles from the
+network, request `ohos.permission.INTERNET` and
+`ohos.permission.GET_NETWORK_INFO` in your app's `module.json5`.
 
 ## Quick start
 
@@ -72,9 +51,8 @@ struct MapPage {
 
 ## Documentation
 
-The [documentation] has the guides, from the map and its camera to requests,
-offline regions, and logs, and the [API reference]. Its examples build in the
-repository's demo app, which shows each feature.
+The [documentation] has the guides, and the [API reference] has every public
+component, class, and function.
 
 [API reference]: https://code.sargunv.dev/maplibre-arkui/api/
 [documentation]: https://code.sargunv.dev/maplibre-arkui/
